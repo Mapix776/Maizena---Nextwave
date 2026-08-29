@@ -5,15 +5,19 @@ import { Server as SocketServer } from 'socket.io';
 import { z } from 'zod';
 
 import { RunCoordinator } from '../coordinator/run-coordinator.js';
+import { chatMessagesSchema, type ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const startCommandSchema = z
-  .object({ requestId: z.string().min(1).max(128) })
+  .object({
+    requestId: z.string().min(1).max(128),
+    messages: chatMessagesSchema.optional(),
+  })
   .strict();
 
 interface NautaServerOptions {
-  executeStep?: () => Promise<unknown>;
+  executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
   composeUi?: (result: StepResult) => unknown;
 }
 
@@ -94,7 +98,12 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       acknowledge({ ok: true, runId: snapshot.runId });
 
       setImmediate(() => {
-        void coordinator.execute(snapshot.runId);
+        void coordinator.execute(
+          snapshot.runId,
+          parsed.data.messages ?? [
+            { role: 'user', content: 'Run the json-render demo.' },
+          ],
+        );
       });
     });
 

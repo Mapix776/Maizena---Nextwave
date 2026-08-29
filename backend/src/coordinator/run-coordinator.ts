@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { ChatMessage } from '../contracts/chat.js';
 import { stepResultSchema, type StepResult } from '../contracts/step-result.js';
 import {
   type RunSnapshot,
@@ -10,7 +11,7 @@ import { executeAriStep } from '../mastra/ari.js';
 import { composeRunUi } from '../services/ui-composer.js';
 
 interface RunCoordinatorOptions {
-  executeStep?: () => Promise<unknown>;
+  executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
   composeUi?: (result: StepResult) => unknown;
   emit?: (envelope: UIEnvelope) => void | Promise<void>;
   createRunId?: () => string;
@@ -19,7 +20,7 @@ interface RunCoordinatorOptions {
 
 export class RunCoordinator {
   readonly #runs = new Map<string, RunSnapshot>();
-  readonly #executeStep: () => Promise<unknown>;
+  readonly #executeStep: (messages: ChatMessage[]) => Promise<unknown>;
   readonly #composeUi: (result: StepResult) => unknown;
   readonly #emit: (envelope: UIEnvelope) => void | Promise<void>;
   readonly #createRunId: () => string;
@@ -55,13 +56,20 @@ export class RunCoordinator {
     return structuredClone(run);
   }
 
-  async execute(runId: string): Promise<void> {
+  async execute(
+    runId: string,
+    messages: ChatMessage[] = [
+      { role: 'user', content: 'Run the json-render demo.' },
+    ],
+  ): Promise<void> {
     const run = this.#getMutableRun(runId);
     run.status = 'running';
     await this.#emitNext(run, 'run:status', { status: run.status });
 
     try {
-      const parsedResult = stepResultSchema.safeParse(await this.#executeStep());
+      const parsedResult = stepResultSchema.safeParse(
+        await this.#executeStep(messages),
+      );
 
       if (!parsedResult.success) {
         throw new Error('Invalid StepResult', { cause: parsedResult.error });

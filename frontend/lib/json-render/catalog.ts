@@ -31,6 +31,9 @@ export const jsonRenderSchema = defineSchema((s) => ({
 
 export const catalog = defineCatalog(jsonRenderSchema, {
   components: {
+    AssistantMessage: {
+      props: z.object({ text: z.string().min(1) }),
+    },
     ContainerProgress: {
       props: z.object({ currentStatus: z.enum(containerStatuses) }),
     },

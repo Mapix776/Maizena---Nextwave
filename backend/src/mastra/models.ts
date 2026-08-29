@@ -19,10 +19,10 @@ const EMPTY_USAGE = {
   },
 };
 
-export class DeterministicHelloModel implements LanguageModelV4 {
+export class DeterministicRenderModel implements LanguageModelV4 {
   readonly specificationVersion = 'v4' as const;
   readonly provider = 'nauta-tracer';
-  readonly modelId = 'deterministic-hello-v1';
+  readonly modelId = 'deterministic-render-v1';
   readonly supportedUrls = {};
 
   async doGenerate(options: LanguageModelV4CallOptions): Promise<LanguageModelV4GenerateResult> {
@@ -38,9 +38,11 @@ export class DeterministicHelloModel implements LanguageModelV4 {
         content: [
           {
             type: 'tool-call',
-            toolCallId: 'hello-tool-call',
-            toolName: 'helloTool',
-            input: '{}',
+            toolCallId: 'render-demo-tool-call',
+            toolName: 'renderDemoTool',
+            input: JSON.stringify({
+              assistantResponse: 'I can help with that.',
+            }),
           },
         ],
         finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
@@ -50,7 +52,7 @@ export class DeterministicHelloModel implements LanguageModelV4 {
     }
 
     return {
-      content: [{ type: 'text', text: 'Hello tool completed.' }],
+      content: [{ type: 'text', text: 'Render demo tool completed.' }],
       finishReason: { unified: 'stop', raw: 'stop' },
       usage: EMPTY_USAGE,
       warnings: [],
@@ -58,7 +60,7 @@ export class DeterministicHelloModel implements LanguageModelV4 {
   }
 
   async doStream(): Promise<never> {
-    throw new Error('The deterministic tracer model supports generate() only.');
+    throw new Error('The deterministic render model supports generate() only.');
   }
 }
 

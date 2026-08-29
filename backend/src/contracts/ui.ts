@@ -48,6 +48,9 @@ const reactSpecSchema = defineSchema((schema) => ({
 
 export const tracerCatalog = defineCatalog(reactSpecSchema, {
   components: {
+    AssistantMessage: {
+      props: z.object({ text: z.string().min(1) }).strict(),
+    },
     ContainerProgress: {
       props: z
         .object({ currentStatus: z.enum(containerStatuses) })

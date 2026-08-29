@@ -1,16 +1,22 @@
 import type { StepResult } from '../contracts/step-result.js';
 
 export function composeRunUi(result: StepResult): unknown {
-  const greeting = result.factPatch?.greeting;
-  const deliveryId = typeof greeting === 'string' ? greeting : result.summary;
+  const assistantResponse = result.factPatch?.assistantResponse;
+  const text =
+    typeof assistantResponse === 'string' ? assistantResponse : result.summary;
 
   return {
-    root: 'delivery-card',
+    root: 'assistant-message',
     elements: {
+      'assistant-message': {
+        type: 'AssistantMessage',
+        props: { text },
+        children: ['delivery-card'],
+      },
       'delivery-card': {
         type: 'DeliveryCard',
         props: {
-          id: deliveryId,
+          id: 'DEMO-2048',
           from: 'Cartagena',
           to: 'Bogotá',
           transportType: 'Land',

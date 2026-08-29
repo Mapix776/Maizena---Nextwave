@@ -70,6 +70,58 @@ test('run:start acknowledges before asynchronous execution completes', async (co
   step.resolve(HELLO_STEP_RESULT);
 });
 
+test('run:start carries conversation history through the json-render tracer', async (context) => {
+  let receivedMessages: unknown;
+  const server = createNautaServer({
+    executeStep: async (...args: unknown[]) => {
+      [receivedMessages] = args;
+      return {
+        status: 'completed',
+        summary: 'I can help with that.',
+        factPatch: { assistantResponse: 'I can help with that.' },
+        evidence: [
+          {
+            id: 'hardcoded-ui-demo',
+            source: 'json-render:hardcoded-components',
+          },
+        ],
+      };
+    },
+  });
+  const port = await server.start(0);
+  const client = await connectClient(port);
+
+  context.after(async () => {
+    client.disconnect();
+    await server.stop();
+  });
+
+  const completed = new Promise<Record<string, unknown>>((resolve) => {
+    client.on('run:event', (envelope) => {
+      if (envelope.type === 'run:complete') resolve(envelope);
+    });
+  });
+  const messages = [
+    { role: 'user', content: 'Can you help me plan this delivery?' },
+  ];
+  const startAck = await client.emitWithAck('run:start', {
+    requestId: 'chat-turn-1',
+    messages,
+  });
+
+  assert.equal(startAck.ok, true);
+  await within(completed, 250);
+  assert.deepEqual(receivedMessages, messages);
+
+  const snapshot = server.coordinator.getSnapshot(startAck.runId);
+  assert.equal(snapshot.status, 'completed');
+  assert.match(JSON.stringify(snapshot.ui), /I can help with that\./);
+  assert.deepEqual(
+    Object.values(snapshot.ui?.elements ?? {}).map(({ type }) => type),
+    ['AssistantMessage', 'DeliveryCard', 'ContainerProgress'],
+  );
+});
+
 test('repeated run:start request identity acknowledges one run and executes once', async (context) => {
   const step = deferred<unknown>();
   let executions = 0;

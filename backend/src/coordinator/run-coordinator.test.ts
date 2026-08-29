@@ -31,6 +31,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
   assert.equal(complete.facts.greeting, 'Hello from Ari');
   assert.ok(complete.ui);
   assert.deepEqual([...tracerCatalog.componentNames].sort(), [
+    'AssistantMessage',
     'ContainerProgress',
     'DeliveryCard',
     'DeliveryIssueCard',
@@ -46,7 +47,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
     ),
   );
   assert.deepEqual(complete.ui.elements[complete.ui.root]?.children, [
-    'container-progress',
+    'delivery-card',
   ]);
   assert.match(JSON.stringify(complete.ui), /Hello from Ari/);
 });
