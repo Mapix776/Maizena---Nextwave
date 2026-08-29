@@ -15,4 +15,3 @@ Use the installed Wall-I skills for structured workflow:
 
 Keep Wall-I artifacts in .wall-i/. After the PRD in .wall-i/runs/<task-id>/prd.md is approved, run wall-i-execute for implementation.
 Use the current runtime's available execution and delegation capabilities. Verify completion from repository artifacts, diffs, and configured gates.
-

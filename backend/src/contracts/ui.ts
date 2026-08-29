@@ -6,8 +6,28 @@ import {
 } from '@json-render/core';
 import { z } from 'zod';
 
-// Mirrors @json-render/react/schema without importing the React package on the
-// server. This is the shared grammar used by both copies of the tracer catalog.
+export const containerStatuses = [
+  'Booking Confirmed',
+  'In Transit',
+  'Arrived at Port',
+  'Customs',
+  'Delivered',
+] as const;
+
+const deliveryProps = z
+  .object({
+    id: z.string(),
+    from: z.string(),
+    to: z.string(),
+    transportType: z.enum(['Sea', 'Land']),
+    status: z.enum(containerStatuses),
+    createdAt: z.string(),
+    deliveryTime: z.string(),
+  })
+  .strict();
+
+// Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
+// out of the backend while making component names and props catalog-bound.
 const reactSpecSchema = defineSchema((schema) => ({
   spec: schema.object({
     root: schema.string(),
@@ -22,33 +42,22 @@ const reactSpecSchema = defineSchema((schema) => ({
   catalog: schema.object({
     components: schema.map({
       props: schema.zod(),
-      slots: schema.array(schema.string()),
-      description: schema.string(),
     }),
   }),
 }));
 
 export const tracerCatalog = defineCatalog(reactSpecSchema, {
   components: {
-    Stack: {
-      props: z.object({ gap: z.enum(['sm', 'md', 'lg']) }).strict(),
-      slots: ['default'],
-      description: 'A vertical layout for tracer content.',
-    },
-    Heading: {
-      props: z.object({ text: z.string().min(1) }).strict(),
-      slots: [],
-      description: 'A prominent heading.',
-    },
-    Text: {
+    ContainerProgress: {
       props: z
-        .object({
-          text: z.string().min(1),
-          tone: z.enum(['default', 'success']),
-        })
+        .object({ currentStatus: z.enum(containerStatuses) })
         .strict(),
-      slots: [],
-      description: 'A line of run-generated text.',
+    },
+    DeliveryCard: {
+      props: deliveryProps,
+    },
+    DeliveryIssueCard: {
+      props: deliveryProps.extend({ issue: z.string() }),
     },
   },
 });

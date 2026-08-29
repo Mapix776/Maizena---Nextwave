@@ -2,26 +2,27 @@ import type { StepResult } from '../contracts/step-result.js';
 
 export function composeRunUi(result: StepResult): unknown {
   const greeting = result.factPatch?.greeting;
+  const deliveryId = typeof greeting === 'string' ? greeting : result.summary;
 
   return {
-    root: 'run-result',
+    root: 'delivery-card',
     elements: {
-      'run-result': {
-        type: 'Stack',
-        props: { gap: 'md' },
-        children: ['run-title', 'run-greeting'],
-      },
-      'run-title': {
-        type: 'Heading',
-        props: { text: 'Nauta engine tracer' },
-        children: [],
-      },
-      'run-greeting': {
-        type: 'Text',
+      'delivery-card': {
+        type: 'DeliveryCard',
         props: {
-          text: typeof greeting === 'string' ? greeting : result.summary,
-          tone: 'success',
+          id: deliveryId,
+          from: 'Cartagena',
+          to: 'Bogotá',
+          transportType: 'Land',
+          status: 'In Transit',
+          createdAt: '2026-08-29T20:00:00.000Z',
+          deliveryTime: '6 hours',
         },
+        children: ['container-progress'],
+      },
+      'container-progress': {
+        type: 'ContainerProgress',
+        props: { currentStatus: 'In Transit' },
         children: [],
       },
     },

@@ -8,7 +8,9 @@ import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import type { StepResult } from '../contracts/step-result.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
-const startCommandSchema = z.object({}).strict();
+const startCommandSchema = z
+  .object({ requestId: z.string().min(1).max(128) })
+  .strict();
 
 interface NautaServerOptions {
   executeStep?: () => Promise<unknown>;
@@ -41,6 +43,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       origin: frontendUrl,
     },
   });
+  const runIdsByStartRequest = new Map<string, string>();
   const coordinator = new RunCoordinator({
     executeStep: options.executeStep,
     composeUi: options.composeUi,
@@ -51,12 +54,23 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
 
   io.on('connection', (socket) => {
     socket.on('run:start', (command, acknowledge) => {
-      if (!startCommandSchema.safeParse(command).success) {
+      const parsed = startCommandSchema.safeParse(command);
+
+      if (!parsed.success) {
         acknowledge({ ok: false, error: 'Invalid run:start command' });
         return;
       }
 
+      const existingRunId = runIdsByStartRequest.get(parsed.data.requestId);
+
+      if (existingRunId) {
+        void socket.join(roomName(existingRunId));
+        acknowledge({ ok: true, runId: existingRunId });
+        return;
+      }
+
       const snapshot = coordinator.createRun();
+      runIdsByStartRequest.set(parsed.data.requestId, snapshot.runId);
       void socket.join(roomName(snapshot.runId));
       acknowledge({ ok: true, runId: snapshot.runId });
 

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const stepResultSchema = z
   .object({
-    status: z.enum(['completed', 'skipped', 'waiting_human', 'failed']),
+    status: z.literal('completed'),
     summary: z.string().min(1),
     factPatch: z.record(z.string(), z.unknown()).optional(),
     findings: z
@@ -27,17 +27,4 @@ export const stepResultSchema = z
   })
   .strict();
 
-export interface StepResult {
-  status: 'completed' | 'skipped' | 'waiting_human' | 'failed';
-  summary: string;
-  factPatch?: Record<string, unknown>;
-  findings?: Array<{
-    id: string;
-    statement: string;
-    evidenceIds: string[];
-  }>;
-  evidence: Array<{
-    id: string;
-    source: string;
-  }>;
-}
+export type StepResult = z.infer<typeof stepResultSchema>;

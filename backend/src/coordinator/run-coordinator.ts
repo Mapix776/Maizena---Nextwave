@@ -61,7 +61,13 @@ export class RunCoordinator {
     await this.#emitNext(run, 'run:status', { status: run.status });
 
     try {
-      const result = stepResultSchema.parse(await this.#executeStep());
+      const parsedResult = stepResultSchema.safeParse(await this.#executeStep());
+
+      if (!parsedResult.success) {
+        throw new Error('Invalid StepResult', { cause: parsedResult.error });
+      }
+
+      const result = parsedResult.data;
       const ui = validateTracerSpec(this.#composeUi(result));
 
       run.facts = { ...run.facts, ...result.factPatch };

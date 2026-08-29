@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { tracerCatalog } from '../contracts/ui.js';
 import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
 import { RunCoordinator } from './run-coordinator.js';
 
@@ -29,6 +30,58 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
   assert.equal(complete.sequence, 3);
   assert.equal(complete.facts.greeting, 'Hello from Ari');
   assert.ok(complete.ui);
+  assert.deepEqual([...tracerCatalog.componentNames].sort(), [
+    'ContainerProgress',
+    'DeliveryCard',
+    'DeliveryIssueCard',
+  ]);
+  assert.ok(
+    Object.values(complete.ui.elements).every(({ type }) =>
+      tracerCatalog.componentNames.includes(type),
+    ),
+  );
+  assert.ok(
+    Object.values(complete.ui.elements).some(
+      ({ type }) => type === 'ContainerProgress',
+    ),
+  );
+  assert.deepEqual(complete.ui.elements[complete.ui.root]?.children, [
+    'container-progress',
+  ]);
+  assert.match(JSON.stringify(complete.ui), /Hello from Ari/);
+});
+
+test('non-success StepResults cannot mutate facts or complete successfully', async () => {
+  for (const status of ['failed', 'skipped', 'waiting_human'] as const) {
+    const envelopes: Array<{ type: string; payload: unknown }> = [];
+    const coordinator = new RunCoordinator({
+      executeStep: async () => ({
+        ...HELLO_STEP_RESULT,
+        status,
+      }),
+      emit: ({ type, payload }) => {
+        envelopes.push({ type, payload });
+      },
+      createRunId: () => `run-${status}`,
+    });
+
+    const run = coordinator.createRun();
+    await coordinator.execute(run.runId);
+
+    assert.deepEqual(
+      envelopes.map(({ type }) => type),
+      ['run:status', 'run:complete'],
+    );
+    assert.deepEqual(envelopes.at(-1)?.payload, {
+      status: 'failed',
+      error: 'Invalid StepResult',
+    });
+
+    const failed = coordinator.getSnapshot(run.runId);
+    assert.equal(failed.status, 'failed');
+    assert.deepEqual(failed.facts, {});
+    assert.equal(failed.ui, null);
+  }
 });
 
 test('invalid component trees never mutate facts or emit ui:replace', async () => {
@@ -43,18 +96,16 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
       root: 'bad',
       elements: {
         bad: {
-          type: 'Text',
-          props: { text: 'Hello from Ari', tone: 'not-a-tone' },
-          children: [],
-        },
-      },
-    },
-    {
-      root: 'missing-root',
-      elements: {
-        bad: {
-          type: 'Text',
-          props: { text: 'Hello from Ari', tone: 'success' },
+          type: 'DeliveryCard',
+          props: {
+            id: 'Hello from Ari',
+            from: 'Cartagena',
+            to: 'Bogotá',
+            transportType: 'Land',
+            status: 'Not a delivery status',
+            createdAt: '2026-08-29T20:00:00.000Z',
+            deliveryTime: '6 hours',
+          },
           children: [],
         },
       },
@@ -63,8 +114,36 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
       root: 'bad',
       elements: {
         bad: {
-          type: 'Stack',
-          props: { gap: 'md' },
+          type: 'ContainerProgress',
+          props: { currentStatus: 'Not a delivery status' },
+          children: [],
+        },
+      },
+    },
+    {
+      root: 'missing-root',
+      elements: {
+        bad: {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'In Transit' },
+          children: [],
+        },
+      },
+    },
+    {
+      root: 'bad',
+      elements: {
+        bad: {
+          type: 'DeliveryCard',
+          props: {
+            id: 'Hello from Ari',
+            from: 'Cartagena',
+            to: 'Bogotá',
+            transportType: 'Land',
+            status: 'In Transit',
+            createdAt: '2026-08-29T20:00:00.000Z',
+            deliveryTime: '6 hours',
+          },
           children: ['missing-child'],
         },
       },
