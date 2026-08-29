@@ -1,5 +1,6 @@
 import { eventBus } from '../../../bus/eventBus.js';
 import { BUS_EVENTS } from '../../../bus/events.js';
+import { env } from '../../../config/env.js';
 import type { UIIntent } from '../../../types/agent.contract.js';
 
 /**
@@ -12,7 +13,7 @@ export async function streamSpec(
   runId: string,
   uiIntent: UIIntent,
   openai: import('openai').OpenAI,
-  model = 'gpt-4o-mini'
+  model = env.OPENAI_MODEL_FAST
 ): Promise<Record<string, unknown>> {
   const stream = await openai.chat.completions.create({
     model,
