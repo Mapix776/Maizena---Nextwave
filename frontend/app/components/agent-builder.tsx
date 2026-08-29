@@ -25,10 +25,18 @@ import { JsonRenderClient } from '@/app/json-render/render-client'
 type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 type MessageRole = 'user' | 'assistant'
 
+interface ChatAttachment {
+  id: string
+  name: string
+  size: number
+  type: string
+}
+
 interface ChatMessage {
   id: string
   role: MessageRole
   text: string
+  attachments?: ChatAttachment[]
   spec?: JsonRenderSpec
 }
 
@@ -93,6 +101,12 @@ const initialConversation: ChatMessage[] = [
   },
 ]
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function responseText(spec: JsonRenderSpec): string {
   const root = spec.elements[spec.root]
   const props = root?.props as Record<string, unknown> | undefined
@@ -112,6 +126,7 @@ export default function AgentBuilderView({
   const shouldAutoScroll = useRef(true)
   const [tab, setTab] = useState('Test Agent')
   const [messages, setMessages] = useState<ChatMessage[]>(initialConversation)
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [input, setInput] = useState('')
   const [agentName, setAgentName] = useState('Ari')
   const [connectionStatus, setConnectionStatus] =
@@ -254,7 +269,7 @@ export default function AgentBuilderView({
     const text = input.trim()
     const socket = socketRef.current
 
-    if (!text || connectionStatus === 'running') return
+    if ((!text && attachments.length === 0) || connectionStatus === 'running') return
     if (!socket?.connected) {
       onNotify(`No se pudo conectar con el backend en ${backendUrl}`)
       return
@@ -263,7 +278,8 @@ export default function AgentBuilderView({
     const userMessage: ChatMessage = {
       id: `user-${crypto.randomUUID()}`,
       role: 'user',
-      text,
+      text: text || 'Archivo adjunto',
+      attachments: attachments.length ? attachments : undefined,
     }
     const nextMessages = [...messages, userMessage]
     const requestId = crypto.randomUUID()
@@ -273,6 +289,7 @@ export default function AgentBuilderView({
     latestSequence.current = 0
     setMessages(nextMessages)
     setInput('')
+    setAttachments([])
     setConnectionStatus('running')
 
     socket.emit(
@@ -366,6 +383,16 @@ export default function AgentBuilderView({
                 data-testid={message.spec ? 'json-render-response' : undefined}
               >
                 <small>{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
+                {message.attachments && (
+                  <div className="chat-attachments" aria-label="Archivos adjuntos">
+                    {message.attachments.map((attachment) => (
+                      <div className="chat-attachment" key={attachment.id}>
+                        <FileText size={16} />
+                        <span><b>{attachment.name}</b><small>{formatFileSize(attachment.size)}</small></span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {message.spec ? (
                   <>
                     <button
@@ -422,13 +449,34 @@ export default function AgentBuilderView({
         </div>
 
         <div className="chat-composer">
+          {attachments.length > 0 && (
+            <div className="pending-attachments" aria-label="Archivos seleccionados">
+              {attachments.map((attachment) => (
+                <div className="pending-attachment" key={attachment.id}>
+                  <FileText size={14} />
+                  <span>{attachment.name}</span>
+                  <button type="button" aria-label={`Quitar ${attachment.name}`} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="composer-row">
           <label className="attach-button" aria-label="Adjuntar archivo">
             <Paperclip size={17} />
             <input
               type="file"
               onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) onNotify(`${file.name} adjuntado`)
+                const selectedFiles = Array.from(event.target.files ?? [])
+                if (!selectedFiles.length) return
+                const nextAttachments = selectedFiles.map((file) => ({
+                  id: `${file.name}-${file.lastModified}`,
+                  name: file.name,
+                  size: file.size,
+                  type: file.type,
+                }))
+                setAttachments((current) => [...current, ...nextAttachments])
+                onNotify(`${selectedFiles.length} archivo${selectedFiles.length === 1 ? '' : 's'} adjuntado${selectedFiles.length === 1 ? '' : 's'}`)
+                event.currentTarget.value = ''
               }}
             />
           </label>
@@ -456,6 +504,7 @@ export default function AgentBuilderView({
           >
             <Send size={18} />
           </button>
+          </div>
         </div>
       </div>
 
