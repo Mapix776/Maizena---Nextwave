@@ -9,6 +9,7 @@ import {
   Activity,
   BarChart3,
   Bell,
+  ChevronDown,
   ChevronRight,
   CircleHelp,
   Clock3,
@@ -92,6 +93,7 @@ function ViewScreen({ active, onNotify, t }: { active: string; onNotify: (messag
 
 function App() {
   const [locale, setLocale] = useState<Locale>('es')
+  const [languageOpen, setLanguageOpen] = useState(false)
   const t = getTranslations(locale)
   const [active, setActive] = useState('Resumen')
   const [dark, setDark] = useState(false)
@@ -154,7 +156,7 @@ function App() {
       </aside>
 
       <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><label className="language-select"><Languages size={15} aria-hidden="true" /><span className="sr-only">{t.language}</span><select value={locale} onChange={(event) => { const nextLocale = event.target.value as Locale; setLocale(nextLocale); window.localStorage.setItem('route-pilot-locale', nextLocale) }}>{(Object.keys(localeLabels) as Locale[]).map((key) => <option key={key} value={key}>{localeLabels[key]}</option>)}</select></label><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
+        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><div className="language-select"><button type="button" className="language-trigger" aria-expanded={languageOpen} aria-haspopup="listbox" onClick={() => setLanguageOpen((open) => !open)}><Languages size={15} aria-hidden="true" /><span>{localeLabels[locale]}</span><ChevronDown size={14} aria-hidden="true" /></button>{languageOpen && <div className="language-menu" role="listbox" aria-label={t.language}>{(Object.keys(localeLabels) as Locale[]).map((key) => <button type="button" role="option" aria-selected={locale === key} className={locale === key ? 'language-option selected' : 'language-option'} key={key} onClick={() => { setLocale(key); setLanguageOpen(false); window.localStorage.setItem('route-pilot-locale', key) }}><span className={`language-flag ${key}`}>{key === 'es' ? 'ES' : key === 'en' ? 'EN' : 'PT'}</span><span>{localeLabels[key]}</span>{locale === key && <span className="language-check">✓</span>}</button>)}</div>}</div><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">{t.operationalSummary} <Activity size={13} /></span><h2>Todo bajo control.</h2><p>Tu red está funcionando al <strong>94%</strong> de capacidad. Hay 3 decisiones que requieren tu atención.</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify('Mostrando incidencias prioritarias') }}>Revisar decisiones <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
