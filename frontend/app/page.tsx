@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
+import { getTranslations, localeLabels, type Locale } from '@/lib/i18n'
 import nextDynamic from 'next/dynamic'
 import {
   Activity,
@@ -50,13 +51,13 @@ const runs: Run[] = [
 ]
 
 const navItems = [
-  { label: 'Resumen', icon: LayoutDashboard },
-  { label: 'Runs', icon: Truck },
-  { label: 'Flota', icon: PackageCheck },
-  { label: 'Calendario', icon: CalendarDays },
-  { label: 'Incidencias', icon: ShieldAlert, badge: '3' },
-  { label: 'Mapa', icon: MapPinned },
-  { label: 'Analíticas', icon: BarChart3 },
+  { key: 'summary', icon: LayoutDashboard },
+  { key: 'runs', icon: Truck },
+  { key: 'fleet', icon: PackageCheck },
+  { key: 'calendar', icon: CalendarDays },
+  { key: 'issues', icon: ShieldAlert, badge: '3' },
+  { key: 'map', icon: MapPinned },
+  { key: 'analytics', icon: BarChart3 },
 ]
 
 function MiniBars() {
@@ -96,6 +97,8 @@ function ViewScreen({ active, onNotify }: { active: string; onNotify: (message: 
 }
 
 function App() {
+  const [locale, setLocale] = useState<Locale>('es')
+  const t = getTranslations(locale)
   const [active, setActive] = useState('Resumen')
   const [dark, setDark] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -106,7 +109,12 @@ function App() {
   const [currentDate, setCurrentDate] = useState('')
 
   useEffect(() => {
-    const updateDate = () => setCurrentDate(new Intl.DateTimeFormat('es-MX', {
+    const savedLocale = window.localStorage.getItem('route-pilot-locale') as Locale | null
+    if (savedLocale && savedLocale in localeLabels) setLocale(savedLocale)
+  }, [])
+
+  useEffect(() => {
+    const updateDate = () => setCurrentDate(new Intl.DateTimeFormat(t.dateLocale, {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
@@ -142,17 +150,17 @@ function App() {
         <p className="nav-label">Operaciones</p>
         <nav aria-label="Navegación principal">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
-          {navItems.map(({ label, icon: Icon, badge }) => <button key={label} className={active === label ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(label)}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button>)}
+          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; return <button key={key} className={active === key ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(key === 'summary' ? 'Resumen' : key === 'runs' ? 'Runs' : key === 'fleet' ? 'Flota' : key === 'calendar' ? 'Calendario' : key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas')}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
           <button className={active === 'Noticias' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Noticias')}><Newspaper size={17} /><span>Noticias</span><em className="news-dot">2</em></button>
         </nav>
         <p className="nav-label secondary-label">Workspace</p>
-        <button className="nav-item" onClick={() => notify('Ajustes listos para configurar')}><Settings size={17} /><span>Ajustes</span></button>
-        <button className="nav-item" onClick={() => notify('Centro de ayuda abierto')}><CircleHelp size={17} /><span>Ayuda</span></button>
+        <button className="nav-item" onClick={() => notify('Ajustes listos para configurar')}><Settings size={17} /><span>{t.settings}</span></button>
+        <button className="nav-item" onClick={() => notify('Centro de ayuda abierto')}><CircleHelp size={17} /><span>{t.help}</span></button>
         <div className="sidebar-bottom"><div className="profile"><div className="profile-avatar">AR</div><div><b>Alex Rivera</b><small>Administrador</small></div><MoreHorizontal size={17} /></div></div>
       </aside>
 
       <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? 'Buenos días, Alex' : active}</h1></div><div className="top-actions"><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar runs, rutas..." aria-label="Buscar runs" />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
+        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><label className="language-select"><span className="sr-only">Language</span><select value={locale} onChange={(event) => { const nextLocale = event.target.value as Locale; setLocale(nextLocale); window.localStorage.setItem('route-pilot-locale', nextLocale) }}>{(Object.keys(localeLabels) as Locale[]).map((key) => <option key={key} value={key}>{localeLabels[key]}</option>)}</select></label><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar runs, rutas..." aria-label="Buscar runs" />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">Resumen operativo <Activity size={13} /></span><h2>Todo bajo control.</h2><p>Tu red está funcionando al <strong>94%</strong> de capacidad. Hay 3 decisiones que requieren tu atención.</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify('Mostrando incidencias prioritarias') }}>Revisar decisiones <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
