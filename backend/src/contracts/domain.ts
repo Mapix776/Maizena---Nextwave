@@ -44,6 +44,23 @@ export const DocumentPartySchema = z
   .strict();
 export type DocumentParty = z.infer<typeof DocumentPartySchema>;
 
+export const DocumentRelationshipTypeSchema = z.enum([
+  'DISCREPANCY_WITH',
+  'SUPERSEDES',
+  'SUPPORTS',
+  'DERIVED_FROM',
+]);
+export type DocumentRelationshipType = z.infer<typeof DocumentRelationshipTypeSchema>;
+
+export const DocumentRelationshipSchema = z
+  .object({
+    targetDocumentId: z.string().uuid(),
+    relationshipType: DocumentRelationshipTypeSchema,
+    details: z.record(z.string(), z.unknown()).default({}),
+  })
+  .strict();
+export type DocumentRelationship = z.infer<typeof DocumentRelationshipSchema>;
+
 /** Business association required when a file is registered as a document. */
 export const DocumentAssociationSchema = z
   .object({
@@ -51,6 +68,7 @@ export const DocumentAssociationSchema = z
     documentType: DocumentTypeSchema,
     documentReference: z.string().trim().min(1).max(120).nullable().default(null),
     parties: z.array(DocumentPartySchema).max(12).default([]),
+    relationships: z.array(DocumentRelationshipSchema).max(12).default([]),
   })
   .strict();
 export type DocumentAssociation = z.infer<typeof DocumentAssociationSchema>;

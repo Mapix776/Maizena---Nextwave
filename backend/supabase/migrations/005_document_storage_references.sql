@@ -67,6 +67,24 @@ CREATE INDEX IF NOT EXISTS idx_document_parties_document
 CREATE INDEX IF NOT EXISTS idx_document_parties_name
   ON document_parties (party_name);
 
+CREATE TABLE IF NOT EXISTS document_relationships (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  target_document_id  UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  relationship_type   TEXT NOT NULL CHECK (relationship_type IN (
+    'DISCREPANCY_WITH', 'SUPERSEDES', 'SUPPORTS', 'DERIVED_FROM'
+  )),
+  details_json        JSONB NOT NULL DEFAULT '{}',
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (source_document_id <> target_document_id),
+  UNIQUE (source_document_id, target_document_id, relationship_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_document_relationships_source
+  ON document_relationships (source_document_id);
+CREATE INDEX IF NOT EXISTS idx_document_relationships_target
+  ON document_relationships (target_document_id);
+
 -- Import parties captured by prior document extraction runs. New uploads should
 -- write the same data directly to document_parties.
 INSERT INTO document_parties (
@@ -95,8 +113,36 @@ WHERE party.party_role IS NOT NULL
   AND party.party_name IS NOT NULL
 ON CONFLICT (document_id, party_role, party_name) DO NOTHING;
 
+-- Import document-to-document relationships captured by prior extraction runs.
+INSERT INTO document_relationships (
+  source_document_id,
+  target_document_id,
+  relationship_type,
+  details_json
+)
+SELECT
+  documents.id,
+  relationship.target_document_id::UUID,
+  relationship.relationship_type,
+  COALESCE(relationship.details_json, '{}'::JSONB)
+FROM documents
+CROSS JOIN LATERAL jsonb_to_recordset(
+  COALESCE(documents.extracted_json -> 'document_relationships', '[]'::JSONB)
+) AS relationship(
+  target_document_id TEXT,
+  relationship_type TEXT,
+  details_json JSONB
+)
+WHERE relationship.target_document_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  AND relationship.relationship_type IN ('DISCREPANCY_WITH', 'SUPERSEDES', 'SUPPORTS', 'DERIVED_FROM')
+ON CONFLICT (source_document_id, target_document_id, relationship_type) DO NOTHING;
+
 ALTER TABLE document_parties ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "service_role_all" ON document_parties
+  FOR ALL USING (auth.role() = 'service_role');
+
+ALTER TABLE document_relationships ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "service_role_all" ON document_relationships
   FOR ALL USING (auth.role() = 'service_role');
 
 COMMENT ON COLUMN documents.document_reference IS
@@ -107,3 +153,5 @@ COMMENT ON COLUMN documents.storage_path IS
   'Object path: operations/{operation_id}/{document-type-folder}/{filename}.';
 COMMENT ON TABLE document_parties IS
   'Parties named by a document. The document is associated to its operation through documents.operation_id.';
+COMMENT ON TABLE document_relationships IS
+  'Auditable relationships between two documents, such as a discrepancy or replacement.';

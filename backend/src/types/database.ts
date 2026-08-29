@@ -1,6 +1,7 @@
 import type {
   CustomsLight,
   DocumentPartyRole,
+  DocumentRelationshipType,
   DocumentType,
 } from '../contracts/domain.js';
 
@@ -57,6 +58,15 @@ export interface DocumentPartyRow {
   party_role: DocumentPartyRole;
   party_name: string;
   party_reference: string | null;
+  details_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface DocumentRelationshipRow {
+  id: string;
+  source_document_id: string;
+  target_document_id: string;
+  relationship_type: DocumentRelationshipType;
   details_json: Record<string, unknown>;
   created_at: string;
 }
