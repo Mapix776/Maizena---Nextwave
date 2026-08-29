@@ -1,0 +1,91 @@
+{
+  "terms": [
+    {
+      "id": "T001",
+      "term": "Ari",
+      "definition": "The supervisor AI logistics operator agent (Mastra). Understands the active flow step, delegates to specialists, selects only registered tools, returns a typed StepResult. Never owns run state and never manufactures operational facts.",
+      "aliases": ["logistics agent", "supervisor agent"],
+      "antiDefinitions": ["Not the run coordinator: Ari reasons, the coordinator owns state, sequencing, and authorization."],
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": [".wall-i/runs/nauta-ari-agent/intake/resolved.md", "NAUTA_AGENT_BACKEND_SPEC.md §4.3"]
+    },
+    {
+      "id": "T002",
+      "term": "Run",
+      "definition": "One execution of a FlowDefinition for a scenario, identified by runId. Canonical state is RunState (status, steps, facts, findings, pendingHuman, report, ui, sequence counter). Clients subscribe via Socket.IO room run:{runId}.",
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §6"]
+    },
+    {
+      "id": "T003",
+      "term": "FlowDefinition",
+      "definition": "Versioned JSON data describing the logistics flow as steps with an allowlisted capability vocabulary. Stored as data, never hard-coded as a graph; executed one step at a time by the FlowRunner, which re-reads the latest version before each step.",
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §5"]
+    },
+    {
+      "id": "T004",
+      "term": "RunCoordinator",
+      "definition": "The deterministic application harness: creates/cancels runs, advances steps under a per-runId mutex, validates StepResults before mutating RunState, invokes the UI composer, emits ordered Socket.IO envelopes. The LLM never performs these duties.",
+      "aliases": ["coordinator"],
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §4.2, §16"]
+    },
+    {
+      "id": "T005",
+      "term": "StepResult",
+      "definition": "The typed envelope every flow capability returns: status (completed|skipped|waiting_human|failed), summary, optional factPatch and findings, and evidence entries. Zod-validated by the coordinator; invalid output fails the step and preserves the last valid UI.",
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §8"]
+    },
+    {
+      "id": "T006",
+      "term": "UIEnvelope",
+      "definition": "A full, catalog-validated json-render tree plus runId, uiVersion, reason, and timestamp, delivered via ui:replace. The UI is a disposable projection of RunState — regenerable at any time, never a source of truth. Full replacement; patches/deltas are explicitly deferred.",
+      "aliases": ["ui:replace payload"],
+      "antiDefinitions": ["Not the repo's old JsonRenderPatch incremental protocol — that contract is deleted by the rewrite."],
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §11"]
+    },
+    {
+      "id": "T007",
+      "term": "Facts vs Findings",
+      "definition": "Facts are canonical tool-produced data (ETA, carrier, container state). Findings are evidence-backed interpretations (\"ETA slipped by nine days\") that must reference evidence IDs. Kept separate from messages (Mastra memory) and UI (projection).",
+      "source": "docs",
+      "status": "draft",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["NAUTA_AGENT_BACKEND_SPEC.md §6"]
+    },
+    {
+      "id": "T008",
+      "term": "recon",
+      "definition": "Legacy agent name from the pre-spec repo contract ('ari' | 'recon'). Replaced by the spec's report specialist; kept visible so old references are recognized.",
+      "source": "code",
+      "status": "deprecated",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": ["backend/src/types/agent.contract.ts (origin/main)"]
+    },
+    {
+      "id": "T009",
+      "term": "engine tracer",
+      "definition": "The first vertical slice, requested verbatim by the user: the full setup where the AI returns a hello world through one deterministic tool that always returns the same result — Mastra agent → RunCoordinator → Socket.IO → json-render in the Next frontend. LLM capabilities, sub-agents, and tools extend from this base later.",
+      "aliases": ["tracer bullet", "first slice"],
+      "source": "user",
+      "status": "accepted",
+      "introducedByTask": "nauta-ari-agent",
+      "evidence": [".wall-i/runs/nauta-ari-agent/intake/resolved.md"]
+    }
+  ]
+}
