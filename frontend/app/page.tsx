@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import nextDynamic from 'next/dynamic'
 import {
   Activity,
@@ -103,6 +103,20 @@ function App() {
   const [notice, setNotice] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [currentDate, setCurrentDate] = useState('')
+
+  useEffect(() => {
+    const updateDate = () => setCurrentDate(new Intl.DateTimeFormat('es-MX', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date()))
+
+    updateDate()
+    const timer = window.setInterval(updateDate, 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const filteredRuns = useMemo(() => runs.filter((run) => `${run.id} ${run.route} ${run.carrier}`.toLowerCase().includes(query.toLowerCase())), [query])
 
@@ -138,7 +152,7 @@ function App() {
       </aside>
 
       <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">Martes, 18 de junio de 2024</p><h1>{active === 'Resumen' ? 'Buenos días, Alex' : active}</h1></div><div className="top-actions"><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar runs, rutas..." aria-label="Buscar runs" />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
+        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? 'Buenos días, Alex' : active}</h1></div><div className="top-actions"><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar runs, rutas..." aria-label="Buscar runs" />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">Resumen operativo <Activity size={13} /></span><h2>Todo bajo control.</h2><p>Tu red está funcionando al <strong>94%</strong> de capacidad. Hay 3 decisiones que requieren tu atención.</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify('Mostrando incidencias prioritarias') }}>Revisar decisiones <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
