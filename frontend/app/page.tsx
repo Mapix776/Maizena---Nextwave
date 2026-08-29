@@ -9,12 +9,12 @@ import {
   Activity,
   BarChart3,
   Bell,
-  CalendarDays,
   ChevronRight,
   CircleHelp,
   Clock3,
   Filter,
   LayoutDashboard,
+  Languages,
   ListTodo,
   MapPinned,
   Menu,
@@ -23,7 +23,6 @@ import {
   MoreHorizontal,
   Newspaper,
   Paperclip,
-  PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
@@ -38,7 +37,6 @@ import {
   Zap,
 } from 'lucide-react'
 
-const FleetMap = nextDynamic(() => import('@/app/components/fleet-map'), { ssr: false })
 const OperationsMapView = nextDynamic(() => import('@/app/components/operations-map'), { ssr: false })
 const AgentBuilderView = nextDynamic(() => import('@/app/components/agent-builder'), { ssr: false })
 
@@ -53,8 +51,6 @@ const runs: Run[] = [
 const navItems = [
   { key: 'summary', icon: LayoutDashboard },
   { key: 'runs', icon: Truck },
-  { key: 'fleet', icon: PackageCheck },
-  { key: 'calendar', icon: CalendarDays },
   { key: 'issues', icon: ShieldAlert, badge: '3' },
   { key: 'map', icon: MapPinned },
   { key: 'analytics', icon: BarChart3 },
@@ -84,8 +80,6 @@ function ViewScreen({ active, onNotify, t }: { active: string; onNotify: (messag
   if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
     Runs: { kicker: 'Operaciones', title: 'Todos los runs', description: 'Supervisa rutas activas, próximos movimientos y estados de entrega.', items: ['RUN-2048 · Madrid → Lyon · En tránsito', 'RUN-2047 · Valencia → Lisboa · En preparación', 'RUN-2046 · Bilbao → París · Revisar'] },
-    Flota: { kicker: 'Recursos', title: 'Flota disponible', description: 'Consulta el estado de tus vehículos y su próxima asignación.', items: ['TRK-018 · Volvo FH · Disponible', 'TRK-024 · Mercedes Actros · En ruta', 'TRK-031 · Scania R · Mantenimiento'] },
-    Calendario: { kicker: 'Planificación', title: 'Calendario operativo', description: 'Organiza salidas, ventanas de entrega y turnos del equipo.', items: ['09:20 · Valencia → Lisboa · 2 vehículos', '13:00 · Bilbao → París · 1 vehículo', '18:40 · Madrid → Lyon · Entrega prevista'] },
     Incidencias: { kicker: 'Atención', title: 'Incidencias', description: 'Revisa las alertas que requieren una decisión humana.', items: ['Retraso de 35 min · RUN-2046', 'Documentación pendiente · RUN-2047', 'Cambio de muelle solicitado · Centro Lyon'] },
     Chat: { kicker: 'Comunicación', title: 'Chat del equipo', description: 'Coordina decisiones rápidas con las personas de operaciones.', items: ['Lucía · ¿Confirmamos la salida de Valencia?', 'Diego · El muelle 4 ya está disponible', 'Marina · He actualizado el ETA de Lyon'] },
     Noticias: { kicker: 'Comunicación', title: 'Noticias', description: 'Mantente al día de cambios relevantes para tu red logística.', items: ['Nueva ventana de circulación en Lyon', 'Seur amplía cobertura para Lisboa', 'Actualización de tarifas para junio'] },
@@ -160,7 +154,7 @@ function App() {
       </aside>
 
       <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><label className="language-select"><span className="sr-only">Language</span><select value={locale} onChange={(event) => { const nextLocale = event.target.value as Locale; setLocale(nextLocale); window.localStorage.setItem('route-pilot-locale', nextLocale) }}>{(Object.keys(localeLabels) as Locale[]).map((key) => <option key={key} value={key}>{localeLabels[key]}</option>)}</select></label><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
+        <header className="topbar"><div><p className="eyebrow">{currentDate || 'Cargando fecha...'}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><label className="language-select"><Languages size={15} aria-hidden="true" /><span className="sr-only">{t.language}</span><select value={locale} onChange={(event) => { const nextLocale = event.target.value as Locale; setLocale(nextLocale); window.localStorage.setItem('route-pilot-locale', nextLocale) }}>{(Object.keys(localeLabels) as Locale[]).map((key) => <option key={key} value={key}>{localeLabels[key]}</option>)}</select></label><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">{t.operationalSummary} <Activity size={13} /></span><h2>Todo bajo control.</h2><p>Tu red está funcionando al <strong>94%</strong> de capacidad. Hay 3 decisiones que requieren tu atención.</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify('Mostrando incidencias prioritarias') }}>Revisar decisiones <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
@@ -170,8 +164,6 @@ function App() {
         <div className="dashboard-grid"><div className="panel activity-panel"><div className="panel-heading"><div><p className="section-kicker">{t.performance}</p><h3>{t.runActivity}</h3></div><button className="filter-button" onClick={() => notify('Filtro de actividad aplicado')}><Filter size={14} /> Esta semana</button></div><div className="chart-wrap"><div className="y-axis"><span>30</span><span>20</span><span>10</span><span>0</span></div><svg className="line-chart" viewBox="0 0 600 190" preserveAspectRatio="none" role="img" aria-label="Gráfico de actividad semanal"><path className="chart-area" d="M0,148 C40,125 54,48 90,88 S145,142 184,103 S240,36 275,76 S321,138 360,105 S410,62 440,93 S495,153 525,112 S560,48 600,63 V190 H0 Z" /><path className="chart-line" d="M0,148 C40,125 54,48 90,88 S145,142 184,103 S240,36 275,76 S321,138 360,105 S410,62 440,93 S495,153 525,112 S560,48 600,63" /></svg></div><div className="chart-labels"><span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span></div></div>
           <div className="panel cost-panel"><div className="panel-heading"><div><p className="section-kicker">Finanzas</p><h3>Coste operativo</h3></div><button className="dots-button" onClick={() => notify('Más opciones de finanzas')}><MoreHorizontal size={18} /></button></div><p className="big-number">13.840€ <small>este mes</small></p><MiniBars /><div className="budget-line"><span>Presupuesto mensual</span><b>72%</b></div><div className="progress"><span style={{ width: '72%' }} /></div></div>
           <div className="panel runs-panel"><div className="panel-heading"><div><p className="section-kicker">{t.tracking}</p><h3>{t.recentRuns}</h3></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? t.seeLess : t.seeAll} <ChevronRight size={14} /></button></div><div className="run-list">{filteredRuns.slice(0, showAll ? 3 : 2).map((run) => <button className="run-row" key={run.id} onClick={() => notify(`${run.id} seleccionado`)}><span className={`run-icon ${run.tone}`}><Truck size={16} /></span><span className="run-info"><b>{run.route}</b><small>{run.id} · {run.carrier}</small></span><span className={`status ${run.tone}`}>{run.status}</span><span className="run-eta">{run.eta}</span><ChevronRight size={15} /></button>)}</div></div>
-          <FleetMap />
-          <div className="panel calendar-panel"><div className="panel-heading"><div><p className="section-kicker">{t.planning}</p><h3>{t.nextDepartures}</h3></div><button className="dots-button" onClick={() => notify('Calendario abierto')}><CalendarDays size={17} /></button></div><div className="calendar-date"><strong>JUN</strong><b>18</b><span>Martes</span></div><div className="departure"><span className="time">09:20</span><div><b>Valencia → Lisboa</b><small>2 vehículos · Seur</small></div><span className="status violet">En 4h</span></div><div className="departure"><span className="time">13:00</span><div><b>Bilbao → París</b><small>1 vehículo · DB Schenker</small></div><span className="status amber">Mañana</span></div><button className="calendar-button" onClick={() => { setActive('Calendario'); notify('Calendario seleccionado') }}>Ver calendario completo <ChevronRight size={14} /></button></div>
         </div>
         </> : <ViewScreen active={active} onNotify={notify} t={t} />}
       </section>
