@@ -5,7 +5,7 @@ import type { ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
 import { createProductionModel } from './models.js';
 import {
-  defineSubagentRegistry,
+  createSubagentRegistry,
   type SubagentRegistry,
 } from './subagents/registry.js';
 import {
@@ -17,6 +17,9 @@ import {
 export const ARI_SYSTEM_PROMPT = 'You are a helpful assistant.';
 
 export const ARI_INSTRUCTIONS = `${ARI_SYSTEM_PROMPT}
+
+Delegate requests to reconcile a Bill of Lading, Commercial Invoice, and
+Packing List to reconAgent.
 
 For every user request, call renderDemoTool exactly once. Pass your helpful,
 natural-language answer in assistantResponse. The tool returns that answer
@@ -33,19 +36,21 @@ export interface AriOptions {
 }
 
 export function createAriAgent(options: AriOptions = {}) {
+  const model = options.model ?? createProductionModel();
   const toolRegistry =
     options.toolRegistry ??
     createToolRegistry({
       onRenderDemoExecution: options.onRenderToolExecution,
     });
   const subagentRegistry =
-    options.subagentRegistry ?? defineSubagentRegistry({});
+    options.subagentRegistry ??
+    createSubagentRegistry({ model, toolRegistry });
 
   return new Agent({
     id: 'ari',
     name: 'Ari',
     instructions: ARI_INSTRUCTIONS,
-    model: options.model ?? createProductionModel(),
+    model,
     tools: selectTools(toolRegistry, ARI_TOOL_KEYS),
     agents: subagentRegistry,
   });
@@ -62,7 +67,7 @@ export async function executeAriStep(
       ? { role: 'user' as const, content: message.content }
       : { role: 'assistant' as const, content: message.content },
   );
-  const response = await agent.generate(modelMessages, { maxSteps: 2 });
+  const response = await agent.generate(modelMessages, { maxSteps: 6 });
   const renderResult = response.toolResults.find(
     ({ payload }) => payload.toolName === 'renderDemoTool',
   );

@@ -95,13 +95,15 @@ interface RunEnvelope {
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
 const fixedInstructions = `You are a helpful assistant.
 
+Delegate requests to reconcile a Bill of Lading, Commercial Invoice, and Packing List to reconAgent.
+
 For every user request, call renderDemoTool exactly once. Return the helpful answer through the fixed json-render demo components.`
 
 const initialConversation: ChatMessage[] = [
   {
     id: 'welcome',
     role: 'assistant',
-    text: 'Hola. Soy Ari. ¿En qué puedo ayudarte hoy?',
+    text: 'Hola. Soy Ari. Puedo ayudarte y delegar la reconciliación de BL, Invoice y Packing List a Recon.',
   },
 ]
 
@@ -605,7 +607,7 @@ export default function AgentBuilderView({
                 </div>
                 <div>
                   <span>Salida</span>
-                  <b>json-render</b>
+                  <b>Recon → json-render</b>
                 </div>
               </div>
             </div>
@@ -683,12 +685,12 @@ export default function AgentBuilderView({
         <div className="knowledge-section">
           <h4>Tracer contract</h4>
           <p>
-            AssistantMessage → DeliveryCard → ContainerProgress. Component
-            names and props are validated before state changes or UI events.
+            Ari → Recon → reconcileShipmentDocumentsTool → renderDemoTool.
+            Recon alone owns the reconciliation capability; rendered component
+            names and props remain catalog-validated.
           </p>
         </div>
       </div>}
     </div>
   )
 }
-

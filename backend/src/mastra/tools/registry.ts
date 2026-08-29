@@ -1,3 +1,4 @@
+import { createReconcileShipmentDocumentsTool } from './reconcile-shipment-documents.tool.js';
 import { createRenderDemoTool } from './render-demo.tool.js';
 
 interface ToolRegistryOptions {
@@ -6,6 +7,7 @@ interface ToolRegistryOptions {
 
 export function createToolRegistry(options: ToolRegistryOptions = {}) {
   return {
+    reconcileShipmentDocumentsTool: createReconcileShipmentDocumentsTool(),
     renderDemoTool: createRenderDemoTool({
       onExecution: options.onRenderDemoExecution,
     }),
