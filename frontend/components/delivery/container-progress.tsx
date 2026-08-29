@@ -1,6 +1,6 @@
 'use client'
 
-import { Check, Circle, CircleDot, Ship, Truck } from 'lucide-react'
+import { Check, Circle, CircleDot, CircleCheckBig, Ship, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { containerStatuses, ContainerStatus, statusIndex } from './types'
 
@@ -23,8 +23,8 @@ export function ContainerProgress({ currentStatus }: { currentStatus: ContainerS
           const done = index < current
           const active = index === current
           return <div className="relative z-10 flex min-w-0 flex-col items-center gap-2 text-center" key={status}>
-            <span className={cn('flex size-8 items-center justify-center rounded-full border-2 bg-background', done || active ? 'border-primary text-primary' : 'border-border text-muted-foreground')}>
-              {done ? <Check className="size-4" aria-hidden="true" /> : active ? (index === 1 ? <Ship className="size-4" aria-hidden="true" /> : index === 2 ? <Truck className="size-4" aria-hidden="true" /> : <CircleDot className="size-4" aria-hidden="true" />) : <Circle className="size-3" aria-hidden="true" />}
+            <span className={cn('flex size-8 items-center justify-center rounded-full border-2 bg-background', done || active ? 'border-primary text-primary' : 'border-border text-muted-foreground', active && status === 'Delivered' && 'size-11 border-0 bg-primary text-primary-foreground shadow-[0_0_0_5px_color-mix(in_srgb,var(--primary)_16%,transparent),0_8px_24px_color-mix(in_srgb,var(--primary)_28%,transparent)] transition-transform duration-300 hover:scale-105')} aria-label={active && status === 'Delivered' ? 'Delivered — final status' : undefined}>
+              {done ? <Check className="size-4" aria-hidden="true" /> : active ? (status === 'Delivered' ? <CircleCheckBig className="size-6" strokeWidth={2.5} aria-hidden="true" /> : index === 1 ? <Ship className="size-4" aria-hidden="true" /> : index === 2 ? <Truck className="size-4" aria-hidden="true" /> : <CircleDot className="size-4" aria-hidden="true" />) : <Circle className="size-3" aria-hidden="true" />}
             </span>
             <span className={cn('text-[11px] leading-tight', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{status}</span>
           </div>
