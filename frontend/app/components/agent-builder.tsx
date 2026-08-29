@@ -32,6 +32,39 @@ interface ChatMessage {
   spec?: JsonRenderSpec
 }
 
+type ContextItem = {
+  id: string
+  title: string
+  kind: 'Documento' | 'Informe' | 'Detalle'
+  description: string
+  sourceId: string
+}
+
+function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextItem[] {
+  return Object.entries(spec.elements).map(([id, element], index) => {
+    const props = element.props as Record<string, unknown>
+    const kind = element.type.toLowerCase().includes('issue')
+      ? 'Informe'
+      : element.type.toLowerCase().includes('document')
+        ? 'Documento'
+        : 'Detalle'
+    const title = typeof props.title === 'string'
+      ? props.title
+      : typeof props.reference === 'string'
+        ? props.reference
+        : `${kind} ${index + 1}`
+    return {
+      id: `${sourceId}-${id}`,
+      title,
+      kind,
+      description: typeof props.description === 'string'
+        ? props.description
+        : `Información contextual de ${title.toLowerCase()}.`,
+      sourceId,
+    }
+  })
+}
+
 interface RunSnapshot {
   runId: string
   status: 'pending' | 'running' | 'completed' | 'failed'
@@ -75,6 +108,8 @@ export default function AgentBuilderView({
   const activeRunId = useRef<string | null>(null)
   const pendingRequestId = useRef<string | null>(null)
   const latestSequence = useRef(0)
+  const messagesEnd = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScroll = useRef(true)
   const [tab, setTab] = useState('Test Agent')
   const [messages, setMessages] = useState<ChatMessage[]>(initialConversation)
   const [input, setInput] = useState('')
@@ -88,6 +123,8 @@ export default function AgentBuilderView({
     'Empresa de distribución y logística',
   )
   const [saved, setSaved] = useState(false)
+  const [contextItems, setContextItems] = useState<ContextItem[]>([])
+  const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
 
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
@@ -207,6 +244,12 @@ export default function AgentBuilderView({
     }
   }, [])
 
+  useEffect(() => {
+    if (shouldAutoScroll.current) {
+      messagesEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [messages, connectionStatus])
+
   function sendMessage() {
     const text = input.trim()
     const socket = socketRef.current
@@ -270,8 +313,14 @@ export default function AgentBuilderView({
   }
 
   const connected = connectionStatus === 'ready'
-  const hasImportantResult = messages.some((message) => Boolean(message.spec))
-  const showContextPanel = connectionStatus === 'running' || hasImportantResult
+  function openContextPanel(spec: JsonRenderSpec, sourceId: string) {
+    const items = contextItemsFromSpec(spec, sourceId)
+    setContextItems(items)
+    setSelectedContextId(items[0]?.id ?? null)
+  }
+
+  const selectedContext = contextItems.find((item) => item.id === selectedContextId)
+  const showContextPanel = contextItems.length > 0
   const statusLabel = {
     connecting: 'Conectando',
     ready: 'Conectado',
@@ -296,7 +345,14 @@ export default function AgentBuilderView({
           </span>
         </div>
 
-        <div className="chat-messages" aria-live="polite">
+        <div
+          className="chat-messages"
+          aria-live="polite"
+          onScroll={(event) => {
+            const element = event.currentTarget
+            shouldAutoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+          }}
+        >
           {messages.map((message) => (
             <div
               key={message.id}
@@ -311,7 +367,15 @@ export default function AgentBuilderView({
               >
                 <small>{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
                 {message.spec ? (
-                  <JsonRenderClient spec={message.spec as Spec} />
+                  <>
+                    <button
+                      className="open-context-button"
+                      onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
+                    >
+                      <FileText size={13} /> Abrir información
+                    </button>
+                    <JsonRenderClient spec={message.spec as Spec} />
+                  </>
                 ) : (
                   <p>{message.text}</p>
                 )}
@@ -354,6 +418,7 @@ export default function AgentBuilderView({
               </div>
             </div>
           )}
+          <div ref={messagesEnd} />
         </div>
 
         <div className="chat-composer">
@@ -396,9 +461,17 @@ export default function AgentBuilderView({
 
       {showContextPanel && <div className="builder-right">
         <div className="context-panel-label">
-          <span><Activity size={14} /> Contexto activo</span>
-          <small>{connectionStatus === 'running' ? 'Ejecución en curso' : 'Último resultado importante'}</small>
+          <span><Activity size={14} /> Información contextual</span>
+          <button aria-label="Cerrar panel" onClick={() => setContextItems([])}>×</button>
         </div>
+        <div className="context-tabs" role="tablist" aria-label="Información disponible">
+          {contextItems.map((item) => (
+            <button key={item.id} role="tab" aria-selected={selectedContextId === item.id} className={selectedContextId === item.id ? 'selected' : ''} onClick={() => setSelectedContextId(item.id)}>
+              <small>{item.kind}</small><span>{item.title}</span>
+            </button>
+          ))}
+        </div>
+        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p><small>Origen: {selectedContext.sourceId}</small></div>}
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
