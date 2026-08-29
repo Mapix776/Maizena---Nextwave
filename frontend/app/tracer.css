@@ -94,6 +94,25 @@
   color: var(--muted);
 }
 
+.context-file-preview {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--surface);
+}
+
+.context-file-preview[title] {
+  min-height: 280px;
+}
+
+.context-file-link {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .open-context-button {
   display: inline-flex;
   align-items: center;
@@ -138,6 +157,74 @@
 }
 
 .chat-message.rendered {
+  width: 100%;
+}
+
+.chat-attachments,
+.pending-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chat-attachment,
+.pending-attachment {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.chat-attachment > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.chat-attachment b,
+.pending-attachment span {
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-attachment small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pending-attachments {
+  width: 100%;
+}
+
+.pending-attachment {
+  max-width: 260px;
+  padding: 6px 8px;
+}
+
+.pending-attachment button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
 }
 
