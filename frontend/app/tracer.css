@@ -1,3 +1,36 @@
+.agent-builder.context-panel-hidden {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.agent-builder.context-panel-hidden .builder-left {
+  max-width: 980px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.context-panel-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.context-panel-label span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.context-panel-label small {
+  font-size: 10px;
+}
+
 .chat-message.rendered {
   width: 100%;
 }

@@ -2,6 +2,7 @@
 
 import type { Spec } from '@json-render/core'
 import {
+  Activity,
   CheckCircle2,
   Copy,
   FileText,
@@ -269,6 +270,8 @@ export default function AgentBuilderView({
   }
 
   const connected = connectionStatus === 'ready'
+  const hasImportantResult = messages.some((message) => Boolean(message.spec))
+  const showContextPanel = connectionStatus === 'running' || hasImportantResult
   const statusLabel = {
     connecting: 'Conectando',
     ready: 'Conectado',
@@ -277,7 +280,7 @@ export default function AgentBuilderView({
   }[connectionStatus]
 
   return (
-    <div className="agent-builder">
+    <div className={`agent-builder ${showContextPanel ? 'context-panel-visible' : 'context-panel-hidden'}`}>
       <div className="builder-left">
         <div className="chat-header">
           <div className="chat-brand">
@@ -391,7 +394,11 @@ export default function AgentBuilderView({
         </div>
       </div>
 
-      <div className="builder-right">
+      {showContextPanel && <div className="builder-right">
+        <div className="context-panel-label">
+          <span><Activity size={14} /> Contexto activo</span>
+          <small>{connectionStatus === 'running' ? 'Ejecución en curso' : 'Último resultado importante'}</small>
+        </div>
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
@@ -536,7 +543,7 @@ export default function AgentBuilderView({
             names and props are validated before state changes or UI events.
           </p>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }
