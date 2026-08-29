@@ -15,13 +15,13 @@
     "@ai-sdk/openai": "4.0.51",
     "@ai-sdk/provider": "4.0.8",
     "@json-render/core": "0.20.0",
-    "@mastra/core": "1.63.2",
+    "@mastra/core": "^1.63.2",
     "socket.io": "4.8.3",
     "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "^22.13.5",
-    "socket.io-client": "4.8.3",
+    "socket.io-client": "^4.8.3",
     "tsx": "4.23.12",
     "typescript": "5.7.3"
   }
