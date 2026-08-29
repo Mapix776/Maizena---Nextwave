@@ -51,7 +51,6 @@ const runs: Run[] = [
 
 const navItems = [
   { key: 'summary', icon: LayoutDashboard },
-  { key: 'runs', icon: Truck },
   { key: 'issues', icon: ShieldAlert, badge: '3' },
   { key: 'map', icon: MapPinned },
   { key: 'analytics', icon: BarChart3 },
@@ -80,7 +79,6 @@ function ViewScreen({ active, onNotify, t }: { active: string; onNotify: (messag
   if (active === 'Analíticas') return <AnalyticsView onNotify={onNotify} t={t} />
   if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
-    Runs: { kicker: 'Operaciones', title: 'Todos los runs', description: 'Supervisa rutas activas, próximos movimientos y estados de entrega.', items: ['RUN-2048 · Madrid → Lyon · En tránsito', 'RUN-2047 · Valencia → Lisboa · En preparación', 'RUN-2046 · Bilbao → París · Revisar'] },
     Incidencias: { kicker: 'Atención', title: 'Incidencias', description: 'Revisa las alertas que requieren una decisión humana.', items: ['Retraso de 35 min · RUN-2046', 'Documentación pendiente · RUN-2047', 'Cambio de muelle solicitado · Centro Lyon'] },
     Chat: { kicker: 'Comunicación', title: 'Chat del equipo', description: 'Coordina decisiones rápidas con las personas de operaciones.', items: ['Lucía · ¿Confirmamos la salida de Valencia?', 'Diego · El muelle 4 ya está disponible', 'Marina · He actualizado el ETA de Lyon'] },
     Noticias: { kicker: 'Comunicación', title: 'Noticias', description: 'Mantente al día de cambios relevantes para tu red logística.', items: ['Nueva ventana de circulación en Lyon', 'Seur amplía cobertura para Lisboa', 'Actualización de tarifas para junio'] },
@@ -146,7 +144,7 @@ function App() {
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Navegación principal">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
-          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; return <button key={key} className={active === key ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(key === 'summary' ? 'Resumen' : key === 'runs' ? 'Runs' : key === 'fleet' ? 'Flota' : key === 'calendar' ? 'Calendario' : key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas')}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
+          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; return <button key={key} className={active === key ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(key === 'summary' ? 'Resumen' : key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas')}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
           <button className={active === 'Noticias' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Noticias')}><Newspaper size={17} /><span>Noticias</span><em className="news-dot">2</em></button>
         </nav>
         <p className="nav-label secondary-label">{t.workspace}</p>
