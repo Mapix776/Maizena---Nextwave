@@ -1,18 +1,30 @@
 'use client'
 
-import type { Spec } from '@json-render/core'
 import { JsonRenderClient } from './render-client'
-
-export const localSpec: Spec = {
-  root: 'delivery-demo',
-  elements: {
-    'delivery-demo': { type: 'DeliveryCard', props: { id: 'container-001', from: 'Shanghai', to: 'Cartagena', transportType: 'Sea', status: 'In Transit', createdAt: '2026-08-29T10:30:00Z', deliveryTime: '18 days' }, children: [] },
-    'progress-demo': { type: 'ContainerProgress', props: { currentStatus: 'In Transit' }, children: [] },
-    'issue-demo': { type: 'DeliveryIssueCard', props: { id: 'container-002', from: 'Miami', to: 'Cartagena', transportType: 'Sea', status: 'Customs', issue: 'Customs clearance delayed', createdAt: '2026-08-29T10:30:00Z', deliveryTime: '21 days' }, children: [] },
-  },
-}
+import { catalogShowcase } from '@/lib/json-render/catalog-showcase'
 
 export default function JsonRenderPage() {
-  const spec = { ...localSpec, root: 'page-root', elements: { 'page-root': { type: 'DeliveryCard', props: localSpec.elements['delivery-demo'].props, children: ['progress-demo', 'issue-demo'] }, ...localSpec.elements } }
-  return <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-8"><div className="mx-auto flex max-w-3xl flex-col gap-8"><header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">route.pilot / json-render</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">Dynamic logistics UI</h1><p className="mt-3 max-w-xl leading-relaxed text-muted-foreground">This page is rendered from a JSON spec through the official catalog, registry, and Renderer pipeline.</p></header><JsonRenderClient spec={spec} /></div></main>
+  return (
+    <main className="json-catalog-page">
+      <div className="json-catalog-shell">
+        <header className="json-catalog-header">
+          <p className="json-catalog-eyebrow">route.pilot / json-render</p>
+          <h1>Catálogo de componentes</h1>
+          <p>Todos los componentes registrados en el catálogo oficial, con sus variantes renderizadas desde specs JSON.</p>
+        </header>
+        <section className="json-catalog-grid" aria-label="Component catalog">
+          {catalogShowcase.map((item, index) => (
+            <article className="json-catalog-card" key={item.name}>
+              <div className="json-catalog-card-header">
+                <div><span className="json-catalog-index">{String(index + 1).padStart(2, '0')}</span><h2>{item.name}</h2></div>
+                <span className="json-catalog-badge">JSON</span>
+              </div>
+              <p className="json-catalog-description">{item.description}</p>
+              <div className="json-catalog-preview"><JsonRenderClient spec={item.spec} /></div>
+            </article>
+          ))}
+        </section>
+      </div>
+    </main>
+  )
 }

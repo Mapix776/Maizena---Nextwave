@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
+import { getTranslations, type Locale } from '@/lib/i18n'
 
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
 import { JsonRenderClient } from '@/app/json-render/render-client'
@@ -25,11 +26,55 @@ import { JsonRenderClient } from '@/app/json-render/render-client'
 type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 type MessageRole = 'user' | 'assistant'
 
+interface ChatAttachment {
+  id: string
+  name: string
+  size: number
+  type: string
+  url: string
+}
+
 interface ChatMessage {
   id: string
   role: MessageRole
   text: string
+  attachments?: ChatAttachment[]
   spec?: JsonRenderSpec
+}
+
+type ContextItem = {
+  id: string
+  title: string
+  kind: 'Documento' | 'Informe' | 'Detalle'
+  description: string
+  sourceId: string
+  url?: string
+  mimeType?: string
+}
+
+function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextItem[] {
+  return Object.entries(spec.elements).map(([id, element], index) => {
+    const props = element.props as Record<string, unknown>
+    const kind = element.type.toLowerCase().includes('issue')
+      ? 'Informe'
+      : element.type.toLowerCase().includes('document')
+        ? 'Documento'
+        : 'Detalle'
+    const title = typeof props.title === 'string'
+      ? props.title
+      : typeof props.reference === 'string'
+        ? props.reference
+        : `${kind} ${index + 1}`
+    return {
+      id: `${sourceId}-${id}`,
+      title,
+      kind,
+      description: typeof props.description === 'string'
+        ? props.description
+        : `Información contextual de ${title.toLowerCase()}.`,
+      sourceId,
+    }
+  })
 }
 
 interface RunSnapshot {
@@ -60,6 +105,12 @@ const initialConversation: ChatMessage[] = [
   },
 ]
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 function responseText(spec: JsonRenderSpec): string {
   const root = spec.elements[spec.root]
   const props = root?.props as Record<string, unknown> | undefined
@@ -68,15 +119,21 @@ function responseText(spec: JsonRenderSpec): string {
 
 export default function AgentBuilderView({
   onNotify,
+  locale = 'es',
 }: {
   onNotify: (message: string) => void
+  locale?: Locale
 }) {
+  const t = getTranslations(locale)
   const socketRef = useRef<Socket | null>(null)
   const activeRunId = useRef<string | null>(null)
   const pendingRequestId = useRef<string | null>(null)
   const latestSequence = useRef(0)
+  const messagesEnd = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScroll = useRef(true)
   const [tab, setTab] = useState('Test Agent')
   const [messages, setMessages] = useState<ChatMessage[]>(initialConversation)
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [input, setInput] = useState('')
   const [agentName, setAgentName] = useState('Ari')
   const [connectionStatus, setConnectionStatus] =
@@ -88,6 +145,8 @@ export default function AgentBuilderView({
     'Empresa de distribución y logística',
   )
   const [saved, setSaved] = useState(false)
+  const [contextItems, setContextItems] = useState<ContextItem[]>([])
+  const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
 
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
@@ -207,11 +266,17 @@ export default function AgentBuilderView({
     }
   }, [])
 
+  useEffect(() => {
+    if (shouldAutoScroll.current) {
+      messagesEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [messages, connectionStatus])
+
   function sendMessage() {
     const text = input.trim()
     const socket = socketRef.current
 
-    if (!text || connectionStatus === 'running') return
+    if ((!text && attachments.length === 0) || connectionStatus === 'running') return
     if (!socket?.connected) {
       onNotify(`No se pudo conectar con el backend en ${backendUrl}`)
       return
@@ -220,7 +285,8 @@ export default function AgentBuilderView({
     const userMessage: ChatMessage = {
       id: `user-${crypto.randomUUID()}`,
       role: 'user',
-      text,
+      text: text || t.attach,
+      attachments: attachments.length ? attachments : undefined,
     }
     const nextMessages = [...messages, userMessage]
     const requestId = crypto.randomUUID()
@@ -230,6 +296,7 @@ export default function AgentBuilderView({
     latestSequence.current = 0
     setMessages(nextMessages)
     setInput('')
+    setAttachments([])
     setConnectionStatus('running')
 
     socket.emit(
@@ -270,13 +337,33 @@ export default function AgentBuilderView({
   }
 
   const connected = connectionStatus === 'ready'
-  const hasImportantResult = messages.some((message) => Boolean(message.spec))
-  const showContextPanel = connectionStatus === 'running' || hasImportantResult
+  function openContextPanel(spec: JsonRenderSpec, sourceId: string) {
+    const items = contextItemsFromSpec(spec, sourceId)
+    setContextItems(items)
+    setSelectedContextId(items[0]?.id ?? null)
+  }
+
+  function openAttachment(attachment: ChatAttachment, sourceId: string) {
+    const item: ContextItem = {
+      id: `${sourceId}-${attachment.id}`,
+      title: attachment.name,
+      kind: 'Documento',
+      description: `Vista previa de ${attachment.name}.`,
+      sourceId,
+      url: attachment.url,
+      mimeType: attachment.type,
+    }
+    setContextItems([item])
+    setSelectedContextId(item.id)
+  }
+
+  const selectedContext = contextItems.find((item) => item.id === selectedContextId)
+  const showContextPanel = contextItems.length > 0
   const statusLabel = {
-    connecting: 'Conectando',
-    ready: 'Conectado',
-    running: 'Pensando',
-    error: 'Sin conexión',
+    connecting: t.connecting,
+    ready: t.connected,
+    running: t.thinkingStatus,
+    error: t.offline,
   }[connectionStatus]
 
   return (
@@ -296,7 +383,14 @@ export default function AgentBuilderView({
           </span>
         </div>
 
-        <div className="chat-messages" aria-live="polite">
+        <div
+          className="chat-messages"
+          aria-live="polite"
+          onScroll={(event) => {
+            const element = event.currentTarget
+            shouldAutoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
+          }}
+        >
           {messages.map((message) => (
             <div
               key={message.id}
@@ -310,21 +404,39 @@ export default function AgentBuilderView({
                 data-testid={message.spec ? 'json-render-response' : undefined}
               >
                 <small>{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
+                {message.attachments && (
+                  <div className="chat-attachments" aria-label="Archivos adjuntos">
+                    {message.attachments.map((attachment) => (
+                      <button className="chat-attachment" key={attachment.id} type="button" onClick={() => openAttachment(attachment, message.id)}>
+                        <FileText size={16} />
+                        <span><b>{attachment.name}</b><small>{formatFileSize(attachment.size)}</small></span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {message.spec ? (
-                  <JsonRenderClient spec={message.spec as Spec} />
+                  <>
+                    <button
+                      className="open-context-button"
+                      onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
+                    >
+                      <FileText size={13} /> {t.openInfo}
+                    </button>
+                    <JsonRenderClient spec={message.spec as Spec} />
+                  </>
                 ) : (
                   <p>{message.text}</p>
                 )}
                 {message.role === 'assistant' && (
                   <div className="chat-actions">
                     <button
-                      aria-label="Valorar"
+                      aria-label={t.responseRated}
                       onClick={() => onNotify('Respuesta valorada')}
                     >
                       <ThumbsUp size={13} />
                     </button>
                     <button
-                      aria-label="Copiar"
+                      aria-label={t.copy}
                       onClick={() => {
                         void navigator.clipboard?.writeText(message.text)
                         onNotify('Respuesta copiada')
@@ -333,7 +445,7 @@ export default function AgentBuilderView({
                       <Copy size={13} />
                     </button>
                     <button
-                      aria-label="Compartir"
+                      aria-label={t.share}
                       onClick={() => onNotify('Respuesta lista para compartir')}
                     >
                       <Share2 size={13} />
@@ -350,20 +462,43 @@ export default function AgentBuilderView({
               </div>
               <div className="chat-bubble typing-bubble">
                 <small>Ari</small>
-                <p>Preparando respuesta y componentes…</p>
+                <p>{t.thinking}</p>
               </div>
             </div>
           )}
+          <div ref={messagesEnd} />
         </div>
 
         <div className="chat-composer">
+          {attachments.length > 0 && (
+            <div className="pending-attachments" aria-label="Archivos seleccionados">
+              {attachments.map((attachment) => (
+                <div className="pending-attachment" key={attachment.id}>
+                  <FileText size={14} />
+                  <span>{attachment.name}</span>
+                  <button type="button" aria-label={`Quitar ${attachment.name}`} onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="composer-row">
           <label className="attach-button" aria-label="Adjuntar archivo">
             <Paperclip size={17} />
             <input
               type="file"
               onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) onNotify(`${file.name} adjuntado`)
+                const selectedFiles = Array.from(event.target.files ?? [])
+                if (!selectedFiles.length) return
+                const nextAttachments = selectedFiles.map((file) => ({
+                  id: `${file.name}-${file.lastModified}`,
+                  name: file.name,
+                  size: file.size,
+                  type: file.type,
+                  url: URL.createObjectURL(file),
+                }))
+                setAttachments((current) => [...current, ...nextAttachments])
+                onNotify(`${selectedFiles.length} archivo${selectedFiles.length === 1 ? '' : 's'} adjuntado${selectedFiles.length === 1 ? '' : 's'}`)
+                event.currentTarget.value = ''
               }}
             />
           </label>
@@ -380,8 +515,8 @@ export default function AgentBuilderView({
                 sendMessage()
               }
             }}
-            placeholder="Escribe un mensaje para Ari…"
-            aria-label="Escribe un mensaje"
+            placeholder={t.chatPlaceholder}
+            aria-label={t.chatPlaceholder}
           />
           <button
             className="send-button"
@@ -391,14 +526,23 @@ export default function AgentBuilderView({
           >
             <Send size={18} />
           </button>
+          </div>
         </div>
       </div>
 
       {showContextPanel && <div className="builder-right">
         <div className="context-panel-label">
-          <span><Activity size={14} /> Contexto activo</span>
-          <small>{connectionStatus === 'running' ? 'Ejecución en curso' : 'Último resultado importante'}</small>
+          <span><Activity size={14} /> {t.contextualInfo}</span>
+          <button aria-label="Cerrar panel" onClick={() => setContextItems([])}>×</button>
         </div>
+        <div className="context-tabs" role="tablist" aria-label={t.availableInfo}>
+          {contextItems.map((item) => (
+            <button key={item.id} role="tab" aria-selected={selectedContextId === item.id} className={selectedContextId === item.id ? 'selected' : ''} onClick={() => setSelectedContextId(item.id)}>
+              <small>{item.kind}</small><span>{item.title}</span>
+            </button>
+          ))}
+        </div>
+        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">{t.viewFile}</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
