@@ -22,6 +22,7 @@
 .json-catalog-description { min-height: 42px; margin: 12px 0 20px; color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
 .json-catalog-preview { min-width: 0; overflow: hidden; border-top: 1px solid var(--border); padding-top: 20px; }
 .json-catalog-preview > * { width: 100%; }
+.chat-thinking-state { display: flex; align-items: center; gap: 12px; min-width: 250px; }.chat-thinking-state .animation-visual { width: 46px; height: 46px; flex: 0 0 auto; border-radius: 14px; }.chat-thinking-state .animation-visual svg { width: 18px; height: 18px; }.chat-thinking-state .thinking-orbit { transform: scale(.48); }.chat-thinking-state .thinking-dot { width: 4px; height: 4px; }.chat-thinking-state .document-line { left: 12px; width: 21px; height: 2px; }.chat-thinking-state .line-two { width: 17px; }.chat-thinking-state .line-three { width: 19px; }.chat-thinking-state .document-scan { left: 7px; width: 32px; }.chat-thinking-state .chart-axis { transform: scale(.6); transform-origin: bottom left; }.chat-thinking-state .chart-bar { width: 5px; margin-bottom: 12px; }.chat-thinking-state .bar-one { margin-left: 14px; }.chat-thinking-state .bar-four { margin-right: 8px; }.chat-thinking-state p { margin: 0; }.chat-thinking-state .thinking-progress { width: 150px; margin-top: 8px; }
 .animations-page { min-height: 100vh; background: var(--background); color: var(--foreground); padding: 56px 24px 80px; }
 .animations-shell { width: min(100%, 820px); margin: 0 auto; }
 .animations-header { margin-bottom: 30px; }

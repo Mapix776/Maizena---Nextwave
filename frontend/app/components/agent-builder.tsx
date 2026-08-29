@@ -22,6 +22,7 @@ import { getTranslations, type Locale } from '@/lib/i18n'
 
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
 import { JsonRenderClient } from '@/app/json-render/render-client'
+import { ThinkingAnimation } from '@/components/chat/thinking-animation'
 
 type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 type MessageRole = 'user' | 'assistant'
@@ -462,7 +463,13 @@ export default function AgentBuilderView({
               </div>
               <div className="chat-bubble typing-bubble">
                 <small>Ari</small>
-                <p>{t.thinking}</p>
+                <div className="chat-thinking-state" role="status" aria-label={t.thinking}>
+                  <ThinkingAnimation type="thinking" />
+                  <div>
+                    <p>{t.thinking}</p>
+                    <div className="thinking-progress" aria-hidden="true"><span /></div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
