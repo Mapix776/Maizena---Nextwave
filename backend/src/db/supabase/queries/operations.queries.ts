@@ -9,7 +9,7 @@ export const operationQueries = {
       .select()
       .single();
     if (error) throw error;
-    return data as OperationRow;
+    return data as unknown as OperationRow;
   },
 
   async getById(id: string): Promise<OperationRow | null> {
@@ -19,7 +19,7 @@ export const operationQueries = {
       .eq('id', id)
       .single();
     if (error) return null;
-    return data as OperationRow;
+    return data as unknown as OperationRow;
   },
 
   async list(): Promise<OperationRow[]> {
@@ -28,6 +28,6 @@ export const operationQueries = {
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []) as OperationRow[];
+    return (data ?? []) as unknown as OperationRow[];
   },
 };

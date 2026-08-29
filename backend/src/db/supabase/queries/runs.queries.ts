@@ -16,7 +16,7 @@ export const runQueries = {
       .select()
       .single();
     if (error) throw error;
-    return data as RunRow;
+    return data as unknown as RunRow;
   },
 
   async getById(runId: string): Promise<RunRow | null> {
@@ -26,7 +26,7 @@ export const runQueries = {
       .eq('id', runId)
       .single();
     if (error) return null;
-    return data as RunRow;
+    return data as unknown as RunRow;
   },
 
   async updateContext(runId: string, contextUpdate: Record<string, unknown>): Promise<void> {
@@ -34,7 +34,7 @@ export const runQueries = {
     const merged = { ...(current?.context_json ?? {}), ...contextUpdate };
     const { error } = await supabase
       .from('runs')
-      .update({ context_json: merged })
+      .update({ context_json: merged } as any)
       .eq('id', runId);
     if (error) throw error;
   },
@@ -42,7 +42,7 @@ export const runQueries = {
   async updateStep(runId: string, flowStep: string, status?: RunRow['status']): Promise<void> {
     const { error } = await supabase
       .from('runs')
-      .update({ flow_step: flowStep, ...(status ? { status } : {}) })
+      .update({ flow_step: flowStep, ...(status ? { status } : {}) } as any)
       .eq('id', runId);
     if (error) throw error;
   },

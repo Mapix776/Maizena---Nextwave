@@ -19,8 +19,17 @@ const server = createServer(app);
 
 initWebSocket(server);
 
-server.listen(env.PORT, () => {
-  console.log(`🚀 Nauta Backend en http://localhost:${env.PORT}`);
-  console.log(`🔌 WebSocket: ws://localhost:${env.PORT}/ws?runId=<id>`);
+// Render inyecta PORT dinámicamente — nunca hardcodear
+const PORT = process.env.PORT ?? env.PORT ?? '3001';
+
+server.listen(PORT, () => {
+  const isProduction = env.NODE_ENV === 'production';
+  const baseUrl = isProduction
+    ? 'https://maizena-nextwave.onrender.com'
+    : `http://localhost:${PORT}`;
+  const wsProtocol = isProduction ? 'wss' : 'ws';
+
+  console.log(`🚀 Nauta Backend en ${baseUrl}`);
+  console.log(`🔌 WebSocket: ${wsProtocol}://${isProduction ? 'maizena-nextwave.onrender.com' : `localhost:${PORT}`}/ws?runId=<id>`);
   console.log(`   Entorno: ${env.NODE_ENV}`);
 });

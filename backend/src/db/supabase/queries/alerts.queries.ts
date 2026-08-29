@@ -7,11 +7,11 @@ export const eventQueries = {
   ): Promise<EventRow> {
     const { data, error } = await supabase
       .from('events')
-      .insert({ ...input, acknowledged: false })
+      .insert({ ...input, acknowledged: false } as any)
       .select()
       .single();
     if (error) throw error;
-    return data as EventRow;
+    return data as unknown as EventRow;
   },
 
   async listByOperation(operationId: string): Promise<EventRow[]> {
@@ -21,6 +21,6 @@ export const eventQueries = {
       .eq('operation_id', operationId)
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return (data ?? []) as EventRow[];
+    return (data ?? []) as unknown as EventRow[];
   },
 };

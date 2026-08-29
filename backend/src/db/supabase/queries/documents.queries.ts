@@ -7,22 +7,22 @@ export const decisionQueries = {
   ): Promise<DecisionRow> {
     const { data, error } = await supabase
       .from('decisions')
-      .insert({ ...input, status: 'pending' })
+      .insert({ ...input, status: 'pending' } as any)
       .select()
       .single();
     if (error) throw error;
-    return data as DecisionRow;
+    return data as unknown as DecisionRow;
   },
 
   async resolve(decisionId: string, answer: string): Promise<DecisionRow> {
     const { data, error } = await supabase
       .from('decisions')
-      .update({ answer, status: 'resolved', resolved_at: new Date().toISOString() })
+      .update({ answer, status: 'resolved', resolved_at: new Date().toISOString() } as any)
       .eq('id', decisionId)
       .select()
       .single();
     if (error) throw error;
-    return data as DecisionRow;
+    return data as unknown as DecisionRow;
   },
 
   async listPendingByRun(runId: string): Promise<DecisionRow[]> {
@@ -32,6 +32,6 @@ export const decisionQueries = {
       .eq('run_id', runId)
       .eq('status', 'pending');
     if (error) throw error;
-    return (data ?? []) as DecisionRow[];
+    return (data ?? []) as unknown as DecisionRow[];
   },
 };
