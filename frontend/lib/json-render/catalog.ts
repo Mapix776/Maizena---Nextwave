@@ -57,6 +57,14 @@ export const catalog = defineCatalog(jsonRenderSchema, {
         height: z.number().min(180).max(700).optional(),
       }),
     },
+    CatalogChart: {
+      props: z.object({
+        title: z.string(), description: z.string().optional(),
+        chartType: z.enum(['line', 'pie', 'scatter', 'stackedArea', 'fluctuation', 'spider', 'groupedBar', 'pyramid', 'frequencyPolygon']),
+        data: z.array(z.object({ label: z.string(), value: z.number().optional(), value2: z.number().optional(), value3: z.number().optional(), x: z.number().optional(), y: z.number().optional() })),
+        height: z.number().min(180).max(700).optional(), showGrid: z.boolean().optional(),
+      }),
+    },
     ShipmentDocumentsTimeline: {
       props: z.object({
         title: z.string(),
