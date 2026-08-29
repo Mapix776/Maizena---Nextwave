@@ -1,4 +1,8 @@
-import type { CustomsLight } from '../contracts/domain.js';
+import type {
+  CustomsLight,
+  DocumentPartyRole,
+  DocumentType,
+} from '../contracts/domain.js';
 
 export type OperationStatus =
   | 'BOOKED'
@@ -32,15 +36,28 @@ export interface OperationRow {
 export interface DocumentRow {
   id: string;
   operation_id: string;
-  type: string;
+  type: DocumentType;
   file_name: string;
   file_size: number | null;
   mime_type: string | null;
+  document_reference: string | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
   raw_md: string;
   extracted_json: Record<string, unknown> | null;
   confidence_score: number | null;
   processing_status: ProcessingStatus;
   error_message: string | null;
+  created_at: string;
+}
+
+export interface DocumentPartyRow {
+  id: string;
+  document_id: string;
+  party_role: DocumentPartyRole;
+  party_name: string;
+  party_reference: string | null;
+  details_json: Record<string, unknown>;
   created_at: string;
 }
 
