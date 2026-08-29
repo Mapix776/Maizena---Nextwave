@@ -1,11 +1,18 @@
 import { Agent } from '@mastra/core/agent';
-import { createTool } from '@mastra/core/tools';
 import type { LanguageModelV4 } from '@ai-sdk/provider';
-import { z } from 'zod';
 
 import type { ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
 import { createProductionModel } from './models.js';
+import {
+  defineSubagentRegistry,
+  type SubagentRegistry,
+} from './subagents/registry.js';
+import {
+  createToolRegistry,
+  selectTools,
+  type ToolRegistry,
+} from './tools/registry.js';
 
 export const ARI_SYSTEM_PROMPT = 'You are a helpful assistant.';
 
@@ -16,41 +23,31 @@ natural-language answer in assistantResponse. The tool returns that answer
 inside a catalog-validated json-render tree together with hardcoded delivery
 demo components. Do not write JSON yourself.`;
 
-interface AriOptions {
+const ARI_TOOL_KEYS = ['renderDemoTool'] as const;
+
+export interface AriOptions {
   model?: LanguageModelV4;
   onRenderToolExecution?: () => void;
+  toolRegistry?: ToolRegistry;
+  subagentRegistry?: SubagentRegistry;
 }
 
 export function createAriAgent(options: AriOptions = {}) {
-  const renderDemoTool = createTool({
-    id: 'render-json-demo',
-    description:
-      'Return the assistant answer through the fixed json-render demonstration components.',
-    inputSchema: z.object({
-      assistantResponse: z.string().min(1),
-    }),
-    execute: async ({ assistantResponse }): Promise<StepResult> => {
-      options.onRenderToolExecution?.();
-      return {
-        status: 'completed',
-        summary: assistantResponse,
-        factPatch: { assistantResponse },
-        evidence: [
-          {
-            id: 'hardcoded-ui-demo',
-            source: 'json-render:hardcoded-components',
-          },
-        ],
-      };
-    },
-  });
+  const toolRegistry =
+    options.toolRegistry ??
+    createToolRegistry({
+      onRenderDemoExecution: options.onRenderToolExecution,
+    });
+  const subagentRegistry =
+    options.subagentRegistry ?? defineSubagentRegistry({});
 
   return new Agent({
     id: 'ari',
     name: 'Ari',
     instructions: ARI_INSTRUCTIONS,
     model: options.model ?? createProductionModel(),
-    tools: { renderDemoTool },
+    tools: selectTools(toolRegistry, ARI_TOOL_KEYS),
+    agents: subagentRegistry,
   });
 }
 
