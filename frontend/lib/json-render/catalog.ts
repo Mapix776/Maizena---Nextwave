@@ -2,6 +2,7 @@ import { defineCatalog, defineSchema } from '@json-render/core'
 import { z } from 'zod'
 
 import { containerStatuses } from '@/components/delivery/types'
+import { documentStatuses } from '@/components/delivery/shipment-documents-timeline'
 
 const deliveryProps = z.object({
   id: z.string(),
@@ -39,6 +40,20 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     },
     DeliveryIssueCard: {
       props: deliveryProps.extend({ issue: z.string() }),
+    },
+    ShipmentDocumentsTimeline: {
+      props: z.object({
+        title: z.string(),
+        subtitle: z.string(),
+        documents: z.array(z.object({
+          id: z.string(),
+          title: z.string(),
+          description: z.string(),
+          status: z.enum(documentStatuses),
+          date: z.string().optional(),
+          documentUrl: z.string().optional(),
+        })),
+      }),
     },
   },
 })
