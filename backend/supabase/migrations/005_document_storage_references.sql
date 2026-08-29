@@ -29,12 +29,22 @@ SET document_reference = CASE type::TEXT
 END
 WHERE document_reference IS NULL;
 
-ALTER TABLE documents
-  ADD CONSTRAINT documents_storage_reference_complete
-  CHECK (
-    (storage_bucket IS NULL AND storage_path IS NULL)
-    OR (storage_bucket IS NOT NULL AND storage_path IS NOT NULL)
-  );
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'documents_storage_reference_complete'
+      AND conrelid = 'public.documents'::REGCLASS
+  ) THEN
+    ALTER TABLE documents
+      ADD CONSTRAINT documents_storage_reference_complete
+      CHECK (
+        (storage_bucket IS NULL AND storage_path IS NULL)
+        OR (storage_bucket IS NOT NULL AND storage_path IS NOT NULL)
+      );
+  END IF;
+END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_storage_object
   ON documents (storage_bucket, storage_path)
@@ -138,10 +148,12 @@ WHERE relationship.target_document_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[
 ON CONFLICT (source_document_id, target_document_id, relationship_type) DO NOTHING;
 
 ALTER TABLE document_parties ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_all" ON document_parties;
 CREATE POLICY "service_role_all" ON document_parties
   FOR ALL USING (auth.role() = 'service_role');
 
 ALTER TABLE document_relationships ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "service_role_all" ON document_relationships;
 CREATE POLICY "service_role_all" ON document_relationships
   FOR ALL USING (auth.role() = 'service_role');
 
