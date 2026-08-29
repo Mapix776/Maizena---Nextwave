@@ -1,0 +1,111 @@
+import { randomUUID } from 'node:crypto';
+
+import { stepResultSchema, type StepResult } from '../contracts/step-result.js';
+import {
+  type RunSnapshot,
+  type UIEnvelope,
+  validateTracerSpec,
+} from '../contracts/ui.js';
+import { executeAriStep } from '../mastra/ari.js';
+import { composeRunUi } from '../services/ui-composer.js';
+
+interface RunCoordinatorOptions {
+  executeStep?: () => Promise<unknown>;
+  composeUi?: (result: StepResult) => unknown;
+  emit?: (envelope: UIEnvelope) => void | Promise<void>;
+  createRunId?: () => string;
+  now?: () => Date;
+}
+
+export class RunCoordinator {
+  readonly #runs = new Map<string, RunSnapshot>();
+  readonly #executeStep: () => Promise<unknown>;
+  readonly #composeUi: (result: StepResult) => unknown;
+  readonly #emit: (envelope: UIEnvelope) => void | Promise<void>;
+  readonly #createRunId: () => string;
+  readonly #now: () => Date;
+
+  constructor(options: RunCoordinatorOptions = {}) {
+    this.#executeStep = options.executeStep ?? executeAriStep;
+    this.#composeUi = options.composeUi ?? composeRunUi;
+    this.#emit = options.emit ?? (() => undefined);
+    this.#createRunId = options.createRunId ?? randomUUID;
+    this.#now = options.now ?? (() => new Date());
+  }
+
+  createRun(): RunSnapshot {
+    const snapshot: RunSnapshot = {
+      runId: this.#createRunId(),
+      status: 'pending',
+      sequence: 0,
+      facts: {},
+      ui: null,
+    };
+    this.#runs.set(snapshot.runId, snapshot);
+    return this.getSnapshot(snapshot.runId);
+  }
+
+  getSnapshot(runId: string): RunSnapshot {
+    const run = this.#runs.get(runId);
+
+    if (!run) {
+      throw new Error(`Unknown run: ${runId}`);
+    }
+
+    return structuredClone(run);
+  }
+
+  async execute(runId: string): Promise<void> {
+    const run = this.#getMutableRun(runId);
+    run.status = 'running';
+    await this.#emitNext(run, 'run:status', { status: run.status });
+
+    try {
+      const result = stepResultSchema.parse(await this.#executeStep());
+      const ui = validateTracerSpec(this.#composeUi(result));
+
+      run.facts = { ...run.facts, ...result.factPatch };
+      run.ui = ui;
+      await this.#emitNext(run, 'ui:replace', {
+        uiVersion: 1,
+        reason: 'step-complete',
+        spec: ui,
+      });
+
+      run.status = 'completed';
+      await this.#emitNext(run, 'run:complete', { status: run.status });
+    } catch (error) {
+      run.status = 'failed';
+      run.error = error instanceof Error ? error.message : 'Run failed';
+      await this.#emitNext(run, 'run:complete', {
+        status: run.status,
+        error: run.error,
+      });
+    }
+  }
+
+  #getMutableRun(runId: string): RunSnapshot {
+    const run = this.#runs.get(runId);
+
+    if (!run) {
+      throw new Error(`Unknown run: ${runId}`);
+    }
+
+    return run;
+  }
+
+  async #emitNext(
+    run: RunSnapshot,
+    type: UIEnvelope['type'],
+    payload: unknown,
+  ): Promise<void> {
+    run.sequence += 1;
+    await this.#emit({
+      runId: run.runId,
+      sequence: run.sequence,
+      type,
+      timestamp: this.#now().toISOString(),
+      payload,
+    });
+  }
+}

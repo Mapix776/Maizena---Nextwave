@@ -1,0 +1,4 @@
+.wall-i/*
+!.wall-i/vocabulary/
+!.wall-i/decisions/
+!.wall-i/maps/
