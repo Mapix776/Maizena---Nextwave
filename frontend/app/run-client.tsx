@@ -1,12 +1,11 @@
 'use client'
 
 import type { Spec } from '@json-render/core'
-import { Renderer } from '@json-render/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
 
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
-import { registry } from '@/lib/json-render/registry'
+import { JsonRenderClient } from './json-render/render-client'
 
 type RunStatus = 'connecting' | 'pending' | 'running' | 'completed' | 'failed'
 
@@ -183,7 +182,7 @@ export function RunClient() {
 
         <section className="result-panel" data-testid="json-render-result">
           {spec ? (
-            <Renderer spec={spec as Spec} registry={registry} />
+            <JsonRenderClient spec={spec as Spec} />
           ) : (
             <p className="placeholder">
               {error ?? 'The deterministic hello tool is running…'}
