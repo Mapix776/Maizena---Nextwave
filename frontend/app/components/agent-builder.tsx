@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
+import { getTranslations, type Locale } from '@/lib/i18n'
 
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
 import { JsonRenderClient } from '@/app/json-render/render-client'
@@ -118,9 +119,12 @@ function responseText(spec: JsonRenderSpec): string {
 
 export default function AgentBuilderView({
   onNotify,
+  locale = 'es',
 }: {
   onNotify: (message: string) => void
+  locale?: Locale
 }) {
+  const t = getTranslations(locale)
   const socketRef = useRef<Socket | null>(null)
   const activeRunId = useRef<string | null>(null)
   const pendingRequestId = useRef<string | null>(null)
@@ -281,7 +285,7 @@ export default function AgentBuilderView({
     const userMessage: ChatMessage = {
       id: `user-${crypto.randomUUID()}`,
       role: 'user',
-      text: text || 'Archivo adjunto',
+      text: text || t.attach,
       attachments: attachments.length ? attachments : undefined,
     }
     const nextMessages = [...messages, userMessage]
@@ -356,10 +360,10 @@ export default function AgentBuilderView({
   const selectedContext = contextItems.find((item) => item.id === selectedContextId)
   const showContextPanel = contextItems.length > 0
   const statusLabel = {
-    connecting: 'Conectando',
-    ready: 'Conectado',
-    running: 'Pensando',
-    error: 'Sin conexión',
+    connecting: t.connecting,
+    ready: t.connected,
+    running: t.thinkingStatus,
+    error: t.offline,
   }[connectionStatus]
 
   return (
@@ -416,7 +420,7 @@ export default function AgentBuilderView({
                       className="open-context-button"
                       onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
                     >
-                      <FileText size={13} /> Abrir información
+                      <FileText size={13} /> {t.openInfo}
                     </button>
                     <JsonRenderClient spec={message.spec as Spec} />
                   </>
@@ -426,13 +430,13 @@ export default function AgentBuilderView({
                 {message.role === 'assistant' && (
                   <div className="chat-actions">
                     <button
-                      aria-label="Valorar"
+                      aria-label={t.responseRated}
                       onClick={() => onNotify('Respuesta valorada')}
                     >
                       <ThumbsUp size={13} />
                     </button>
                     <button
-                      aria-label="Copiar"
+                      aria-label={t.copy}
                       onClick={() => {
                         void navigator.clipboard?.writeText(message.text)
                         onNotify('Respuesta copiada')
@@ -441,7 +445,7 @@ export default function AgentBuilderView({
                       <Copy size={13} />
                     </button>
                     <button
-                      aria-label="Compartir"
+                      aria-label={t.share}
                       onClick={() => onNotify('Respuesta lista para compartir')}
                     >
                       <Share2 size={13} />
@@ -458,7 +462,7 @@ export default function AgentBuilderView({
               </div>
               <div className="chat-bubble typing-bubble">
                 <small>Ari</small>
-                <p>Preparando respuesta y componentes…</p>
+                <p>{t.thinking}</p>
               </div>
             </div>
           )}
@@ -511,8 +515,8 @@ export default function AgentBuilderView({
                 sendMessage()
               }
             }}
-            placeholder="Escribe un mensaje para Ari…"
-            aria-label="Escribe un mensaje"
+            placeholder={t.chatPlaceholder}
+            aria-label={t.chatPlaceholder}
           />
           <button
             className="send-button"
@@ -528,17 +532,17 @@ export default function AgentBuilderView({
 
       {showContextPanel && <div className="builder-right">
         <div className="context-panel-label">
-          <span><Activity size={14} /> Información contextual</span>
+          <span><Activity size={14} /> {t.contextualInfo}</span>
           <button aria-label="Cerrar panel" onClick={() => setContextItems([])}>×</button>
         </div>
-        <div className="context-tabs" role="tablist" aria-label="Información disponible">
+        <div className="context-tabs" role="tablist" aria-label={t.availableInfo}>
           {contextItems.map((item) => (
             <button key={item.id} role="tab" aria-selected={selectedContextId === item.id} className={selectedContextId === item.id ? 'selected' : ''} onClick={() => setSelectedContextId(item.id)}>
               <small>{item.kind}</small><span>{item.title}</span>
             </button>
           ))}
         </div>
-        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">Abrir archivo</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
+        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">{t.viewFile}</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
