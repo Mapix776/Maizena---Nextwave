@@ -1,5 +1,111 @@
+.agent-builder {
+  height: min(760px, calc(100vh - 150px));
+  min-height: 560px;
+}
+
 .agent-builder.context-panel-hidden {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.builder-left {
+  min-height: 0;
+}
+
+.chat-messages {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.builder-right {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.builder-right .config-header,
+.builder-right .config-tabs,
+.builder-right .config-panel,
+.builder-right .knowledge-section {
+  display: none;
+}
+
+.context-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.context-tabs button {
+  display: flex;
+  min-width: 130px;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-tabs button.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+.context-tabs small,
+.context-detail > span {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.context-tabs span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+}
+
+.context-detail h3,
+.context-detail p {
+  margin: 0;
+}
+
+.context-detail p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.context-detail > small {
+  color: var(--muted);
+}
+
+.open-context-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .agent-builder.context-panel-hidden .builder-left {
