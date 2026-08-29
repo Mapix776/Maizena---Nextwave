@@ -24,14 +24,31 @@ export interface NautaServer {
 }
 
 export function createNautaServer(options: NautaServerOptions = {}): NautaServer {
-  const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://maizena-nextwave.vercel.app',
+    'https://maizena-nextwave-git-main-joshuapzzs-projects.vercel.app',
+    /^https:\/\/maizena-nextwave-.*\.vercel\.app$/,
+  ];
+
+  const isOriginAllowed = (origin?: string) => {
+    if (!origin) return true;
+    return allowedOrigins.some((allowed) =>
+      allowed instanceof RegExp ? allowed.test(origin) : allowed === origin,
+    );
+  };
+
   const httpServer: HttpServer = createServer((request, response) => {
-    response.setHeader('Access-Control-Allow-Origin', frontendUrl);
+    const origin = request.headers.origin;
+    if (isOriginAllowed(origin)) {
+      response.setHeader('Access-Control-Allow-Origin', origin || '*');
+    }
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    if (request.method === 'GET' && request.url === '/healthz') {
+    if (request.method === 'GET' && (request.url === '/healthz' || request.url === '/health' || request.url === '/')) {
       response.writeHead(200);
-      response.end(JSON.stringify({ ok: true }));
+      response.end(JSON.stringify({ ok: true, status: 'ok', timestamp: new Date().toISOString() }));
       return;
     }
 
@@ -40,7 +57,9 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   });
   const io = new SocketServer(httpServer, {
     cors: {
-      origin: frontendUrl,
+      origin: (origin, callback) => {
+        callback(null, isOriginAllowed(origin));
+      },
     },
   });
   const runIdsByStartRequest = new Map<string, string>();
@@ -108,7 +127,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       await new Promise<void>((resolve, reject) => {
         const onError = (error: Error) => reject(error);
         httpServer.once('error', onError);
-        httpServer.listen(port, '127.0.0.1', () => {
+        httpServer.listen(port, '0.0.0.0', () => {
           httpServer.off('error', onError);
           resolve();
         });
