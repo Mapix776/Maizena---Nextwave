@@ -94,6 +94,25 @@
   color: var(--muted);
 }
 
+.context-file-preview {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--surface);
+}
+
+.context-file-preview[title] {
+  min-height: 280px;
+}
+
+.context-file-link {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .open-context-button {
   display: inline-flex;
   align-items: center;
@@ -151,6 +170,9 @@
 
 .chat-attachment,
 .pending-attachment {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   gap: 8px;

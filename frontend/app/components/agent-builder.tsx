@@ -30,6 +30,7 @@ interface ChatAttachment {
   name: string
   size: number
   type: string
+  url: string
 }
 
 interface ChatMessage {
@@ -46,6 +47,8 @@ type ContextItem = {
   kind: 'Documento' | 'Informe' | 'Detalle'
   description: string
   sourceId: string
+  url?: string
+  mimeType?: string
 }
 
 function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextItem[] {
@@ -336,6 +339,20 @@ export default function AgentBuilderView({
     setSelectedContextId(items[0]?.id ?? null)
   }
 
+  function openAttachment(attachment: ChatAttachment, sourceId: string) {
+    const item: ContextItem = {
+      id: `${sourceId}-${attachment.id}`,
+      title: attachment.name,
+      kind: 'Documento',
+      description: `Vista previa de ${attachment.name}.`,
+      sourceId,
+      url: attachment.url,
+      mimeType: attachment.type,
+    }
+    setContextItems([item])
+    setSelectedContextId(item.id)
+  }
+
   const selectedContext = contextItems.find((item) => item.id === selectedContextId)
   const showContextPanel = contextItems.length > 0
   const statusLabel = {
@@ -386,10 +403,10 @@ export default function AgentBuilderView({
                 {message.attachments && (
                   <div className="chat-attachments" aria-label="Archivos adjuntos">
                     {message.attachments.map((attachment) => (
-                      <div className="chat-attachment" key={attachment.id}>
+                      <button className="chat-attachment" key={attachment.id} type="button" onClick={() => openAttachment(attachment, message.id)}>
                         <FileText size={16} />
                         <span><b>{attachment.name}</b><small>{formatFileSize(attachment.size)}</small></span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -473,6 +490,7 @@ export default function AgentBuilderView({
                   name: file.name,
                   size: file.size,
                   type: file.type,
+                  url: URL.createObjectURL(file),
                 }))
                 setAttachments((current) => [...current, ...nextAttachments])
                 onNotify(`${selectedFiles.length} archivo${selectedFiles.length === 1 ? '' : 's'} adjuntado${selectedFiles.length === 1 ? '' : 's'}`)
@@ -520,7 +538,7 @@ export default function AgentBuilderView({
             </button>
           ))}
         </div>
-        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p><small>Origen: {selectedContext.sourceId}</small></div>}
+        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">Abrir archivo</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
