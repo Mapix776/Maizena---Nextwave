@@ -74,8 +74,6 @@ export default function AgentBuilderView({
   const activeRunId = useRef<string | null>(null)
   const pendingRequestId = useRef<string | null>(null)
   const latestSequence = useRef(0)
-  const messagesEnd = useRef<HTMLDivElement | null>(null)
-
   const [tab, setTab] = useState('Test Agent')
   const [messages, setMessages] = useState<ChatMessage[]>(initialConversation)
   const [input, setInput] = useState('')
@@ -89,10 +87,6 @@ export default function AgentBuilderView({
     'Empresa de distribución y logística',
   )
   const [saved, setSaved] = useState(false)
-
-  useEffect(() => {
-    messagesEnd.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
 
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
@@ -357,7 +351,6 @@ export default function AgentBuilderView({
               </div>
             </div>
           )}
-          <div ref={messagesEnd} />
         </div>
 
         <div className="chat-composer">
