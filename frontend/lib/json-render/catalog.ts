@@ -44,6 +44,19 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     DeliveryIssueCard: {
       props: deliveryProps.extend({ issue: z.string() }),
     },
+    BarChart: {
+      props: z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        data: z.array(z.object({ label: z.string(), value: z.number() })),
+        xAxisLabel: z.string().optional(),
+        yAxisLabel: z.string().optional(),
+        showValues: z.boolean().optional(),
+        showGrid: z.boolean().optional(),
+        orientation: z.enum(['vertical', 'horizontal']).optional(),
+        height: z.number().min(180).max(700).optional(),
+      }),
+    },
     ShipmentDocumentsTimeline: {
       props: z.object({
         title: z.string(),

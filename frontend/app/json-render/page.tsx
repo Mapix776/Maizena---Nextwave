@@ -2,6 +2,7 @@
 
 import type { Spec } from '@json-render/core'
 import { JsonRenderClient } from './render-client'
+import { barChartExample } from '@/lib/json-render/bar-chart-example'
 
 export const localSpec: Spec = {
   root: 'delivery-demo',
@@ -14,5 +15,5 @@ export const localSpec: Spec = {
 
 export default function JsonRenderPage() {
   const spec = { ...localSpec, root: 'page-root', elements: { 'page-root': { type: 'DeliveryCard', props: localSpec.elements['delivery-demo'].props, children: ['progress-demo', 'issue-demo'] }, ...localSpec.elements } }
-  return <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-8"><div className="mx-auto flex max-w-3xl flex-col gap-8"><header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">route.pilot / json-render</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">Dynamic logistics UI</h1><p className="mt-3 max-w-xl leading-relaxed text-muted-foreground">This page is rendered from a JSON spec through the official catalog, registry, and Renderer pipeline.</p></header><JsonRenderClient spec={spec} /></div></main>
+  return <main className="min-h-screen bg-background px-4 py-10 text-foreground sm:px-8"><div className="mx-auto flex max-w-3xl flex-col gap-8"><header><p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">route.pilot / json-render</p><h1 className="mt-2 text-4xl font-semibold tracking-tight">Dynamic logistics UI</h1><p className="mt-3 max-w-xl leading-relaxed text-muted-foreground">This page is rendered from a JSON spec through the official catalog, registry, and Renderer pipeline.</p></header><JsonRenderClient spec={spec} /><JsonRenderClient spec={barChartExample} /></div></main>
 }
