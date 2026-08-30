@@ -5,14 +5,35 @@ import { SpeculativeEngine, TRANSITION_MAP } from './speculative-engine.js';
 import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import type { StepResult } from '../contracts/step-result.js';
 
-test('TRANSITION_MAP defines canonical forward transitions', () => {
+test('TRANSITION_MAP defines canonical forward transitions and milestones', () => {
+  // 1. Initial booking
   assert.deepEqual(TRANSITION_MAP.BOOKED, ['IN_TRANSIT']);
+  assert.deepEqual(TRANSITION_MAP['Booking Confirmed'], ['In Transit']);
+  assert.deepEqual(TRANSITION_MAP.VESSEL_DEPARTED, ['IN_TRANSIT']);
+
+  // 2. Sea transit
   assert.deepEqual(TRANSITION_MAP.IN_TRANSIT, ['ARRIVED_AT_PORT']);
+  assert.deepEqual(TRANSITION_MAP['In Transit'], ['Arrived at Port']);
+  assert.deepEqual(TRANSITION_MAP.PORT_ARRIVED, ['ARRIVED_AT_PORT']);
+
+  // 3. Port arrival
   assert.deepEqual(TRANSITION_MAP.ARRIVED_AT_PORT, ['CUSTOMS_CLEARANCE']);
-  assert.deepEqual(TRANSITION_MAP.CUSTOMS_CLEARANCE, ['DELIVERED']);
+  assert.deepEqual(TRANSITION_MAP['Arrived at Port'], ['Customs']);
+  assert.deepEqual(TRANSITION_MAP.DISCHARGED, ['CUSTOMS_CLEARANCE']);
+  assert.deepEqual(TRANSITION_MAP.PORT_UNLOADED, ['CUSTOMS_CLEARANCE']);
+
+  // 4. Customs clearance
+  assert.deepEqual(TRANSITION_MAP.CUSTOMS_CLEARANCE, ['OUT_FOR_DELIVERY']);
+  assert.deepEqual(TRANSITION_MAP['Customs'], ['Out for Delivery']);
+  assert.deepEqual(TRANSITION_MAP.CUSTOMS_CLEARED, ['OUT_FOR_DELIVERY']);
+
+  // 5. Out for delivery / Last mile
+  assert.deepEqual(TRANSITION_MAP.OUT_FOR_DELIVERY, ['DELIVERED']);
+  assert.deepEqual(TRANSITION_MAP['Out for Delivery'], ['Delivered']);
+  assert.deepEqual(TRANSITION_MAP.LAST_MILE, ['DELIVERED']);
 });
 
-test('SpeculativeEngine refuses to speculate on human decisions or critical holds', () => {
+test('SpeculativeEngine refuses to speculate on human decisions, critical holds, or discrepancies', () => {
   const engine = new SpeculativeEngine();
 
   // Case with human decision
@@ -26,6 +47,16 @@ test('SpeculativeEngine refuses to speculate on human decisions or critical hold
     customsClearance: [{ containerNumber: 'MSDU7000810', customsLight: 'red' }],
   });
   assert.equal(checkRedHold.allowed, false);
+
+  // Case with active unresolved discrepancy
+  const checkDiscrepancy = engine.canSpeculate('CUSTOMS_CLEARANCE', {
+    reconciliationFindings: { status: 'discrepancy', discrepancies: [{ field: 'weightKg' }] },
+  });
+  assert.equal(checkDiscrepancy.allowed, false);
+
+  // Case with terminal state DELIVERED
+  const checkTerminal = engine.canSpeculate('DELIVERED', {});
+  assert.equal(checkTerminal.allowed, false);
 });
 
 test('SpeculativeEngine pre-generates next state and serves it on transition HIT', async () => {

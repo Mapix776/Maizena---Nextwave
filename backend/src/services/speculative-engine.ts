@@ -3,14 +3,48 @@ import { validateTracerSpec } from '../contracts/ui.js';
 import type { StepResult } from '../contracts/step-result.js';
 
 export const TRANSITION_MAP: Record<string, string[]> = {
+  // 1. Initial booking / Order confirmation -> In transit
   BOOKED: ['IN_TRANSIT'],
+  booked: ['in_transit'],
   booking_confirmed: ['in_transit'],
+  'Booking Confirmed': ['In Transit'],
+  BOOKING_CONFIRMED: ['IN_TRANSIT'],
+  VESSEL_DEPARTED: ['IN_TRANSIT'],
+  vessel_departed: ['in_transit'],
+
+  // 2. Sea / Ocean transit -> Arrival at port
   IN_TRANSIT: ['ARRIVED_AT_PORT'],
   in_transit: ['arrived_at_port'],
+  'In Transit': ['Arrived at Port'],
+  PORT_ARRIVED: ['ARRIVED_AT_PORT'],
+  port_arrived: ['arrived_at_port'],
+
+  // 3. Port arrival -> Customs clearance / Inspection
   ARRIVED_AT_PORT: ['CUSTOMS_CLEARANCE'],
   arrived_at_port: ['customs'],
-  CUSTOMS_CLEARANCE: ['DELIVERED'],
-  customs: ['delivered'],
+  'Arrived at Port': ['Customs'],
+  DISCHARGED: ['CUSTOMS_CLEARANCE'],
+  discharged: ['customs'],
+  PORT_UNLOADED: ['CUSTOMS_CLEARANCE'],
+  port_unloaded: ['customs'],
+
+  // 4. Customs inspection (green/cleared) -> Out for delivery
+  CUSTOMS_CLEARANCE: ['OUT_FOR_DELIVERY'],
+  customs: ['out_for_delivery'],
+  'Customs': ['Out for Delivery'],
+  CUSTOMS_CLEARED: ['OUT_FOR_DELIVERY'],
+  customs_cleared: ['out_for_delivery'],
+  CLEARED: ['OUT_FOR_DELIVERY'],
+  cleared: ['out_for_delivery'],
+
+  // 5. Out for delivery / Last mile -> Final Delivered
+  OUT_FOR_DELIVERY: ['DELIVERED'],
+  out_for_delivery: ['delivered'],
+  'Out for Delivery': ['Delivered'],
+  IN_LAND_TRANSIT: ['DELIVERED'],
+  in_land_transit: ['delivered'],
+  LAST_MILE: ['DELIVERED'],
+  last_mile: ['delivered'],
 };
 
 export interface SpeculativeEntry {
@@ -54,29 +88,36 @@ export class SpeculativeEngine {
     currentState: string,
     factPatch: Record<string, unknown> = {},
   ): { allowed: boolean; nextState?: string; reason?: string } {
-    // 1. Never speculate on initial booking creation without prior context
+    // 1. Never speculate on initial ungrounded state
     if (!currentState) {
       return { allowed: false, reason: 'Initial ungrounded state' };
     }
 
-    // 2. Never speculate when a human decision is pending or critical customs hold exists
+    // 2. Never speculate when human decision, critical customs hold, or unresolved discrepancy exists
     const hasHumanDecision = Boolean(factPatch.humanDecision);
     const hasCriticalHold = Array.isArray(factPatch.customsClearance)
       ? factPatch.customsClearance.some(
           (c: { customsLight?: string }) => c.customsLight === 'red',
         )
       : false;
+    const hasActiveDiscrepancy = Boolean(
+      (factPatch.reconciliation as { status?: string } | undefined)?.status === 'discrepancy' ||
+      (factPatch.reconciliationFindings as { status?: string } | undefined)?.status === 'discrepancy'
+    );
 
-    if (hasHumanDecision || hasCriticalHold) {
+    if (hasHumanDecision || hasCriticalHold || hasActiveDiscrepancy) {
       return {
         allowed: false,
-        reason: 'Pending human decision or critical customs inspection hold',
+        reason: 'Pending human decision, critical customs hold, or unresolved discrepancy',
       };
     }
 
-    // 3. Look up transition map
-    const normalized = currentState.toUpperCase();
-    const nextStates = TRANSITION_MAP[normalized] ?? TRANSITION_MAP[currentState];
+    // 3. Look up transition map with normalization
+    const normalized = currentState.trim().replace(/\s+/g, '_').toUpperCase();
+    const nextStates =
+      TRANSITION_MAP[currentState] ??
+      TRANSITION_MAP[normalized] ??
+      TRANSITION_MAP[currentState.toLowerCase()];
 
     if (!nextStates || nextStates.length === 0) {
       return {
@@ -125,9 +166,31 @@ export class SpeculativeEngine {
     };
 
     if (opSummary) {
+      const existing = opSummary as Record<string, unknown>;
+      const existingContainers = Array.isArray(existing.containers) ? existing.containers : [];
       speculativeFactPatch.operationSummary = {
-        ...opSummary,
+        operationId: (existing.operationId as string) ?? opSummary.referenceCode ?? operationRef,
+        referenceCode: opSummary.referenceCode ?? operationRef,
+        clientName: (existing.clientName as string) ?? (factPatch.clientName as string) ?? 'Muebles del Sur',
         status: nextState,
+        tags: Array.isArray(existing.tags) ? existing.tags : ['Ocean', 'Active'],
+        containers: existingContainers.length > 0
+          ? existingContainers.map((c: any) => ({
+              id: c.id ?? `cont-${c.containerNumber ?? '1'}`,
+              containerNumber: c.containerNumber ?? (factPatch.deliveryId as string) ?? 'MSKU1234567',
+              status: nextState,
+              originPort: c.originPort ?? (factPatch.from as string) ?? 'Ho Chi Minh City, Vietnam',
+              destinationPort: c.destinationPort ?? (factPatch.to as string) ?? 'Manzanillo, Mexico',
+            }))
+          : [
+              {
+                id: `cont-${(factPatch.deliveryId as string) ?? 'MSKU1234567'}`,
+                containerNumber: (factPatch.deliveryId as string) ?? 'MSKU1234567',
+                status: nextState,
+                originPort: (factPatch.from as string) ?? 'Ho Chi Minh City, Vietnam',
+                destinationPort: (factPatch.to as string) ?? 'Manzanillo, Mexico',
+              },
+            ],
       };
     }
 

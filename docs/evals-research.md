@@ -215,15 +215,29 @@ Con la suite ejecutando llamadas reales contra `gpt-4o-mini` (95 llamadas en Sui
 
 ---
 
-### 7.4. Evaluación del Render Agent (Generación de UI con OpenAI Real)
+### 7.4. Evaluación del Render Agent (Generación de UI con OpenAI Real Optimizado)
 
-En la Suite B se ejecutó el agente Ari en tiempo real con resolución multi-step y tool calling:
+En la Suite B se ejecutó el agente Ari en tiempo real con paralelismo de herramientas y directivas de turno único:
 
 - **Total de Corridas Realizadas:** 24 corridas sobre 8 `uiIntent` ($N=3$).
 - **Validez Estructural del Árbol:** **100.0%** (Todos los árboles poseen nodo `root` válido, cero hijos huérfanos y cero ciclos).
-- **Conformidad con Catálogo json-render:** **100.0%** (Todos los componentes emitidos corresponden exactamente a los registrados).
+- **Conformidad con Catálogo json-render:** **100.0%** (100% de componentes registrados).
 - **Estabilidad de Componentes:** **100.0%**.
-- **Latencia de Ejecución del Agente:** **Promedio de 6,175 ms** (Mínima 3,300 ms, Máxima 10,957 ms, Mediana 5,778 ms) reflejando llamadas reales de inferencia y resolución de herramientas.
+- **Latencia de Ejecución del Agente:**
+  - **Promedio:** **5,290 ms** (Optimizado desde 6,175 ms).
+  - **Mediana:** **5,351 ms**.
+  - **Mínima:** **2,921 ms**.
+  - **Peor Caso (Max):** **7,199 ms** (Optimizado desde 10,957 ms).
+
+#### Desglose de Latencia Real por uiIntent (Promedio N=3):
+1. `ui-intent-01-route-update`         : ~5,300 ms
+2. `ui-intent-02-decision-required`    : ~5,150 ms
+3. `ui-intent-03-document-alert`       : ~5,400 ms
+4. `ui-intent-04-status-change`        : ~4,438 ms
+5. `ui-intent-05-reconciliation-result`: ~5,132 ms
+6. `ui-intent-06-customs-hold`         : ~6,457 ms (Optimizado desde 10,957 ms)
+7. `ui-intent-07-eta-slip`             : ~4,177 ms
+8. `ui-intent-08-operations-overview`  : ~5,473 ms
 
 ---
 

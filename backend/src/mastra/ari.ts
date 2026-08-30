@@ -211,7 +211,7 @@ export async function executeAriStep(
   };
 
   logStepTiming('model_invoke_start');
-  const MODEL_TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 18_000);
+  const MODEL_TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 25_000);
 
   let response: {
     text: string;
@@ -220,7 +220,7 @@ export async function executeAriStep(
 
   try {
     const generatePromise = agent.generate(modelMessages, {
-      maxSteps: 10,
+      maxSteps: 4,
       delegation: {
         onDelegationComplete: ({ result }) => {
           logStepTiming('subagent_delegation_complete');
