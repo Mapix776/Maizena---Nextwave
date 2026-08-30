@@ -59,7 +59,7 @@ export function WorkTraceDisclosure({
       ? `${workingLabel}: ${currentStep?.title ?? workingLabel}`
       : trace.status === 'completed'
         ? `${workedForLabel} ${formatWorkDuration(trace.durationMs)}`
-        : `${currentStep?.title ?? workingLabel}: no completado`
+        : `${currentStep?.title ?? workingLabel}: not completed`
 
   useEffect(() => {
     dispatch({ type: 'trace-status', status: trace.status })
@@ -119,8 +119,8 @@ export function WorkTraceDisclosure({
                   {step.status === 'running'
                     ? workingLabel
                     : step.status === 'completed'
-                      ? 'Completado'
-                      : 'No completado'}
+                      ? 'Completed'
+                      : 'Not completed'}
                 </p>
                 {step.sources?.length ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={sourcesLabel}>

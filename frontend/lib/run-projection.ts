@@ -199,8 +199,8 @@ const pendingTrace: WorkTrace = workTraceSchema.parse({
       kind: 'thinking',
       status: 'running',
       animationType: 'thinking',
-      title: 'Entendiendo tu solicitud',
-      detail: 'Preparando el trabajo observable de esta respuesta.',
+      title: 'Reviewing your request',
+      detail: 'Preparing the next logistics step.',
     },
   ],
 })
@@ -225,7 +225,7 @@ export function settleUnavailableRun(
       status: step.status === 'running' ? 'failed' : step.status,
       detail:
         step.status === 'running'
-          ? 'No fue posible recuperar este trabajo observable.'
+          ? 'The logistics review could not be recovered.'
           : step.detail,
     })),
   })
@@ -235,7 +235,7 @@ export function settleUnavailableRun(
       current.id === binding.responseMessageId
         ? {
             ...current,
-            text: 'Esta ejecución ya no está disponible. Inténtalo de nuevo.',
+            text: 'This logistics review is no longer available. Please try again.',
             workTrace: failedTrace,
           }
         : current,
@@ -317,7 +317,7 @@ export function settleSupersededRun(
       status: step.status === 'running' ? 'failed' : step.status,
       detail:
         step.status === 'running'
-          ? 'Esta ejecución fue reemplazada por una decisión posterior.'
+          ? 'This logistics review was replaced by your latest decision.'
           : step.detail,
     })),
   })
@@ -712,7 +712,7 @@ export function applyRunProjection(
       if (snapshot.status === 'failed' && snapshot.error) {
         messages = messages.map((message) =>
           message.id === responseMessageId && message.role === 'assistant'
-            ? { ...message, text: snapshot.error ?? 'No pude completar esa respuesta.' }
+            ? { ...message, text: snapshot.error ?? 'I could not complete this logistics review.' }
             : message,
         )
       }

@@ -117,7 +117,8 @@ test('document sources appear only after successful observed settlement', async 
   const failedCorrelation = {};
   const document = {
     id: '11111111-1111-4111-8111-111111111111',
-    file_name: 'Commercial Invoice.pdf',
+    file_name: 'Supabase esquema.pdf',
+    type: 'COMMERCIAL_INVOICE',
     mime_type: 'application/pdf',
     storage_bucket: 'private-documents',
     storage_path: 'operations/private/invoice.pdf',
@@ -143,7 +144,9 @@ test('document sources appear only after successful observed settlement', async 
       });
       return HELLO_STEP_RESULT;
     },
-    emit: (envelope) => envelopes.push(envelope as never),
+    emit: (envelope) => {
+      envelopes.push(envelope as never);
+    },
   });
   const run = coordinator.createRun();
   await coordinator.execute(run.runId);
@@ -152,14 +155,14 @@ test('document sources appear only after successful observed settlement', async 
     .filter(({ type }) => type === 'work-trace:replace')
     .map(({ payload }) => payload.workTrace);
   const beforeSettlement = projections.find((trace) =>
-    trace.steps.some((step: any) => step.title === 'Leyendo documento' && step.status === 'running'),
+    trace.steps.some((step: any) => step.title === 'Reading shipment document' && step.status === 'running'),
   );
   assert.ok(beforeSettlement);
   assert.equal(beforeSettlement.steps.some((step: any) => step.sources), false);
   const finalTrace = (envelopes.find(({ type }) => type === 'ui:replace') as any).payload.workTrace;
   assert.deepEqual(finalTrace.steps[1].sources, [{
     id: 'trace-source-1',
-    title: 'Commercial Invoice.pdf',
+    title: 'Commercial Invoice',
     mimeType: 'application/pdf',
     contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content',
   }]);
@@ -498,8 +501,8 @@ test('normal completion stores and emits one coordinator-measured Work trace', a
         kind: 'thinking',
         status: 'completed',
         animationType: 'thinking',
-        title: 'Entendiendo tu solicitud',
-        detail: 'Trabajo observable finalizado.',
+        title: 'Reviewing your request',
+        detail: 'Logistics review completed.',
       },
     ],
   });
@@ -554,8 +557,8 @@ test('speculative completion emits the same sanitized Work trace shape', async (
         kind: 'thinking',
         status: 'completed',
         animationType: 'thinking',
-        title: 'Aplicando una actualización preparada',
-        detail: 'Apliqué una actualización preparada para esta solicitud.',
+        title: 'Applying prepared shipment update',
+        detail: 'Applying the prepared shipment update for this request.',
       },
     ],
   });
@@ -601,7 +604,7 @@ test('a failed observed tool and run settle atomically on the same safe response
   assert.equal(terminal.payload.responseMessageId, snapshot.responseMessageId);
   assert.equal(terminal.payload.workTrace.status, 'failed');
   assert.equal(terminal.payload.workTrace.steps.at(-1).status, 'failed');
-  assert.equal(terminal.payload.error, 'No pude completar esa respuesta.');
+  assert.equal(terminal.payload.error, 'I could not complete this logistics review.');
   assert.equal(snapshot.status, 'failed');
   assert.deepEqual(snapshot.workTrace, terminal.payload.workTrace);
   assert.doesNotMatch(JSON.stringify({ terminal, snapshot }), new RegExp(rawSentinel));
@@ -700,6 +703,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
     'AssistantMessage',
     'ComparisonTable',
     'ContainerProgress',
+    'ContextArtifact',
     'CustomsClearancePanel',
     'DeliveryCard',
     'DeliveryIssueCard',
@@ -904,7 +908,7 @@ test('invalid reconciliation facts never mutate run state or emit UI', async () 
   assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
   assert.equal(
     coordinator.getSnapshot(run.runId).error,
-    'No pude completar esa respuesta.',
+    'I could not complete this logistics review.',
   );
 });
 
@@ -935,7 +939,7 @@ test('non-success StepResults cannot mutate facts or complete successfully', asy
     );
     const terminalPayload = envelopes.at(-1)?.payload as any;
     assert.equal(terminalPayload.status, 'failed');
-    assert.equal(terminalPayload.error, 'No pude completar esa respuesta.');
+    assert.equal(terminalPayload.error, 'I could not complete this logistics review.');
     assert.equal(terminalPayload.responseMessageId, `assistant-run-${status}`);
     assert.equal(terminalPayload.workTrace.status, 'failed');
 

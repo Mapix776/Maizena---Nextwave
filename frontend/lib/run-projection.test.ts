@@ -707,7 +707,7 @@ test('failed completion settles the correlated response shell without an orphan 
     type: 'run:complete',
     payload: {
       status: 'failed',
-      error: 'No pude completar esa respuesta.',
+      error: 'I could not complete this logistics review.',
       responseMessageId: 'assistant-run-failed-shell',
       workTrace: failedTrace,
     },
@@ -715,7 +715,7 @@ test('failed completion settles the correlated response shell without an orphan 
 
   assert.equal(state.messages.length, 1)
   assert.equal(state.messages[0].id, 'assistant-run-failed-shell')
-  assert.equal(state.messages[0].text, 'No pude completar esa respuesta.')
+  assert.equal(state.messages[0].text, 'I could not complete this logistics review.')
   assert.deepEqual(state.messages[0].workTrace, failedTrace)
   assert.equal(state.runs['run-failed-shell'].terminal, true)
 })
@@ -751,7 +751,7 @@ test('refresh binding validation rejoins only its correlated shell and stale los
 
   const stale = state.messages[0]
   const independent = state.messages[1]
-  assert.equal(stale.text, 'Esta ejecución ya no está disponible. Inténtalo de nuevo.')
+  assert.equal(stale.text, 'This logistics review is no longer available. Please try again.')
   assert.equal(stale.workTrace?.status, 'failed')
   assert.equal(stale.workTrace?.steps.every(({ status }) => status === 'failed'), true)
   assert.equal(independent.workTrace?.status, 'running')
@@ -779,7 +779,7 @@ test('invalid persisted startup authority settles its relevant running shell and
     assert.equal(recovery.state.messages[0].workTrace?.status, 'failed')
     assert.equal(
       recovery.state.messages[0].text,
-      'Esta ejecución ya no está disponible. Inténtalo de nuevo.',
+      'This logistics review is no longer available. Please try again.',
     )
     assert.equal(recovery.state.runs['run-stale-startup'].terminal, true)
   }

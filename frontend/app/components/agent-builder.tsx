@@ -823,9 +823,9 @@ function ChatMessageRow({
         {assistant && message.workTrace && (
           <WorkTraceDisclosure
             trace={message.workTrace}
-            workedForLabel={t.workedFor}
-            workingLabel={t.thinkingStatus}
-            sourcesLabel={t.sources}
+            workedForLabel="Worked for"
+            workingLabel="Working"
+            sourcesLabel="Sources"
             onOpenSource={onOpenTraceSource}
           />
         )}
@@ -1371,7 +1371,7 @@ export default function AgentBuilderView({
                   <div
                     key={item.id}
                     role="presentation"
-                    title={item.kind === 'catalog' ? artifactCategoryLabel(item.category, t) : item.kind === 'custom-report' ? t.customReportTab : t.sources}
+                    title={item.kind === 'catalog' ? artifactCategoryLabel(item.category, t) : item.kind === 'custom-report' ? t.customReportTab : 'Sources'}
                     className={`group flex h-8 min-w-24 max-w-[220px] shrink-0 items-center gap-0.5 rounded-t-md border border-b-0 transition-colors ${
                       selected
                         ? 'border-border bg-background text-foreground shadow-[inset_0_-2px_0_0_var(--primary)]'

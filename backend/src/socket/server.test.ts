@@ -345,7 +345,10 @@ test('the document content route proxies injected full PDF bytes and controlled 
   );
   assert.equal(success.status, 200);
   assert.equal(success.headers.get('content-type'), 'application/pdf');
-  assert.equal(success.headers.get('content-disposition'), 'inline; filename="Invoice.pdf"');
+  assert.equal(
+    success.headers.get('content-disposition'),
+    `inline; filename="Invoice.pdf"; filename*=UTF-8''Invoice.pdf`,
+  );
   assert.equal(success.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(success.headers.get('cache-control'), 'private, no-store');
   assert.deepEqual(new Uint8Array(await success.arrayBuffer()), pdfBytes);
@@ -572,8 +575,8 @@ test('run:join on a completed run returns the authoritative terminal snapshot wi
         kind: 'thinking',
         status: 'completed',
         animationType: 'thinking',
-        title: 'Entendiendo tu solicitud',
-        detail: 'Trabajo observable finalizado.',
+        title: 'Reviewing your request',
+        detail: 'Logistics review completed.',
       },
     ],
   });

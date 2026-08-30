@@ -278,20 +278,20 @@ test('createWorkTrace sanitizes source values while preserving useful summaries 
     [
       {
         id: 'trace-step-1',
-        title: 'Leyendo la información solicitada',
+        title: 'Leyendo requested information',
         detail:
-          'Abrí el documento la información solicitada para la información solicitada.',
+          'Abrí el documento requested information para requested information.',
       },
       {
         id: 'trace-step-2',
-        title: 'Ubicando la información solicitada',
-        detail: 'Consulté la ruta de la información solicitada.',
+        title: 'Ubicando requested information',
+        detail: 'Consulté la ruta de requested information.',
       },
       {
         id: 'trace-step-3',
-        title: 'Buscando la información solicitada',
+        title: 'Buscando requested information',
         detail:
-          'Busqué la información solicitada con la consulta "la información solicitada".',
+          'Busqué requested information con la consulta "requested information".',
       },
     ],
   );
@@ -333,16 +333,32 @@ test('mapped tool summaries carry private input provenance into central sanitiza
   assert.deepEqual(
     trace.steps.map(({ stepNumber, title }) => ({ stepNumber, title })),
     [
-      { stepNumber: 1, title: 'Container por barco' },
-      { stepNumber: 2, title: 'Encontrando container' },
+      { stepNumber: 1, title: 'Locating container' },
+      { stepNumber: 2, title: 'Locating cargo' },
     ],
+  );
+});
+
+test('source-bearing Work trace semantics use direct English logistics copy', () => {
+  const steps = [
+    mapToolToTraceStep('readDocumentTool', {}, { documents: [] }, 1),
+    mapToolToTraceStep('getOperationDetailsTool', {}, { details: { documents: [] } }, 2),
+    mapToolToTraceStep('reconcileShipmentDocumentsTool', {}, { discrepanciesCount: 0 }, 3),
+  ];
+  const copy = steps.map(({ title, detail }) => `${title} ${detail}`).join(' ');
+  assert.match(copy, /Reading shipment document/);
+  assert.match(copy, /Bill of Lading, Commercial Invoice, and Packing List/);
+  assert.doesNotMatch(
+    copy,
+    /delegate|agent|subagent|Recon|tool|database|Supabase|JSON-render|catalog|schema|query|render|[áéíóúñ¿¡]/i,
   );
 });
 
 test('PDF sources are extracted only from supported settled tool results, deduplicated, and bounded', () => {
   const document = (index: number) => ({
     id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
-    file_name: `Document ${index}.pdf`,
+    file_name: `Supabase esquema ${index}.pdf`,
+    type: index < 3 ? 'COMMERCIAL_INVOICE' : 'PACKING_LIST',
     mime_type: 'application/pdf',
     storage_bucket: 'private-documents',
     storage_path: `operations/private/document-${index}.pdf`,
@@ -355,7 +371,7 @@ test('PDF sources are extracted only from supported settled tool results, dedupl
   assert.equal(sources.length, 8);
   assert.deepEqual(sources[0], {
     id: 'trace-source-1',
-    title: 'Document 1.pdf',
+    title: 'Commercial Invoice',
     mimeType: 'application/pdf',
     contentUrl: '/api/documents/11111111-1111-4111-8111-000000000001/content',
   });
@@ -364,7 +380,7 @@ test('PDF sources are extracted only from supported settled tool results, dedupl
     extractWorkTraceSources('getOperationDetailsTool', {
       details: { documents: [document(2)] },
     }),
-    [{ ...sources[0], title: 'Document 2.pdf', contentUrl: '/api/documents/11111111-1111-4111-8111-000000000002/content' }],
+    [{ ...sources[0], title: 'Commercial Invoice', contentUrl: '/api/documents/11111111-1111-4111-8111-000000000002/content' }],
   );
   assert.deepEqual(extractWorkTraceSources('genericTool', { documents }), []);
   assert.deepEqual(
@@ -376,6 +392,40 @@ test('PDF sources are extracted only from supported settled tool results, dedupl
     }),
     [],
   );
+  assert.equal(sources[1].title, 'Commercial Invoice 2');
+  assert.equal(sources[2].title, 'Packing List');
+  assert.doesNotMatch(
+    sources.map(({ title }) => title).join(' '),
+    /Supabase|schema|esquema|\.pdf|[áéíóúñ¿¡]/i,
+  );
+});
+
+test('source titles are derived from validated logistics document types with a safe fallback', () => {
+  const base = {
+    id: '11111111-1111-4111-8111-111111111111',
+    file_name: 'Recon herramienta Supabase esquema.pdf',
+    mime_type: 'application/pdf',
+    storage_bucket: 'private',
+    storage_path: 'private/document.pdf',
+  };
+  const expected = [
+    ['BILL_OF_LADING', 'Bill of Lading'],
+    ['COMMERCIAL_INVOICE', 'Commercial Invoice'],
+    ['PACKING_LIST', 'Packing List'],
+    ['BOOKING_CONFIRMATION', 'Booking Confirmation'],
+    ['PURCHASE_ORDER', 'Purchase Order'],
+    ['ARRIVAL_NOTICE', 'Arrival Notice'],
+    ['OTHER', 'Shipment document'],
+    ['INVALID_TYPE', 'Shipment document'],
+  ];
+  for (const [type, title] of expected) {
+    assert.equal(
+      extractWorkTraceSources('readDocumentTool', {
+        documents: [{ ...base, type }],
+      })[0]?.title,
+      title,
+    );
+  }
 });
 
 test('public source descriptors are optional, strict, and reject arbitrary or raw storage fields', () => {

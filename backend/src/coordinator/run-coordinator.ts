@@ -260,7 +260,7 @@ export class RunCoordinator {
         const generic = run.traceSteps[0];
         if (generic?.kind === 'thinking' && generic.status === 'running') {
           generic.status = 'completed';
-          generic.detail = 'Solicitud preparada; continué con el trabajo observable.';
+          generic.detail = 'Request prepared. Continuing the logistics review.';
         }
         if (run.traceSteps.length >= 32) return;
         const stepNumber = run.traceSteps.length + 1;
@@ -289,8 +289,8 @@ export class RunCoordinator {
         status: frozen.outcome,
         ...(frozen.outcome === 'failed'
           ? {
-              title: 'No se pudo completar la consulta',
-              detail: 'La consulta observada terminó sin completarse.',
+              title: 'Logistics review incomplete',
+              detail: 'The logistics review could not be completed.',
               outputSummary: undefined,
             }
           : {}),
@@ -332,8 +332,8 @@ export class RunCoordinator {
       kind: 'thinking',
       status: 'running',
       animationType: 'thinking',
-      title: 'Entendiendo tu solicitud',
-      detail: 'Analizando lo que necesitas y preparando el siguiente paso.',
+      title: 'Reviewing your request',
+      detail: 'Preparing the next logistics step.',
       durationMs: 0,
       timestamp: this.#now().toISOString(),
     };
@@ -346,8 +346,8 @@ export class RunCoordinator {
       kind: 'thinking',
       status: 'completed',
       animationType: 'thinking',
-      title: 'Aplicando una actualización preparada',
-      detail: 'Apliqué una actualización preparada para esta solicitud.',
+      title: 'Applying prepared shipment update',
+      detail: 'Applying the prepared shipment update for this request.',
       durationMs: 0,
       timestamp: this.#now().toISOString(),
     };
@@ -362,8 +362,8 @@ export class RunCoordinator {
       step.status = status;
       step.detail =
         status === 'completed'
-          ? 'Trabajo observable finalizado.'
-          : 'No fue posible completar este trabajo observable.';
+          ? 'Logistics review completed.'
+          : 'The logistics review could not be completed.';
     }
   }
 
@@ -457,7 +457,7 @@ export class RunCoordinator {
     const commitFailure = () =>
       this.#commit(run, 'run:complete', (draft) => {
         draft.status = 'failed';
-        draft.error = 'No pude completar esa respuesta.';
+        draft.error = 'I could not complete this logistics review.';
         draft.workTrace = workTrace;
         delete draft.uiTargetMessageId;
         return {

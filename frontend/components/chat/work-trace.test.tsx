@@ -22,8 +22,8 @@ const steps = [
     kind: 'querying_database' as const,
     status: 'running' as const,
     animationType: 'findingBoat' as const,
-    title: 'Consultando',
-    detail: 'Consultando información operativa.',
+    title: 'Reviewing operation',
+    detail: 'Reviewing the operation details.',
   },
 ]
 
@@ -31,8 +31,8 @@ test('the live trace renders one decorative animation and one persistent atomic 
   const markup = renderToStaticMarkup(
     <WorkTraceDisclosure
       trace={{ status: 'running', durationMs: 25, steps }}
-      workedForLabel="Trabajó durante"
-      workingLabel="Pensando"
+      workedForLabel="Worked for"
+      workingLabel="Working"
     />,
   )
 
@@ -58,8 +58,8 @@ test('the conversation log is not live while each Work trace owns one atomic sta
         durationMs: 25,
         steps: steps.map((step) => ({ ...step, status: 'completed' as const })),
       }}
-      workedForLabel="Trabajó durante"
-      workingLabel="Pensando"
+      workedForLabel="Worked for"
+      workingLabel="Working"
     />,
   )
   assert.equal(markup.match(/role="status"/g)?.length, 1)
@@ -74,8 +74,8 @@ test('terminal trace starts collapsed while its status node remains outside the 
         durationMs: 2_000,
         steps: steps.map((step) => ({ ...step, status: 'completed' })),
       }}
-      workedForLabel="Trabajó durante"
-      workingLabel="Pensando"
+      workedForLabel="Worked for"
+      workingLabel="Working"
     />,
   )
 
@@ -114,4 +114,15 @@ test('source controls render only when present and invoke the pane-opening seam'
     />,
   )
   assert.doesNotMatch(withoutSources, /Sources/)
+})
+
+test('the chat keeps Work trace and source labels in English for every locale', () => {
+  const agentBuilderSource = readFileSync(
+    new URL('../../app/components/agent-builder.tsx', import.meta.url),
+    'utf8',
+  )
+  assert.match(agentBuilderSource, /workedForLabel="Worked for"/)
+  assert.match(agentBuilderSource, /workingLabel="Working"/)
+  assert.match(agentBuilderSource, /sourcesLabel="Sources"/)
+  assert.doesNotMatch(agentBuilderSource, /sourcesLabel=\{t\.|workedForLabel=\{t\.|workingLabel=\{t\./)
 })

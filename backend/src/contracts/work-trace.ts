@@ -69,7 +69,7 @@ export const executionTraceStepSchema = z.object({
 export type ExecutionTraceStep = z.infer<typeof executionTraceStepSchema>;
 
 const redactionMarker = '\uE000work-trace-redacted\uE001';
-const redactionLabel = 'la información solicitada';
+const redactionLabel = 'requested information';
 
 function collectUntrustedScalars(
   value: unknown,
@@ -178,6 +178,15 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+const sourceTitleByDocumentType: Record<string, string> = {
+  BILL_OF_LADING: 'Bill of Lading',
+  COMMERCIAL_INVOICE: 'Commercial Invoice',
+  PACKING_LIST: 'Packing List',
+  BOOKING_CONFIRMATION: 'Booking Confirmation',
+  PURCHASE_ORDER: 'Purchase Order',
+  ARRIVAL_NOTICE: 'Arrival Notice',
+};
+
 export function extractWorkTraceSources(
   toolName: string,
   output: unknown,
@@ -193,16 +202,18 @@ export function extractWorkTraceSources(
   if (!Array.isArray(supported)) return [];
 
   const seen = new Set<string>();
+  const titleCounts = new Map<string, number>();
   const sources: WorkTraceSource[] = [];
   for (const candidate of supported) {
     const document = record(candidate);
     if (!document) continue;
     const id = typeof document.id === 'string' ? document.id : '';
-    const title = typeof document.file_name === 'string' ? document.file_name.trim() : '';
+    const baseTitle =
+      typeof document.type === 'string'
+        ? sourceTitleByDocumentType[document.type] ?? 'Shipment document'
+        : 'Shipment document';
     if (
       !documentIdPattern.test(id) ||
-      !title ||
-      title.length > 200 ||
       document.mime_type !== 'application/pdf' ||
       typeof document.storage_bucket !== 'string' ||
       !document.storage_bucket ||
@@ -213,6 +224,9 @@ export function extractWorkTraceSources(
       continue;
     }
     seen.add(id);
+    const titleCount = (titleCounts.get(baseTitle) ?? 0) + 1;
+    titleCounts.set(baseTitle, titleCount);
+    const title = titleCount === 1 ? baseTitle : `${baseTitle} ${titleCount}`;
     sources.push(
       workTraceSourceSchema.parse({
         id: `trace-source-${sources.length + 1}`,
