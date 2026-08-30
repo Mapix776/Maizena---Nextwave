@@ -64,6 +64,20 @@ export class DeterministicRenderModel implements LanguageModelV4 {
   }
 }
 
-export function createProductionModel(modelId = process.env.OPENAI_MODEL ?? 'gpt-5-mini') {
+export const DEFAULT_MAIN_MODEL_ID = 'gpt-5.6-luna';
+export const DEFAULT_SMALL_MODEL_ID = 'gpt-5.6-luna';
+
+export const MAIN_REASONING_EFFORT = 'medium' as const;
+export const SMALL_REASONING_EFFORT = 'none' as const;
+
+export function createMainModel(
+  modelId = process.env.OPENAI_MAIN_MODEL ?? DEFAULT_MAIN_MODEL_ID,
+) {
+  return openai(modelId);
+}
+
+export function createSmallModel(
+  modelId = process.env.OPENAI_SMALL_MODEL ?? DEFAULT_SMALL_MODEL_ID,
+) {
   return openai(modelId);
 }
