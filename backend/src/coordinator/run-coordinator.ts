@@ -19,7 +19,10 @@ import {
 } from '../services/element-location-tracker.js';
 
 interface RunCoordinatorOptions {
-  executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
+  executeStep?: (
+    messages: ChatMessage[],
+    onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
+  ) => Promise<unknown>;
   composeUi?: (result: StepResult) => unknown;
   emit?: (envelope: UIEnvelope) => void | Promise<void>;
   createRunId?: () => string;
@@ -30,7 +33,10 @@ interface RunCoordinatorOptions {
 
 export class RunCoordinator {
   readonly #runs = new Map<string, RunSnapshot>();
-  readonly #executeStep: (messages: ChatMessage[]) => Promise<unknown>;
+  readonly #executeStep: (
+    messages: ChatMessage[],
+    onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
+  ) => Promise<unknown>;
   readonly #composeUi: (result: StepResult) => unknown;
   readonly #emit: (envelope: UIEnvelope) => void | Promise<void>;
   readonly #createRunId: () => string;
@@ -142,8 +148,69 @@ export class RunCoordinator {
 
     try {
       logTiming('step_execution_started');
+      const liveTraceSteps: unknown[] = [];
+      let currentAccumulatedFacts = { ...run.facts };
+
+      const onPartialPatch = async (
+        partialFacts: Record<string, unknown>,
+        traceStep?: unknown,
+      ) => {
+        currentAccumulatedFacts = {
+          ...currentAccumulatedFacts,
+          ...partialFacts,
+        };
+
+        const partialAssistantText =
+          typeof currentAccumulatedFacts.assistantResponse === 'string'
+            ? currentAccumulatedFacts.assistantResponse
+            : 'Estructurando vista operativa...';
+
+        const partialResult: StepResult = {
+          status: 'in_progress',
+          summary: 'Construyendo vista de operaciones...',
+          factPatch: {
+            ...currentAccumulatedFacts,
+            assistantResponse: partialAssistantText,
+          },
+          evidence: [],
+        };
+
+        if (traceStep) {
+          liveTraceSteps.push(traceStep);
+        }
+
+        try {
+          const partialUi = validateTracerSpec(this.#composeUi(partialResult));
+          run.facts = currentAccumulatedFacts;
+          run.ui = partialUi;
+
+          const elementKeys = Object.keys(
+            (partialUi as { elements: Record<string, unknown> }).elements,
+          );
+          const targetMessageId =
+            this.#locationTracker.findTargetMessageForElements(elementKeys);
+          const messageId = targetMessageId || `assistant-${runId}`;
+          this.#locationTracker.registerMessageElements(
+            messageId,
+            runId,
+            elementKeys,
+          );
+
+          await this.#emitNext(run, 'ui:replace', {
+            uiVersion: 1,
+            reason: 'partial-tool-resolved',
+            spec: partialUi,
+            traceSteps: [...liveTraceSteps],
+            targetMessageId,
+          });
+          logTiming(`partial_ui_replace_emitted_${Object.keys(partialFacts).join('_')}`);
+        } catch (err) {
+          console.warn('[timing] partial UI composition error:', err);
+        }
+      };
+
       const parsedResult = stepResultSchema.safeParse(
-        await this.#executeStep(messages),
+        await this.#executeStep(messages, onPartialPatch),
       );
       logTiming('step_execution_completed');
 
@@ -168,7 +235,8 @@ export class RunCoordinator {
       logTiming('ui_composition_started');
       const ui = validateTracerSpec(this.#composeUi(mergedResult));
       logTiming('ui_composition_completed');
-      const traceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
+      const finalTraceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
+      const combinedTraceSteps = [...liveTraceSteps, ...finalTraceSteps];
 
       run.facts = accumulatedFacts;
       run.ui = ui;
@@ -182,7 +250,7 @@ export class RunCoordinator {
         uiVersion: 1,
         reason: 'step-complete',
         spec: ui,
-        traceSteps,
+        traceSteps: combinedTraceSteps,
         targetMessageId,
       });
       logTiming('ws_ui_replace_emitted');
@@ -190,7 +258,7 @@ export class RunCoordinator {
       run.status = 'completed';
       await this.#emitNext(run, 'run:complete', {
         status: run.status,
-        traceSteps,
+        traceSteps: combinedTraceSteps,
         findings: result.findings,
       });
       logTiming('stream_closed');

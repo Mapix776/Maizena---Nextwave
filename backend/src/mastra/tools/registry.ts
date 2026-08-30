@@ -23,12 +23,13 @@ import { SupabaseReader } from '../../services/supabase-reader.js';
 
 interface ToolRegistryOptions {
   onRenderDemoExecution?: () => void;
+  onToolResolved?: (event: { toolName: string; result: unknown }) => void | Promise<void>;
   reader?: SupabaseReader;
 }
 
 export function createToolRegistry(options: ToolRegistryOptions = {}) {
   const reader = options.reader ?? new SupabaseReader();
-  return {
+  const rawRegistry = {
     // 1. Reading & Ingesting documents (📄 Leyendo documento / Ingesta)
     readDocumentTool: createReadDocumentTool({ reader }),
     ingestDocumentTool: createIngestDocumentTool(),
@@ -59,6 +60,32 @@ export function createToolRegistry(options: ToolRegistryOptions = {}) {
     getOperationsSummaryTool: createGetOperationsSummaryTool({ reader }),
     universalSearchTool: createUniversalSearchTool({ reader }),
   };
+
+  if (!options.onToolResolved) {
+    return rawRegistry;
+  }
+
+  const wrapped = {} as Record<string, unknown>;
+  for (const [name, tool] of Object.entries(rawRegistry)) {
+    if (tool && typeof (tool as any).execute === 'function') {
+      const originalExec = (tool as any).execute.bind(tool);
+      const wrappedTool = Object.create(tool);
+      wrappedTool.execute = async (...args: any[]) => {
+        const result = await originalExec(...args);
+        try {
+          await options.onToolResolved?.({ toolName: name, result });
+        } catch (err) {
+          console.warn(`[timing] onToolResolved listener error for ${name}:`, err);
+        }
+        return result;
+      };
+      wrapped[name] = wrappedTool;
+    } else {
+      wrapped[name] = tool;
+    }
+  }
+
+  return wrapped as typeof rawRegistry;
 }
 
 export type ToolRegistry = ReturnType<typeof createToolRegistry>;

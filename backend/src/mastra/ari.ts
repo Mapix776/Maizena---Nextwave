@@ -37,6 +37,7 @@ import {
   operationsSummaryOutputSchema,
   pendingDecisionsOutputSchema,
 } from './tools/logistics-database.tools.js';
+import { readDocumentOutputSchema } from './tools/read-document.tool.js';
 import { SupabaseReader } from '../services/supabase-reader.js';
 import {
   reconcileShipmentDocumentsOutputSchema,
@@ -132,7 +133,17 @@ Your tool execution workflow:
      - Inspect what documents ALREADY exist in the operation dossier (such as an ingested Booking Confirmation or Purchase Order).
      - NEVER claim that an existing document is missing if it exists in the operation dossier!
      - Report the live status accurately: acknowledge the documents already on file (e.g. "The Booking Confirmation is already registered on file for operation OP-2026-9201"), state what document is still awaited (e.g. "Awaiting the Bill of Lading (BL) to complete cross-validation before vessel departure"), and register the validation step.
-     - Call \`renderDemoTool\` to visually display the updated flow step and shipment state.`;
+     - Call \`renderDemoTool\` to visually display the updated flow step and shipment state.
+13. 🛡️ Transparency in Rejections & Design Constraints (3-Part Structure):
+   - When you reject or limit an action due to a design, security, or data integrity constraint, NEVER output a generic or dismissive refusal.
+   - Always communicate in 2-3 concise, professional sentences following this exact 3-part structure:
+     1. What was requested (acknowledge the user's intent).
+     2. Why it cannot be done that way (explain the honest business, legal, or data integrity reason — e.g. maintaining an auditable chain of custody, preventing physical shipment misrouting, or requiring human executive authorization for financial impact).
+     3. What the user needs to do next to achieve it correctly.
+   - Specific Scenarios:
+     - Creating an operation from text alone: "I don't create operations from typed descriptions alone — every operation must trace back to a real source document (a Purchase Order, Booking Confirmation, etc.) so the data stays auditable and verifiable across customs and carrier manifests. Upload the document and I will extract and validate the operation from there."
+     - Missing critical data (e.g. unstated port): "I won't guess a destination port — an incorrect assumption could route a real shipment wrong. I need you to confirm it via the decision card or provide a document that states it explicitly."
+     - Critical action without approval: "This action directly affects shipment costs and carrier contracts, so I cannot execute it automatically without your explicit approval. Please select your choice on the decision panel."`;
 
 const ARI_TOOL_KEYS = [
   'requestHumanDecisionTool',
@@ -160,8 +171,296 @@ export interface AriOptions {
   model?: LanguageModelV4;
   smallModel?: LanguageModelV4;
   onRenderToolExecution?: () => void;
+  onToolResolved?: (event: { toolName: string; result: unknown }) => void | Promise<void>;
   toolRegistry?: ToolRegistry;
   subagentRegistry?: SubagentRegistry;
+}
+
+export function extractToolCatalogFacts(
+  toolName: string,
+  result: unknown,
+): {
+  facts: Record<string, unknown>;
+  evidence: Array<{ id: string; source: string }>;
+  traceStep?: {
+    id: string;
+    title: string;
+    detail: string;
+    status: 'completed' | 'in_progress' | 'failed';
+    kind: string;
+  };
+} {
+  const facts: Record<string, unknown> = {};
+  const evidence: Array<{ id: string; source: string }> = [];
+  let traceStep:
+    | {
+        id: string;
+        title: string;
+        detail: string;
+        status: 'completed' | 'in_progress' | 'failed';
+        kind: string;
+      }
+    | undefined;
+
+  // 1. Operation Details
+  if (
+    toolName === 'getOperationDetailsTool' ||
+    toolName === 'get-operation-details'
+  ) {
+    const parsed = operationDetailsOutputSchema.safeParse(result);
+    if (parsed.success && parsed.data.found && parsed.data.details) {
+      try {
+        Object.assign(facts, buildOperationCatalogFacts(parsed.data.details));
+        evidence.push({
+          id: 'supabase-operation-details',
+          source: 'supabase:get-operation-details',
+        });
+        traceStep = {
+          id: `trace-op-${Date.now()}`,
+          title: 'Consultando Expediente Operativo',
+          detail: `Expediente recuperado de Supabase: ${parsed.data.details.operation.reference_code}`,
+          status: 'completed',
+          kind: 'tool-get-operation-details',
+        };
+      } catch (e) {
+        console.error('Failed to build operation catalog facts:', e);
+      }
+    }
+  }
+
+  // 2. Operational Alerts
+  if (
+    toolName === 'getOperationalAlertsTool' ||
+    toolName === 'get-operational-alerts'
+  ) {
+    const parsed = operationalAlertsOutputSchema.safeParse(result);
+    if (parsed.success) {
+      try {
+        facts.operationalAlerts = buildOperationalAlertsCatalogFacts(
+          parsed.data.alerts,
+        );
+        evidence.push({
+          id: 'supabase-operational-alerts',
+          source: 'supabase:get-operational-alerts',
+        });
+        traceStep = {
+          id: `trace-alerts-${Date.now()}`,
+          title: 'Monitoreo de Alertas Operativas',
+          detail: `${parsed.data.alerts.length} alertas consultadas en Supabase.`,
+          status: 'completed',
+          kind: 'tool-get-operational-alerts',
+        };
+      } catch (e) {
+        console.error('Failed to build operational alerts facts:', e);
+      }
+    }
+  }
+
+  // 3. Operations Summary
+  if (
+    toolName === 'getOperationsSummaryTool' ||
+    toolName === 'get-operations-summary'
+  ) {
+    const parsed = operationsSummaryOutputSchema.safeParse(result);
+    if (parsed.success) {
+      try {
+        const summary = parsed.data.summary;
+        facts.operationsMetrics = buildOperationsMetricsCatalogFacts(summary);
+        facts.kpiGrid = {
+          title: 'Métricas Clave de Operaciones',
+          metrics: [
+            {
+              id: 'total-ops',
+              label: 'Operaciones',
+              value: summary.totalOperations,
+              unit: 'activas',
+              severity: 'normal',
+            },
+            {
+              id: 'total-containers',
+              label: 'Contenedores',
+              value: summary.totalContainers,
+              unit: 'en red',
+              severity: 'normal',
+            },
+            {
+              id: 'delayed',
+              label: 'Retrasados',
+              value: summary.delayedContainersCount,
+              unit: 'contenedores',
+              severity:
+                summary.delayedContainersCount > 0 ? 'warning' : 'normal',
+            },
+            {
+              id: 'decisions',
+              label: 'Decisiones',
+              value: summary.pendingDecisionsCount,
+              unit: 'pendientes',
+              severity:
+                summary.pendingDecisionsCount > 0 ? 'critical' : 'normal',
+            },
+          ],
+        };
+        evidence.push({
+          id: 'supabase-operations-summary',
+          source: 'supabase:get-operations-summary',
+        });
+        traceStep = {
+          id: `trace-summary-${Date.now()}`,
+          title: 'Cálculo de Métricas Globales',
+          detail: `${summary.totalContainers} contenedores analizados en la flota.`,
+          status: 'completed',
+          kind: 'tool-get-operations-summary',
+        };
+      } catch (e) {
+        console.error('Failed to build operations summary facts:', e);
+      }
+    }
+  }
+
+  // 4. Pending Decisions
+  if (
+    toolName === 'getPendingDecisionsTool' ||
+    toolName === 'get-pending-decisions'
+  ) {
+    const parsed = pendingDecisionsOutputSchema.safeParse(result);
+    if (parsed.success) {
+      try {
+        const humanDecision = buildHumanDecisionCatalogFact(
+          parsed.data.decisions,
+        );
+        if (humanDecision) {
+          facts.humanDecision = humanDecision;
+          evidence.push({
+            id: 'supabase-pending-decisions',
+            source: 'supabase:get-pending-decisions',
+          });
+          traceStep = {
+            id: `trace-decisions-${Date.now()}`,
+            title: 'Verificación de Decisiones Pendientes (HITL)',
+            detail: `${parsed.data.decisions.length} decisiones pendientes identificadas.`,
+            status: 'completed',
+            kind: 'tool-get-pending-decisions',
+          };
+        }
+      } catch (e) {
+        console.error('Failed to build human decision facts:', e);
+      }
+    }
+  }
+
+  // 5. Customs Status
+  if (
+    toolName === 'getCustomsStatusTool' ||
+    toolName === 'get-customs-status'
+  ) {
+    const parsed = customsStatusOutputSchema.safeParse(result);
+    if (parsed.success) {
+      try {
+        facts.customsClearance = buildCustomsClearanceCatalogFacts(
+          parsed.data.containers,
+        );
+        evidence.push({
+          id: 'supabase-customs-status',
+          source: 'supabase:get-customs-status',
+        });
+        traceStep = {
+          id: `trace-customs-${Date.now()}`,
+          title: 'Inspección de Semáforo Fiscal Aduanero',
+          detail: `${parsed.data.containers.length} contenedores inspeccionados en aduana.`,
+          status: 'completed',
+          kind: 'tool-get-customs-status',
+        };
+      } catch (e) {
+        console.error('Failed to build customs clearance facts:', e);
+      }
+    }
+  }
+
+  // 6. Container Status
+  if (
+    toolName === 'getContainerStatusTool' ||
+    toolName === 'get-container-status' ||
+    toolName === 'findContainerTool' ||
+    toolName === 'find-container'
+  ) {
+    const parsed = containerStatusOutputSchema.safeParse(result);
+    if (parsed.success && parsed.data.found && parsed.data.container) {
+      const c = parsed.data.container;
+      facts.deliveryId = c.container_number;
+      facts.from =
+        c.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam';
+      facts.to =
+        c.destination_port || 'Puerto de Manzanillo, Colima, Mexico';
+      facts.transportType = 'Sea';
+      facts.status =
+        c.status === 'IN_TRANSIT'
+          ? 'In Transit'
+          : c.status === 'DELIVERED'
+            ? 'Delivered'
+            : c.status === 'CUSTOMS_HOLD'
+              ? 'Arrived at Port'
+              : c.status === 'OUT_FOR_DELIVERY'
+                ? 'Out for Delivery'
+                : 'Arrived at Port';
+      facts.deliveryTime = c.eta || c.actual_arrival || 'En tránsito';
+      traceStep = {
+        id: `trace-container-${Date.now()}`,
+        title: `Localización de Contenedor ${c.container_number}`,
+        detail: `Estado: ${c.status} | Ubicación: ${c.current_location || c.destination_port}`,
+        status: 'completed',
+        kind: 'tool-get-container-status',
+      };
+    }
+  }
+
+  // 7. Read Document
+  if (toolName === 'readDocumentTool' || toolName === 'read-document') {
+    const parsed = readDocumentOutputSchema.safeParse(result);
+    if (parsed.success && parsed.data.found && parsed.data.documents) {
+      facts.documentDetails = parsed.data.documents.map((doc: any) => ({
+        documentType: doc.type,
+        documentReference: doc.document_reference,
+        fileName: doc.file_name,
+        confidence: doc.extracted_facts?.confidence ?? 0.95,
+        fields: Object.entries(doc.extracted_facts || {}).map(([key, val]) => ({
+          label: key,
+          value: String(val),
+        })),
+      }));
+      traceStep = {
+        id: `trace-doc-${Date.now()}`,
+        title: 'Lectura de Documentación de Embarque',
+        detail: `${parsed.data.documents.length} documentos verificados en Supabase.`,
+        status: 'completed',
+        kind: 'tool-read-document',
+      };
+    }
+  }
+
+  // 8. Draw Chart
+  if (toolName === 'drawChartTool' || toolName === 'draw-chart') {
+    const parsed = interactiveChartPropsSchema.safeParse(result);
+    if (parsed.success) {
+      facts.chart = parsed.data;
+      traceStep = {
+        id: `trace-chart-${Date.now()}`,
+        title: 'Generación de Gráfico Analítico',
+        detail: `Visualización ${parsed.data.chartType} generada: ${parsed.data.title}`,
+        status: 'completed',
+        kind: 'tool-draw-chart',
+      };
+    }
+  }
+
+  // 9. Render Demo Tool
+  if (toolName === 'renderDemoTool' || toolName === 'render-json-demo') {
+    if (result && typeof result === 'object' && 'factPatch' in result) {
+      Object.assign(facts, (result as any).factPatch || {});
+    }
+  }
+
+  return { facts, evidence, traceStep };
 }
 
 export function createAriAgent(options: AriOptions = {}) {
@@ -171,6 +470,7 @@ export function createAriAgent(options: AriOptions = {}) {
     options.toolRegistry ??
     createToolRegistry({
       onRenderDemoExecution: options.onRenderToolExecution,
+      onToolResolved: options.onToolResolved,
     });
   const subagentRegistry =
     options.subagentRegistry ??
@@ -196,8 +496,48 @@ export async function executeAriStep(
   messages: ChatMessage[] = [
     { role: 'user', content: 'Run the json-render demo.' },
   ],
-  agent = createAriAgent(),
+  agentOrPartialPatch?:
+    | Agent
+    | ((facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void),
+  onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
 ): Promise<StepResult> {
+  let agent: Agent;
+  let partialPatchHandler:
+    | ((facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void)
+    | undefined;
+
+  if (typeof agentOrPartialPatch === 'function') {
+    partialPatchHandler = agentOrPartialPatch;
+    agent = createAriAgent({
+      onToolResolved: async ({ toolName, result }) => {
+        const { facts, traceStep } = extractToolCatalogFacts(toolName, result);
+        if (Object.keys(facts).length > 0 && partialPatchHandler) {
+          try {
+            await partialPatchHandler(facts, traceStep);
+          } catch (e) {
+            console.warn('[timing] partialPatchHandler error:', e);
+          }
+        }
+      },
+    });
+  } else if (agentOrPartialPatch) {
+    agent = agentOrPartialPatch;
+    partialPatchHandler = onPartialPatch;
+  } else {
+    partialPatchHandler = onPartialPatch;
+    agent = createAriAgent({
+      onToolResolved: async ({ toolName, result }) => {
+        const { facts, traceStep } = extractToolCatalogFacts(toolName, result);
+        if (Object.keys(facts).length > 0 && partialPatchHandler) {
+          try {
+            await partialPatchHandler(facts, traceStep);
+          } catch (e) {
+            console.warn('[timing] partialPatchHandler error:', e);
+          }
+        }
+      },
+    });
+  }
   const modelMessages = messages.map((message) =>
     message.role === 'user'
       ? { role: 'user' as const, content: message.content }

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import { tracerCatalog } from '../contracts/ui.js';
 import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
+import { composeRunUi } from '../services/ui-composer.js';
 import { RunCoordinator } from './run-coordinator.js';
 
 test('RunCoordinator validates and emits one monotonic envelope sequence', async () => {
@@ -500,3 +501,90 @@ test('RunCoordinator clears transient humanDecision when subsequent turn resolve
     'Turn 2 UI must NOT contain HumanDecisionCard',
   );
 });
+
+test('RunCoordinator emits incremental ui:replace patches in real time as each tool resolves', async () => {
+  const emittedEnvelopes: Array<{ type: string; payload: any }> = [];
+
+  const coordinator = new RunCoordinator({
+    executeStep: async (_messages, onPartialPatch) => {
+      // Simulate tool 1 resolving
+      await onPartialPatch?.(
+        {
+          operationSummary: {
+            operationId: 'op-123',
+            referenceCode: 'OP-2026-PARTIAL',
+            clientName: 'Partial Client',
+            status: 'BOOKED',
+            tags: [],
+            containers: [
+              {
+                id: 'cont-1',
+                containerNumber: 'CONT-999',
+                status: 'CLEARED',
+                originPort: 'Shanghai',
+                destinationPort: 'Manzanillo',
+              },
+            ],
+          },
+        },
+        { id: 'trace-1', title: 'Tool 1 Resolved', detail: 'Operation details loaded', status: 'completed' },
+      );
+
+      // Simulate tool 2 resolving
+      await onPartialPatch?.(
+        {
+          customsClearance: [
+            {
+              containerNumber: 'CONT-999',
+              status: 'CLEARED',
+              customsLight: 'green',
+              currentLocation: 'Manzanillo',
+              previoStatus: 'completed',
+              pedimentoStatus: 'completed',
+              alertIds: [],
+              decisionIds: [],
+            },
+          ],
+        },
+        { id: 'trace-2', title: 'Tool 2 Resolved', detail: 'Customs status loaded', status: 'completed' },
+      );
+
+      return {
+        status: 'completed',
+        summary: 'Final summary after all tools.',
+        factPatch: {
+          assistantResponse: 'Final summary after all tools.',
+        },
+        evidence: [],
+      };
+    },
+    composeUi: composeRunUi,
+    emit: (envelope) => {
+      emittedEnvelopes.push({ type: envelope.type, payload: envelope.payload });
+    },
+    createRunId: () => 'partial-run-test',
+  });
+
+  const run = coordinator.createRun();
+  await coordinator.execute(run.runId, [{ role: 'user', content: 'test partial' }]);
+
+  const partialEvents = emittedEnvelopes.filter(
+    (e) => e.type === 'ui:replace' && e.payload?.reason === 'partial-tool-resolved',
+  );
+  const completeEvent = emittedEnvelopes.find(
+    (e) => e.type === 'ui:replace' && e.payload?.reason === 'step-complete',
+  );
+
+  assert.equal(partialEvents.length, 2, 'Must emit 2 partial ui:replace events');
+  assert.ok(completeEvent, 'Must emit final step-complete ui:replace event');
+
+  // Verify first patch had OperationSummaryCard
+  const firstSpecElements = Object.values(partialEvents[0].payload.spec.elements).map((el: any) => el.type);
+  assert.ok(firstSpecElements.includes('OperationSummaryCard'));
+
+  // Verify second patch had CustomsClearancePanel added
+  const secondSpecElements = Object.values(partialEvents[1].payload.spec.elements).map((el: any) => el.type);
+  assert.ok(secondSpecElements.includes('OperationSummaryCard'));
+  assert.ok(secondSpecElements.includes('CustomsClearancePanel'));
+});
+

@@ -7,6 +7,12 @@ export interface ReadDocumentToolOptions {
   reader?: SupabaseReader;
 }
 
+export const readDocumentOutputSchema = z.object({
+  found: z.boolean(),
+  count: z.number(),
+  documents: z.array(z.any()),
+});
+
 export function createReadDocumentTool(options: ReadDocumentToolOptions = {}) {
   const reader = options.reader ?? new SupabaseReader();
   return createTool({
@@ -24,11 +30,7 @@ export function createReadDocumentTool(options: ReadDocumentToolOptions = {}) {
         .optional()
         .describe('Optional exact document number or printed reference code.'),
     }),
-    outputSchema: z.object({
-      found: z.boolean(),
-      count: z.number(),
-      documents: z.array(z.any()),
-    }),
+    outputSchema: readDocumentOutputSchema,
     execute: async (input) => {
       if (input.documentReference) {
         const doc = await reader.getDocumentByReference(input.documentReference);
