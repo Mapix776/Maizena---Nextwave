@@ -109,14 +109,6 @@ Ground operational answers in the live Supabase query tools. Delegate Bill of La
 
 Return client-friendly explanations and preserve validated structured tool results so the backend can compose evidence-backed json-render components.`
 
-const initialConversation: ChatMessage[] = [
-  {
-    id: 'welcome',
-    role: 'assistant',
-    text: 'Hola. Soy Ari. Puedo ayudarte y delegar la reconciliación de BL, Invoice y Packing List a Recon.',
-  },
-]
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -233,7 +225,7 @@ export default function AgentBuilderView({
   const messagesEnd = useRef<HTMLDivElement | null>(null)
   const shouldAutoScroll = useRef(true)
   const [tab, setTab] = useState('Test Agent')
-  const [messages, setMessages] = useState<ChatMessage[]>(initialConversation)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [input, setInput] = useState('')
   const [agentName, setAgentName] = useState('Ari')
