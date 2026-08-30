@@ -35,6 +35,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
     'ContainerProgress',
     'DeliveryCard',
     'DeliveryIssueCard',
+    'HumanDecisionCard',
   ]);
   assert.ok(
     Object.values(complete.ui.elements).every(({ type }) =>

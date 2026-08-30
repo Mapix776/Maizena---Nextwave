@@ -1,4 +1,10 @@
-import { createRequestHumanDecisionTool } from './human-decision.tool.js';
+import { createCalculateEtaTool } from './calculate-eta.tool.js';
+import { createCompareDataTool } from './compare-data.tool.js';
+import { createDrawChartTool } from './draw-chart.tool.js';
+import { createFindContainerTool } from './find-container.tool.js';
+import { createHumanDecisionTool, createRequestHumanDecisionTool } from './human-decision.tool.js';
+import { createIngestDocumentTool } from './ingest-document.tool.js';
+import { createLocateMapTool } from './locate-map.tool.js';
 import {
   createGetContainerStatusTool,
   createGetCustomsStatusTool,
@@ -10,6 +16,7 @@ import {
   createSearchCargoTool,
   createUniversalSearchTool,
 } from './logistics-database.tools.js';
+import { createReadDocumentTool } from './read-document.tool.js';
 import { createReconcileShipmentDocumentsTool } from './reconcile-shipment-documents.tool.js';
 import { createRenderDemoTool } from './render-demo.tool.js';
 import { SupabaseReader } from '../../services/supabase-reader.js';
@@ -22,11 +29,26 @@ interface ToolRegistryOptions {
 export function createToolRegistry(options: ToolRegistryOptions = {}) {
   const reader = options.reader ?? new SupabaseReader();
   return {
+    // 1. Reading & Ingesting documents (📄 Leyendo documento / Ingesta)
+    readDocumentTool: createReadDocumentTool({ reader }),
+    ingestDocumentTool: createIngestDocumentTool(),
+    // 2. Drawing charts (📈 Dibujando gráficas)
+    drawChartTool: createDrawChartTool({ reader }),
+    // 3. Locating on map (📍 Ubicando en el mapa)
+    locateMapTool: createLocateMapTool({ reader }),
+    // 4. Finding container (🔍 Encontrando container)
+    findContainerTool: createFindContainerTool({ reader }),
+    // 5. Calculating ETA (🕒 Calculando ETA)
+    calculateEtaTool: createCalculateEtaTool({ reader }),
+    // 6. Comparing data (🔀 Comparando datos)
+    compareDataTool: createCompareDataTool({ reader }),
     reconcileShipmentDocumentsTool: createReconcileShipmentDocumentsTool(),
+    // 7. Human-in-the-Loop & Generative UI
+    requestHumanDecisionTool: createRequestHumanDecisionTool(),
     renderDemoTool: createRenderDemoTool({
       onExecution: options.onRenderDemoExecution,
     }),
-    requestHumanDecisionTool: createRequestHumanDecisionTool(),
+    // 8. General Database Queries
     searchCargoTool: createSearchCargoTool({ reader }),
     getOperationDetailsTool: createGetOperationDetailsTool({ reader }),
     listOperationsTool: createListOperationsTool({ reader }),

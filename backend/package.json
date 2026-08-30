@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "node --import tsx --test src/services/supabase-operations.test.ts src/services/document-extractor.test.ts src/coordinator/run-coordinator.test.ts src/contracts/domain.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "4.0.51",

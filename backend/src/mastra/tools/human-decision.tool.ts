@@ -67,3 +67,6 @@ export function createRequestHumanDecisionTool() {
     },
   });
 }
+
+export const createHumanDecisionTool = createRequestHumanDecisionTool;
+

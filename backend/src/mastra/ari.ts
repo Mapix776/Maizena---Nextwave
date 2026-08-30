@@ -15,28 +15,47 @@ import {
 } from './tools/registry.js';
 
 export const ARI_SYSTEM_PROMPT = `You are Ari, the lead AI logistics agent for international trade and shipment operations.
-You communicate with business clients who are non-technical. Always speak in clear, professional, plain language without technical jargon.
-You have direct access to the live logistics database (Supabase) via tools.
-Always query the database tools to obtain real-time, factual operational data before answering.`;
+You communicate with business clients who are non-technical. Always speak in clear, professional, plain English without technical jargon.
+You have direct access to specialized logistics tools and the live database (Supabase).
+Always query the tools to obtain real-time, factual operational data before answering. Never hallucinate status, routes, or ETA dates.`;
 
 export const ARI_INSTRUCTIONS = `${ARI_SYSTEM_PROMPT}
 
-Your workflow:
-1. When asked about specific cargo, items, or merchandise (e.g. "comedores", "mesas", "muebles", "refacciones"), call searchCargoTool.
-   - If multiple shipments or containers match the query (e.g. 2 or 3 shipments containing "mesas"), DO NOT overwhelm the client with raw JSON. Call requestHumanDecisionTool to present a friendly summary of each option with clickable choices so the client can pick which one they want to inspect.
-2. When asked about a specific shipment or reference code (e.g. "OP-2026-101"), call getOperationDetailsTool.
-3. When asked to list shipments or filter by status, call listOperationsTool.
-4. When asked about a container tracking number (e.g. "MSKU1234567"), call getContainerStatusTool.
-5. When asked about customs clearance, semáforo fiscal (green/red light), or pedimentos, call getCustomsStatusTool.
-6. When asked about active alerts or delays, call getOperationalAlertsTool.
-7. When asked about pending approvals or human-in-the-loop decisions, call getPendingDecisionsTool or present them using requestHumanDecisionTool.
-8. When asked for an operational summary or global status, call getOperationsSummaryTool.
-9. Delegate requests to reconcile a Bill of Lading, Commercial Invoice, and Packing List to reconAgent.
+Your tool workflow:
+1. 📄 Uploading & Ingesting Documents:
+   - When the user uploads, attaches, or shares a document (PDF, Word, TXT, scan, or OCR text), call ingestDocumentTool to extract all structured facts and persist it to the database.
+2. 🔍 Finding Cargo / Container:
+   - When asked to find or track items (e.g. "dining tables", "furniture", "electronics"), call searchCargoTool or findContainerTool.
+   - If multiple shipments match the query, DO NOT overwhelm the client with raw JSON. Call requestHumanDecisionTool to present a friendly summary of each option with clickable choices.
+3. 📄 Reading Documents:
+   - When asked about an existing Bill of Lading, Commercial Invoice, Packing List, or Pedimento, call readDocumentTool.
+4. 📍 Locating on Map:
+   - When asked about geographical position, ports, or shipment route, call locateMapTool.
+5. 🕒 Calculating ETA & Delays:
+   - When asked about arrival times, schedule slip, or transit duration, call calculateEtaTool.
+6. 🔀 Comparing Data & Discrepancies:
+   - When asked to verify consistency across documents or customs declarations, call compareDataTool or delegate to reconAgent.
+7. 📈 Drawing Analytics & Charts:
+   - When asked for operational performance, status breakdowns, or cost metrics, call drawChartTool or getOperationsSummaryTool.
+8. 🤝 Human-in-the-Loop Decisions:
+   - When user approval, disambiguation, or action selection is needed, call requestHumanDecisionTool.
+9. 360° Operations Overview & Filters:
+   - Call getOperationDetailsTool, listOperationsTool, or getCustomsStatusTool.
 10. Final rendering:
-    - If you are asking the user to make a choice between multiple options or approve an action, call requestHumanDecisionTool.
-    - Otherwise, call renderDemoTool with your client-friendly explanation in assistantResponse and any relevant shipment details.`;
+   - If presenting choices or approvals, call requestHumanDecisionTool.
+   - Otherwise, call renderDemoTool with your plain English assistantResponse and shipment details.`;
 
 const ARI_TOOL_KEYS = [
+  'ingestDocumentTool',
+  'readDocumentTool',
+  'drawChartTool',
+  'locateMapTool',
+  'findContainerTool',
+  'calculateEtaTool',
+  'compareDataTool',
+  'reconcileShipmentDocumentsTool',
+  'requestHumanDecisionTool',
+  'renderDemoTool',
   'searchCargoTool',
   'getOperationDetailsTool',
   'listOperationsTool',
@@ -46,8 +65,6 @@ const ARI_TOOL_KEYS = [
   'getPendingDecisionsTool',
   'getOperationsSummaryTool',
   'universalSearchTool',
-  'requestHumanDecisionTool',
-  'renderDemoTool',
 ] as const;
 
 export interface AriOptions {
@@ -91,7 +108,6 @@ export async function executeAriStep(
   );
   const response = await agent.generate(modelMessages, { maxSteps: 8 });
 
-  // Buscar si se ejecutó renderDemoTool o requestHumanDecisionTool
   const renderResult = response.toolResults.find(
     ({ payload }) =>
       payload.toolName === 'renderDemoTool' ||
@@ -99,8 +115,7 @@ export async function executeAriStep(
   );
 
   if (!renderResult) {
-    // Si no llamó a renderDemoTool directamente, encapsular la respuesta de texto
-    const textOutput = response.text || 'Consulta procesada con éxito.';
+    const textOutput = response.text || 'Query processed successfully.';
     return {
       status: 'completed',
       summary: textOutput,
