@@ -55,7 +55,10 @@ export function WorkTraceDisclosure({
   }, [trace.status])
 
   return (
-    <section className="mb-4 w-full border-b border-border/70" data-work-trace>
+    <section
+      className="mb-4 w-full rounded-2xl border border-border/70 bg-card px-4 shadow-xs last:mb-0"
+      data-work-trace
+    >
       <button
         type="button"
         className="flex min-h-11 w-full items-center gap-2 py-2 text-left font-mono text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

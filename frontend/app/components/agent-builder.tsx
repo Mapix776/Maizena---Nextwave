@@ -74,6 +74,7 @@ import { getTranslations, type Locale } from '@/lib/i18n'
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
 import { extractSavableComponents, fullResultTitle } from '@/lib/dashboard-extract'
 import type { DashboardItemKind, SaveDashboardInput } from '@/lib/use-dashboard'
+import { isNaturalLanguageAssistantResponse } from '@/lib/message-presentation'
 import {
   closePaneTabState,
   keyboardPaneTabTarget,
@@ -676,17 +677,57 @@ function ChatMessageRow({
 }) {
   const [modalOpen, setModalOpen] = useState(false)
   const assistant = message.role === 'assistant'
+  const naturalLanguageResponse = isNaturalLanguageAssistantResponse(message)
+  const hasMessageContent = Boolean(
+    message.text.trim() || message.spec || message.attachments?.length,
+  )
   const fullTitle = message.spec ? fullResultTitle(message.spec as JsonRenderSpec, message.text) : ''
   const saved = isSaved?.(fullTitle, 'full_spec') ?? false
+
+  const specActions = message.spec ? (
+    <>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="rounded-full"
+        onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
+      >
+        <FileText className="size-3.5" />
+        {t.openInfo}
+      </Button>
+      {onSaveComponent && (
+        <Button
+          type="button"
+          variant={saved ? 'secondary' : 'outline'}
+          size="sm"
+          className="rounded-full"
+          aria-pressed={saved}
+          onClick={() => {
+            const nowSaved = onSaveComponent({
+              title: fullTitle,
+              kind: 'full_spec',
+              payload: message.spec as JsonRenderSpec,
+              subtitle: 'Full result',
+            })
+            onNotify(nowSaved ? t.saveCardDone : t.unsaveCardDone)
+          }}
+        >
+          {saved ? <BookmarkCheck className="size-3.5" /> : <Bookmark className="size-3.5" />}
+          {saved ? t.savedCardShort : t.saveResult}
+        </Button>
+      )}
+    </>
+  ) : null
 
   return (
     <Message
       from={message.role}
-      className={`mx-auto w-full max-w-3xl ${assistant ? 'flex-row items-start gap-3' : 'items-end'}`}
+      className={`mx-auto w-full max-w-3xl ${naturalLanguageResponse ? 'flex-row items-start gap-3' : assistant ? 'block' : 'items-end'}`}
     >
-      {assistant && <AriAvatar />}
+      {naturalLanguageResponse && <AriAvatar />}
       <div className={assistant ? 'min-w-0 flex-1' : 'flex max-w-[85%] flex-col items-end'}>
-        {assistant && (
+        {naturalLanguageResponse && (
           <div className="mb-1 flex min-h-6 flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted-foreground">Ari</span>
             {message.spec && (
@@ -745,6 +786,9 @@ function ChatMessageRow({
             )}
           </div>
         )}
+        {!naturalLanguageResponse && specActions && (
+          <div className="mb-2 flex flex-wrap justify-end gap-2">{specActions}</div>
+        )}
         {assistant && message.workTrace && (
           <WorkTraceDisclosure
             trace={message.workTrace}
@@ -752,35 +796,37 @@ function ChatMessageRow({
             workingLabel={t.thinkingStatus}
           />
         )}
-        <MessageContent
-          className={
-            assistant
-              ? 'w-full overflow-visible'
-              : 'rounded-2xl bg-muted px-4 pb-3 pt-[10px] text-foreground'
-          }
-          data-testid={message.spec ? 'json-render-response' : undefined}
-        >
-          {message.attachments && (
-            <SentAttachments
-              attachments={message.attachments}
-              onOpen={(attachment) => onOpenAttachment(attachment, message.id)}
-            />
-          )}
-          {message.spec ? (
-            <SavableResponse
-              spec={message.spec as JsonRenderSpec}
-              isSaved={isSaved}
-              onSaveComponent={onSaveComponent}
-              onNotify={onNotify}
-              t={t}
-            />
-          ) : assistant ? (
-            <MessageResponse>{message.text}</MessageResponse>
-          ) : (
-            <p className="m-0 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
-          )}
-        </MessageContent>
-        {assistant && (
+        {hasMessageContent && (
+          <MessageContent
+            className={
+              assistant
+                ? 'w-full overflow-visible'
+                : 'rounded-2xl bg-muted px-4 pb-3 pt-[10px] text-foreground'
+            }
+            data-testid={message.spec ? 'json-render-response' : undefined}
+          >
+            {message.attachments && (
+              <SentAttachments
+                attachments={message.attachments}
+                onOpen={(attachment) => onOpenAttachment(attachment, message.id)}
+              />
+            )}
+            {message.spec ? (
+              <SavableResponse
+                spec={message.spec as JsonRenderSpec}
+                isSaved={isSaved}
+                onSaveComponent={onSaveComponent}
+                onNotify={onNotify}
+                t={t}
+              />
+            ) : assistant ? (
+              <MessageResponse>{message.text}</MessageResponse>
+            ) : (
+              <p className="m-0 whitespace-pre-wrap text-sm leading-6">{message.text}</p>
+            )}
+          </MessageContent>
+        )}
+        {naturalLanguageResponse && (
           <MessageActions className="mt-1 text-muted-foreground">
             <MessageAction
               label={t.copy}

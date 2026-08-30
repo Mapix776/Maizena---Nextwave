@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -H 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test:work-trace": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test lib/run-projection.test.ts lib/work-trace-disclosure.test.ts components/chat/work-trace.test.tsx lib/work-trace.test.ts"
+    "test:work-trace": "node --import ../backend/node_modules/tsx/dist/loader.mjs --test lib/message-presentation.test.ts lib/run-projection.test.ts lib/work-trace-disclosure.test.ts components/chat/work-trace.test.tsx lib/work-trace.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

@@ -501,9 +501,9 @@ export function bindRunResponseShell(
 function responseText(spec: JsonRenderSpec): string {
   const root = spec.elements[spec.root]
   const props = root?.props as Record<string, unknown> | undefined
-  return typeof props?.text === 'string'
+  return root?.type === 'AssistantMessage' && typeof props?.text === 'string'
     ? props.text.slice(0, 20_000)
-    : 'Respuesta renderizada.'
+    : ''
 }
 
 function mergeSpecs(

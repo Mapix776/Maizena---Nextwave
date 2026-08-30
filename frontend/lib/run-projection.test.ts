@@ -650,6 +650,42 @@ test('same-target final UI keeps the response root and intended card together', 
   })
 })
 
+test('card-only UI does not synthesize a natural-language Ari response', () => {
+  let state = bindRunResponseShell(
+    createChatState(),
+    'run-card-only',
+    'assistant-run-card-only',
+  )
+  state = applyRunProjection(state, {
+    runId: 'run-card-only',
+    sequence: 1,
+    type: 'ui:replace',
+    payload: {
+      uiVersion: 1,
+      reason: 'step-complete',
+      responseMessageId: 'assistant-run-card-only',
+      uiTargetMessageId: 'assistant-run-card-only',
+      workTrace: { ...runningTrace, status: 'completed' },
+      spec: {
+        root: 'container-progress',
+        elements: {
+          'container-progress': {
+            type: 'ContainerProgress',
+            props: { currentStatus: 'In Transit' },
+            children: [],
+          },
+        },
+      },
+    },
+  })
+
+  const message = state.messages.find(
+    ({ id }) => id === 'assistant-run-card-only',
+  )
+  assert.equal(message?.text, '')
+  assert.equal(message?.spec?.root, 'container-progress')
+})
+
 test('failed completion settles the correlated response shell without an orphan error bubble', () => {
   let state = bindRunResponseShell(
     createChatState(),
