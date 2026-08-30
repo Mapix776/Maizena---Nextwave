@@ -6,6 +6,27 @@
 .json-bar-chart p { color: var(--muted-foreground); font-size: 13px; }
 .json-bar-chart-canvas { min-height: 180px; }
 .json-bar-chart-empty { display: grid; min-height: 180px; place-items: center; color: var(--muted-foreground); font-size: 13px; }
+
+/* ===== InteractiveChart (presentation-only json-render widget) ===== */
+.interactive-chart { position: relative; max-width: 100%; border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px 18px; background: var(--card); color: var(--card-foreground); box-shadow: 0 8px 24px rgba(45, 25, 73, 0.06); touch-action: none; }
+.interactive-chart-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.interactive-chart-drag { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--muted-foreground); cursor: grab; touch-action: none; }
+.interactive-chart-drag:active { cursor: grabbing; background: var(--lavender); color: var(--primary); }
+.interactive-chart-heading { display: flex; align-items: center; gap: 7px; min-width: 0; margin-right: auto; padding: 4px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); font-size: 15px; font-weight: 800; letter-spacing: -0.02em; cursor: text; }
+.interactive-chart-heading:hover { background: var(--lavender); }
+.interactive-chart-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.interactive-chart-heading svg { flex: 0 0 auto; color: var(--muted-foreground); }
+.interactive-chart-title-editor { display: flex; align-items: center; gap: 6px; margin-right: auto; }
+.interactive-chart-title-editor input { min-width: 0; width: min(240px, 60vw); padding: 6px 9px; border: 1px solid var(--primary); border-radius: 8px; outline: 0; background: var(--card); color: var(--foreground); font-size: 14px; font-weight: 700; }
+.interactive-chart-title-editor button { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border: 0; border-radius: 8px; color: #fff; background: linear-gradient(100deg, #dc63c7, #8b5cf6); cursor: pointer; }
+.interactive-chart-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.interactive-chart-actions button { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--muted-foreground); cursor: pointer; transition: color 140ms ease, border-color 140ms ease, background 140ms ease; }
+.interactive-chart-actions button:hover { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.interactive-chart-actions button.selected { color: #fff; border-color: transparent; background: linear-gradient(100deg, #dc63c7, #8b5cf6); }
+.interactive-chart-description { margin: 8px 2px 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+.interactive-chart-canvas { height: 250px; margin-top: 12px; }
+.interactive-chart-empty { display: grid; height: 100%; place-items: center; color: var(--muted-foreground); font-size: 13px; }
+@media (max-width: 520px) { .interactive-chart-actions { margin-left: 0; width: 100%; } .interactive-chart-canvas { height: 220px; } }
 .json-catalog-page { min-height: 100vh; background: var(--background); color: var(--foreground); padding: 56px 24px 96px; }
 .json-catalog-shell { max-width: 1180px; margin: 0 auto; }
 .json-catalog-header { max-width: 720px; margin-bottom: 40px; }
