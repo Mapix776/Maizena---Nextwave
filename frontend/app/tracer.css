@@ -46,112 +46,133 @@
   display: none;
 }
 
-.context-view-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 10px 12px 0;
+/* Inline collapsible "step by step" trace inside an assistant message */
+.chat-trace {
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
 }
 
-.context-view-tabs button {
-  display: inline-flex;
+.chat-trace-toggle {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-  border: 1px solid var(--line);
-  border-bottom: none;
-  border-radius: 10px 10px 0 0;
-  padding: 9px 12px;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 11px;
+  border: 0;
   background: transparent;
   color: var(--muted);
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+  transition: color 140ms ease, background 140ms ease;
 }
 
-.context-view-tabs button:hover {
+.chat-trace-toggle:hover {
   color: var(--foreground);
-}
-
-.context-view-tabs button.selected {
-  border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.chat-trace-toggle span {
   color: var(--foreground);
 }
 
-.context-trace {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 22px 24px;
+.chat-trace-toggle small {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
 }
 
-.context-trace-intro {
-  margin: 0;
+.chat-trace-caret {
+  margin-left: auto;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+  transition: transform 160ms ease;
 }
 
-.trace-steps {
+.chat-trace.open .chat-trace-caret {
+  transform: rotate(90deg);
+}
+
+.chat-trace-body {
+  padding: 4px 13px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.chat-trace-intro {
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.chat-trace-steps {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.trace-step {
+.chat-trace-step {
   position: relative;
   display: flex;
-  gap: 14px;
+  gap: 12px;
 }
 
-.trace-step:not(:last-child)::before {
+.chat-trace-step:not(:last-child)::before {
   content: '';
   position: absolute;
-  left: 13px;
-  top: 30px;
-  bottom: -18px;
+  left: 11px;
+  top: 26px;
+  bottom: -14px;
   width: 2px;
   background: var(--line);
 }
 
-.trace-step-marker {
+.chat-trace-marker {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: var(--accent);
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   z-index: 1;
 }
 
-.trace-step-body {
+.chat-trace-step-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 3px;
+  gap: 3px;
+  padding-top: 2px;
 }
 
-.trace-step-body b {
-  font-size: 13px;
+.chat-trace-step-body b {
+  font-size: 12.5px;
   font-weight: 800;
   color: var(--foreground);
 }
 
-.trace-step-body p {
+.chat-trace-step-body p {
   margin: 0;
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .context-tabs {
