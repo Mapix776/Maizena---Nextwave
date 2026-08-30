@@ -1087,6 +1087,7 @@ export default function AgentBuilderView({
                   }`}
                   onClick={() => setSelectedContextId(item.id)}
                 >
+                  
                   <small className={kickerClass}>{item.kind}</small>
                   <span className="mt-1 block truncate text-sm font-medium">{item.title}</span>
                 </button>
