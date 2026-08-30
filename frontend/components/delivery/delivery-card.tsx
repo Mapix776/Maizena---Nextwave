@@ -9,101 +9,101 @@ export function DeliveryCard({ delivery, children }: { delivery: Delivery; child
   const isCustoms = delivery.status === 'Customs'
   const isDelayed = delivery.deliveryTime.toLowerCase().includes('delay') || delivery.deliveryTime.toLowerCase().includes('slip')
 
+  const statusStyles = isDelivered
+    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+    : isCustoms
+      ? 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+      : 'border-primary/25 bg-primary/10 text-primary'
+
   return (
-    <article className="my-3 flex flex-col gap-4 rounded-2xl border border-purple-100 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-5 text-zinc-900 dark:text-zinc-100 shadow-md transition-all hover:shadow-lg">
+    <article className="my-3 flex w-full max-w-3xl flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs">
       {/* Header with ID and Status */}
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50 px-2 py-0.5 rounded-md">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Shipment Overview
-          </span>
-          <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-white mt-1">
+          </p>
+          <h2 className="mt-1 truncate text-base font-semibold tracking-tight">
             {delivery.id}
           </h2>
         </div>
         <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${
-            isDelivered
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-              : isCustoms
-                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800'
-          }`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles}`}
         >
-          <span className="size-1.5 rounded-full bg-current animate-pulse" />
+          <span className="size-1.5 rounded-full bg-current" />
           {delivery.status}
         </span>
       </div>
 
-      {/* HIGHLIGHTED ETA HERO BANNER */}
-      <div className="rounded-xl border border-purple-200 dark:border-purple-900/60 bg-gradient-to-r from-purple-50/80 via-indigo-50/60 to-purple-50/80 dark:from-purple-950/40 dark:via-zinc-900 dark:to-purple-950/40 p-4 flex items-center justify-between gap-3 shadow-inner">
-        <div className="flex items-center gap-3">
-          <div className="size-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
-            <Clock className="size-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-purple-700 dark:text-purple-300">
+      {/* ETA row */}
+      <div className="flex items-center justify-between gap-3 rounded-sm border border-primary/20 bg-primary/5 p-3.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+            <Clock className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Estimated Time of Arrival (ETA)
             </p>
-            <p className="text-base font-extrabold text-zinc-900 dark:text-white">
+            <p className="mt-0.5 text-sm font-semibold">
               {delivery.deliveryTime}
             </p>
           </div>
         </div>
         {isDelayed && (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/80 px-2.5 py-1 rounded-lg border border-amber-300 dark:border-amber-800 shrink-0">
-            <AlertCircle className="size-3.5" /> Delay Reported
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+            <AlertCircle className="size-3.5" aria-hidden="true" /> Delay Reported
           </span>
         )}
       </div>
 
       {/* Origin -> Destination Route */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-xl border border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 p-3.5">
-        <div className="flex flex-col">
-          <span className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-            <MapPin className="size-3 text-zinc-400" /> Origin
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-sm border border-border bg-muted/40 p-3.5">
+        <div className="flex min-w-0 flex-col">
+          <span className="flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <MapPin className="size-3" aria-hidden="true" /> Origin
           </span>
-          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate mt-0.5">
+          <span className="mt-1 truncate text-sm font-medium">
             {delivery.from}
           </span>
         </div>
 
         <div className="flex flex-col items-center justify-center px-2">
-          <div className="size-8 rounded-full bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300 flex items-center justify-center shadow-xs">
-            <TransportIcon className="size-4" />
-          </div>
-          <ArrowRight className="size-3 text-zinc-400 mt-1" />
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <TransportIcon className="size-4" aria-hidden="true" />
+          </span>
+          <ArrowRight className="mt-1 size-3 text-muted-foreground" aria-hidden="true" />
         </div>
 
-        <div className="flex flex-col text-right">
-          <span className="flex items-center justify-end gap-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
-            Destination <MapPin className="size-3 text-purple-500" />
+        <div className="flex min-w-0 flex-col text-right">
+          <span className="flex items-center justify-end gap-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Destination <MapPin className="size-3" aria-hidden="true" />
           </span>
-          <span className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate mt-0.5">
+          <span className="mt-1 truncate text-sm font-medium">
             {delivery.to}
           </span>
         </div>
       </div>
 
       {/* Meta Specs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 border-t border-zinc-100 dark:border-zinc-800/80 pt-3 text-xs">
+      <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs sm:grid-cols-3">
         <div>
-          <span className="text-zinc-400">Transport Mode</span>
-          <p className="font-semibold text-zinc-700 dark:text-zinc-300 mt-0.5">{delivery.transportType} Freight</p>
+          <span className="text-muted-foreground">Transport Mode</span>
+          <p className="mt-0.5 font-medium text-foreground">{delivery.transportType} Freight</p>
         </div>
         <div>
-          <span className="text-zinc-400">Initiated Date</span>
-          <p className="font-semibold text-zinc-700 dark:text-zinc-300 mt-0.5">{formatDeliveryDate(delivery.createdAt)}</p>
+          <span className="text-muted-foreground">Initiated Date</span>
+          <p className="mt-0.5 font-medium text-foreground">{formatDeliveryDate(delivery.createdAt)}</p>
         </div>
         <div>
-          <span className="text-zinc-400">Verification</span>
-          <p className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-0.5">
-            <ShieldCheck className="size-3.5" /> Blockchain &amp; Live DB
+          <span className="text-muted-foreground">Verification</span>
+          <p className="mt-0.5 flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-300">
+            <ShieldCheck className="size-3.5" aria-hidden="true" /> Blockchain &amp; Live DB
           </p>
         </div>
       </div>
 
-      {children && <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-3">{children}</div>}
+      {children && <div className="border-t border-border pt-3">{children}</div>}
     </article>
   )
 }
