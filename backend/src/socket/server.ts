@@ -33,6 +33,7 @@ import {
 } from '../services/supabase-documents.js';
 import { createOrderIncidentStore } from '../services/order-incidents.js';
 import { SupabaseReader } from '../services/supabase-reader.js';
+import { createIncidentAutoGenerator } from '../services/incident-generator.js';
 import { AnalyticsService } from '../services/analytics.service.js';
 import { createPinnedChartStore } from '../services/pinned-charts.store.js';
 import {
@@ -694,6 +695,13 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
     pingTimeout: 10000,
     pingInterval: 5000,
   });
+  const incidentAutoGenerator = createIncidentAutoGenerator({
+    intervalMs: 4 * 60 * 1000,
+    raise: (input) => {
+      incidentStore.raise(input);
+      io.emit('incidents:snapshot', incidentStore.snapshot());
+    },
+  });
   const runIdsByStartRequest = new Map<string, string>();
   const locationTracker = new ElementLocationTracker();
   const coordinator = new RunCoordinator({
@@ -879,9 +887,13 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
         });
       });
 
+      incidentAutoGenerator.start();
+
       return (httpServer.address() as AddressInfo).port;
     },
     async stop() {
+      incidentAutoGenerator.stop();
+
       if (!httpServer.listening) {
         return;
       }
