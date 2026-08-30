@@ -19,8 +19,9 @@ export interface ChatAttachment {
 
 export interface TraceStep {
   title: string
-  detail: string
+  detail?: string
   outputSummary?: string
+  status?: 'completed' | 'in_progress' | 'failed'
 }
 
 export interface ChatMessage {

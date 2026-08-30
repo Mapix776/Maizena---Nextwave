@@ -876,6 +876,10 @@ export default function AgentBuilderView({
     .reverse()
     .find((message) => message.role === 'user')
   const thinkingType = inferThinkingType(lastUserMessage)
+  const activeAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === 'assistant')
+  const latestTraceStep = activeAssistantMessage?.traceSteps?.at(-1)
 
   return (
     <div
@@ -987,8 +991,13 @@ export default function AgentBuilderView({
                       <ThinkingAnimation type={thinkingType} />
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-bold uppercase tracking-wider text-primary" role="status">
-                          {THINKING_COPY[thinkingType]}
+                          {latestTraceStep?.title ?? THINKING_COPY[thinkingType]}
                         </p>
+                        {latestTraceStep?.detail && (
+                          <p className="mt-1 truncate text-sm leading-5 text-muted-foreground">
+                            {latestTraceStep.detail}
+                          </p>
+                        )}
                         <div className="thinking-progress mt-2">
                           <span />
                         </div>
