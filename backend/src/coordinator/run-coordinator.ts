@@ -163,11 +163,11 @@ export class RunCoordinator {
         const partialAssistantText =
           typeof currentAccumulatedFacts.assistantResponse === 'string'
             ? currentAccumulatedFacts.assistantResponse
-            : 'Estructurando vista operativa...';
+            : 'Structuring operational view...';
 
         const partialResult: StepResult = {
           status: 'completed',
-          summary: 'Construyendo vista de operaciones...',
+          summary: 'Building operations overview...',
           factPatch: {
             ...currentAccumulatedFacts,
             assistantResponse: partialAssistantText,

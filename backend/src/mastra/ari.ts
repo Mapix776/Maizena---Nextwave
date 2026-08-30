@@ -50,7 +50,7 @@ import {
 } from './tools/registry.js';
 
 export const ARI_SYSTEM_PROMPT = `You are Ari, the enterprise AI logistics and trade operations agent for Nauta.
-You serve business clients and supply chain executives. Always speak in clean, executive, professional plain English or Spanish according to user language without technical jargon.
+You serve business clients and supply chain executives. ALWAYS communicate in clean, executive, professional plain English. All assistant text responses, UI titles, subtitles, summaries, metrics labels, and status descriptions MUST be generated in ENGLISH (even if the user queries in another language).
 You have direct access to the live logistics database (Supabase) via tools. Query those tools before making claims about current operations.
 
 DIRECT ACTION FOR GENERAL CONTAINER & SHIPMENT QUERIES:
@@ -273,35 +273,35 @@ export function extractToolCatalogFacts(
         const summary = parsed.data.summary;
         facts.operationsMetrics = buildOperationsMetricsCatalogFacts(summary);
         facts.kpiGrid = {
-          title: 'Métricas Clave de Operaciones',
+          title: 'Key Operations Metrics',
           metrics: [
             {
               id: 'total-ops',
-              label: 'Operaciones',
+              label: 'Operations',
               value: summary.totalOperations,
-              unit: 'activas',
+              unit: 'active',
               severity: 'normal',
             },
             {
               id: 'total-containers',
-              label: 'Contenedores',
+              label: 'Containers',
               value: summary.totalContainers,
-              unit: 'en red',
+              unit: 'in network',
               severity: 'normal',
             },
             {
               id: 'delayed',
-              label: 'Retrasados',
+              label: 'Delayed',
               value: summary.delayedContainersCount,
-              unit: 'contenedores',
+              unit: 'containers',
               severity:
                 summary.delayedContainersCount > 0 ? 'warning' : 'normal',
             },
             {
               id: 'decisions',
-              label: 'Decisiones',
+              label: 'Decisions',
               value: summary.pendingDecisionsCount,
-              unit: 'pendientes',
+              unit: 'pending',
               severity:
                 summary.pendingDecisionsCount > 0 ? 'critical' : 'normal',
             },
@@ -313,8 +313,8 @@ export function extractToolCatalogFacts(
         });
         traceStep = {
           id: `trace-summary-${Date.now()}`,
-          title: 'Cálculo de Métricas Globales',
-          detail: `${summary.totalContainers} contenedores analizados en la flota.`,
+          title: 'Global Operations Metrics Calculation',
+          detail: `${summary.totalContainers} containers analyzed across fleet.`,
           status: 'completed',
           kind: 'tool-get-operations-summary',
         };
@@ -343,8 +343,8 @@ export function extractToolCatalogFacts(
           });
           traceStep = {
             id: `trace-decisions-${Date.now()}`,
-            title: 'Verificación de Decisiones Pendientes (HITL)',
-            detail: `${parsed.data.decisions.length} decisiones pendientes identificadas.`,
+            title: 'Pending Decisions Verification (HITL)',
+            detail: `${parsed.data.decisions.length} pending decisions identified.`,
             status: 'completed',
             kind: 'tool-get-pending-decisions',
           };
@@ -372,8 +372,8 @@ export function extractToolCatalogFacts(
         });
         traceStep = {
           id: `trace-customs-${Date.now()}`,
-          title: 'Inspección de Semáforo Fiscal Aduanero',
-          detail: `${parsed.data.containers.length} contenedores inspeccionados en aduana.`,
+          title: 'Customs Clearance Inspection',
+          detail: `${parsed.data.containers.length} containers verified in customs.`,
           status: 'completed',
           kind: 'tool-get-customs-status',
         };
@@ -397,7 +397,7 @@ export function extractToolCatalogFacts(
       facts.from =
         c.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam';
       facts.to =
-        c.destination_port || 'Puerto de Manzanillo, Colima, Mexico';
+        c.destination_port || 'Port of Manzanillo, Colima, Mexico';
       facts.transportType = 'Sea';
       facts.status =
         c.status === 'IN_TRANSIT'
@@ -409,11 +409,11 @@ export function extractToolCatalogFacts(
               : c.status === 'OUT_FOR_DELIVERY'
                 ? 'Out for Delivery'
                 : 'Arrived at Port';
-      facts.deliveryTime = c.eta || c.actual_arrival || 'En tránsito';
+      facts.deliveryTime = c.eta || c.actual_arrival || 'In transit';
       traceStep = {
         id: `trace-container-${Date.now()}`,
-        title: `Localización de Contenedor ${c.container_number}`,
-        detail: `Estado: ${c.status} | Ubicación: ${c.current_location || c.destination_port}`,
+        title: `Container Tracking ${c.container_number}`,
+        detail: `Status: ${c.status} | Location: ${c.current_location || c.destination_port}`,
         status: 'completed',
         kind: 'tool-get-container-status',
       };
@@ -436,8 +436,8 @@ export function extractToolCatalogFacts(
       }));
       traceStep = {
         id: `trace-doc-${Date.now()}`,
-        title: 'Lectura de Documentación de Embarque',
-        detail: `${parsed.data.documents.length} documentos verificados en Supabase.`,
+        title: 'Shipment Documentation Verification',
+        detail: `${parsed.data.documents.length} documents verified in database.`,
         status: 'completed',
         kind: 'tool-read-document',
       };
@@ -451,8 +451,8 @@ export function extractToolCatalogFacts(
       facts.chart = parsed.data;
       traceStep = {
         id: `trace-chart-${Date.now()}`,
-        title: 'Generación de Gráfico Analítico',
-        detail: `Visualización ${parsed.data.chartType} generada: ${parsed.data.title}`,
+        title: 'Analytical Chart Generation',
+        detail: `${parsed.data.chartType} chart generated: ${parsed.data.title}`,
         status: 'completed',
         kind: 'tool-draw-chart',
       };
@@ -722,12 +722,12 @@ export async function executeAriStep(
       const summary = parsedOperationsSummary.data.summary;
       catalogFactPatch.operationsMetrics = buildOperationsMetricsCatalogFacts(summary);
       catalogFactPatch.kpiGrid = {
-        title: 'Métricas Clave de Operaciones',
+        title: 'Key Operations Metrics',
         metrics: [
-          { id: 'total-ops', label: 'Operaciones', value: summary.totalOperations, unit: 'activas', severity: 'normal' },
-          { id: 'total-containers', label: 'Contenedores', value: summary.totalContainers, unit: 'en red', severity: 'normal' },
-          { id: 'delayed', label: 'Retrasados', value: summary.delayedContainersCount, unit: 'contenedores', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
-          { id: 'decisions', label: 'Decisiones', value: summary.pendingDecisionsCount, unit: 'pendientes', severity: summary.pendingDecisionsCount > 0 ? 'critical' : 'normal' },
+          { id: 'total-ops', label: 'Operations', value: summary.totalOperations, unit: 'active', severity: 'normal' },
+          { id: 'total-containers', label: 'Containers', value: summary.totalContainers, unit: 'in network', severity: 'normal' },
+          { id: 'delayed', label: 'Delayed', value: summary.delayedContainersCount, unit: 'containers', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
+          { id: 'decisions', label: 'Decisions', value: summary.pendingDecisionsCount, unit: 'pending', severity: summary.pendingDecisionsCount > 0 ? 'critical' : 'normal' },
         ],
       };
       catalogEvidence.push({
@@ -966,9 +966,9 @@ export async function executeAriStep(
 
       if (!catalogFactPatch.comparisonTable) {
         catalogFactPatch.comparisonTable = {
-          title: 'Operaciones Logísticas y Embarques Activos',
-          documentAName: 'Estado',
-          documentBName: 'Ruta y Cliente',
+          title: 'Active Logistics Operations & Shipments',
+          documentAName: 'Status',
+          documentBName: 'Route & Client',
           severity: fields.some(({ status }) => status === 'discrepancy') ? 'warning' : 'normal',
           fields,
         };
@@ -1012,13 +1012,13 @@ export async function executeAriStep(
           label: c.container_number,
           valueA:
             c.customs_light === 'red'
-              ? 'Retenido (Semáforo Rojo)'
+              ? 'Hold (Red Light)'
               : c.customs_light === 'green'
-                ? 'Liberado (Semáforo Verde)'
+                ? 'Cleared (Green Light)'
                 : c.status === 'IN_TRANSIT'
-                  ? 'En Tránsito Marítimo'
-                  : 'En Inspección',
-          valueB: `${c.origin_port || 'Origen'} → ${c.destination_port || 'Destino'} (${c.status})`,
+                  ? 'In Maritime Transit'
+                  : 'In Customs Inspection',
+          valueB: `${c.origin_port || 'Origin'} → ${c.destination_port || 'Destination'} (${c.status})`,
           status: (c.customs_light === 'red'
             ? 'discrepancy'
             : c.customs_light === 'pending'
@@ -1027,30 +1027,30 @@ export async function executeAriStep(
         }));
 
         catalogFactPatch.comparisonTable = {
-          title: 'Inventario Consolidado de Contenedores',
-          documentAName: 'Estado / Semáforo',
-          documentBName: 'Ruta y Estatus',
+          title: 'Consolidated Container Inventory',
+          documentAName: 'Status / Light',
+          documentBName: 'Route & Status',
           severity: fields.some(({ status }) => status === 'discrepancy') ? 'warning' : 'normal',
           fields,
         };
 
         if (summary && !catalogFactPatch.kpiGrid) {
           catalogFactPatch.kpiGrid = {
-            title: 'Resumen Global de Contenedores',
+            title: 'Global Containers Overview',
             metrics: [
-              { id: 'total-containers', label: 'Total Contenedores', value: summary.totalContainers, unit: 'unidades', severity: 'normal' },
-              { id: 'in-transit', label: 'En Tránsito', value: summary.containersInTransit, unit: 'en mar', severity: 'normal' },
-              { id: 'in-customs', label: 'En Aduana', value: summary.containersInCustoms, unit: 'recinto', severity: summary.containersInCustoms > 0 ? 'warning' : 'normal' },
-              { id: 'delayed', label: 'Retrasados', value: summary.delayedContainersCount, unit: 'embarques', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
+              { id: 'total-containers', label: 'Total Containers', value: summary.totalContainers, unit: 'units', severity: 'normal' },
+              { id: 'in-transit', label: 'In Transit', value: summary.containersInTransit, unit: 'at sea', severity: 'normal' },
+              { id: 'in-customs', label: 'In Customs', value: summary.containersInCustoms, unit: 'port/terminal', severity: summary.containersInCustoms > 0 ? 'warning' : 'normal' },
+              { id: 'delayed', label: 'Delayed', value: summary.delayedContainersCount, unit: 'shipments', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
             ],
           };
         }
 
         catalogFactPatch.assistantResponse =
-          'Aquí tienes el inventario consolidado de los contenedores activos con su estado operativo, ruta y estatus aduanal.';
+          'Here is the consolidated inventory of active containers with operational state, route, and customs status.';
         catalogFactPatch.deliveryId = containers[0]?.container_number || 'MDS-DEMO-GREEN-082';
         catalogFactPatch.from = containers[0]?.origin_port || 'Ho Chi Minh City, Vietnam';
-        catalogFactPatch.to = containers[0]?.destination_port || 'Manzanillo, México';
+        catalogFactPatch.to = containers[0]?.destination_port || 'Port of Manzanillo, Colima, Mexico';
         catalogFactPatch.status = containers[0]?.status || 'In Transit';
         catalogFactPatch.transportType = 'Sea';
       }

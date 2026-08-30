@@ -316,9 +316,9 @@ test('Ari maps listed operations into a schema-valid comparison table', async ()
   );
 
   assert.deepEqual(result.factPatch?.comparisonTable, {
-    title: 'Operaciones Logísticas y Embarques Activos',
-    documentAName: 'Estado',
-    documentBName: 'Ruta y Cliente',
+    title: 'Active Logistics Operations & Shipments',
+    documentAName: 'Status',
+    documentBName: 'Route & Client',
     severity: 'warning',
     fields: [
       {

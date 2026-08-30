@@ -162,7 +162,7 @@ export function buildCustomsClearanceCatalogFacts(
       const isHold = container.status.includes('HOLD') || container.customs_light === 'red';
       const isCleared = container.status.includes('CLEARED') || container.customs_light === 'green';
       const defaultLight = isHold ? 'red' : isCleared ? 'green' : (container.customs_light ?? 'yellow');
-      const location = container.current_location || (isHold || isCleared ? 'Aduana de Manzanillo (Muelle Fiscal)' : 'Océano Pacífico (En tránsito marítimo)');
+      const location = container.current_location || (isHold || isCleared ? 'Manzanillo Customs (Fiscal Pier)' : 'Pacific Ocean (In maritime transit)');
       const pedimento = container.pedimento_number || (isHold ? 'PED-2026-0847-HOLD' : 'PED-2026-0847-9303');
 
       return customsClearancePanelPropsSchema.parse({
@@ -214,7 +214,7 @@ export function buildOperationCatalogFacts(
       containerNumber: container.container_number,
       status: container.status,
       originPort: container.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam',
-      destinationPort: container.destination_port || 'Puerto de Manzanillo, Colima, Mexico',
+      destinationPort: container.destination_port || 'Port of Manzanillo, Colima, Mexico',
       ...(etaIso ? { eta: etaIso } : {}),
       ...(arrivalIso ? { actualArrival: arrivalIso } : {}),
       ...(present(container.current_location)
@@ -258,7 +258,7 @@ export function buildOperationCatalogFacts(
             containerNumber: num,
             status: details.operation.status || 'BOOKED',
             originPort: (typeof facts.originPort === 'string' ? facts.originPort : '') || 'Cat Lai Port, Ho Chi Minh City, Vietnam',
-            destinationPort: (typeof facts.destinationPort === 'string' ? facts.destinationPort : '') || 'Puerto de Manzanillo, Colima, Mexico',
+            destinationPort: (typeof facts.destinationPort === 'string' ? facts.destinationPort : '') || 'Port of Manzanillo, Colima, Mexico',
             eta: etaIso,
             currentVessel: (typeof facts.vessel === 'string' ? facts.vessel.split(',')[0].trim() : '') || 'MSC LUCINDA',
             customsLight: 'pending',
