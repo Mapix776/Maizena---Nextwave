@@ -7,6 +7,10 @@ import { z } from 'zod';
 import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import { chatMessagesSchema, type ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
+import {
+  SupabaseDocumentStore,
+  saveDocumentInputSchema,
+} from '../services/supabase-documents.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const startCommandSchema = z
@@ -19,6 +23,7 @@ const startCommandSchema = z
 interface NautaServerOptions {
   executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
   composeUi?: (result: StepResult) => unknown;
+  documentStore?: SupabaseDocumentStore;
 }
 
 export interface NautaServer {
@@ -43,16 +48,74 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
     );
   };
 
+  const documentStore = options.documentStore ?? new SupabaseDocumentStore();
+
   const httpServer: HttpServer = createServer((request, response) => {
     const origin = request.headers.origin;
     if (isOriginAllowed(origin)) {
       response.setHeader('Access-Control-Allow-Origin', origin || '*');
     }
+    response.setHeader('Vary', 'Origin');
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
+
+    // CORS preflight for the documents endpoint.
+    if (request.method === 'OPTIONS') {
+      response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      response.setHeader('Access-Control-Max-Age', '86400');
+      response.writeHead(204);
+      response.end();
+      return;
+    }
 
     if (request.method === 'GET' && (request.url === '/healthz' || request.url === '/health' || request.url === '/')) {
       response.writeHead(200);
       response.end(JSON.stringify({ ok: true, status: 'ok', timestamp: new Date().toISOString() }));
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/documents/save') {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      let aborted = false;
+
+      request.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > 128_000) {
+          aborted = true;
+          response.writeHead(413);
+          response.end(JSON.stringify({ ok: false, error: 'Payload too large' }));
+          request.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
+
+      request.on('end', () => {
+        if (aborted) return;
+        void (async () => {
+          try {
+            const raw = Buffer.concat(chunks).toString('utf-8');
+            const parsed = saveDocumentInputSchema.safeParse(JSON.parse(raw || '{}'));
+            if (!parsed.success) {
+              response.writeHead(400);
+              response.end(JSON.stringify({ ok: false, error: 'Invalid document payload' }));
+              return;
+            }
+            const saved = await documentStore.save(parsed.data);
+            response.writeHead(200);
+            response.end(JSON.stringify({ ok: true, document: saved }));
+          } catch (error) {
+            response.writeHead(500);
+            response.end(
+              JSON.stringify({
+                ok: false,
+                error: error instanceof Error ? error.message : 'Could not save document',
+              }),
+            );
+          }
+        })();
+      });
       return;
     }
 

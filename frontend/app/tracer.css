@@ -778,6 +778,10 @@
   border: 1px solid var(--line);
 }
 
+.route-map-loading {
+  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 12px, rgba(139, 92, 246, 0.05) 12px, rgba(139, 92, 246, 0.05) 24px);
+}
+
 .route-map-legend {
   display: flex;
   align-items: center;
