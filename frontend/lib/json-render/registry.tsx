@@ -6,6 +6,7 @@ import { ContainerProgress } from '@/components/delivery/container-progress'
 import { DeliveryCard } from '@/components/delivery/delivery-card'
 import { DeliveryIssueCard } from '@/components/delivery/delivery-issue-card'
 import { HumanDecisionCard } from '@/components/delivery/human-decision-card'
+import { InteractiveRouteMap } from '@/components/delivery/interactive-route-map'
 import { ReconciliationFindings } from '@/components/delivery/reconciliation-findings'
 import { ShipmentDocumentsTimeline } from '@/components/delivery/shipment-documents-timeline'
 import { BarChart } from '@/components/analytics/bar-chart'
@@ -41,5 +42,6 @@ export const { registry } = defineRegistry(catalog, {
     BarChart: ({ props }) => <BarChart {...props} />,
     CatalogChart: ({ props }) => <CatalogChart {...props} />,
     InteractiveChart: ({ props }) => <InteractiveChart {...props} />,
+    InteractiveRouteMap: ({ props }) => <InteractiveRouteMap {...props} />,
   },
 })

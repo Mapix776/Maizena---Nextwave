@@ -7,6 +7,7 @@ import {
   BookmarkCheck,
   CheckCircle2,
   Copy,
+  Download,
   FileText,
   Landmark,
   ListTree,
@@ -16,6 +17,7 @@ import {
   PanelLeftOpen,
   Paperclip,
   Rocket,
+  RotateCcw,
   Save,
   Send,
   Settings,
@@ -32,6 +34,7 @@ import { getTranslations, type Locale } from '@/lib/i18n'
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
 import { JsonRenderClient } from '@/app/json-render/render-client'
 import { ThinkingAnimation } from '@/components/chat/thinking-animation'
+import { DocumentSheetView } from '@/components/logistics/document-sheet-view'
 
 type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 type MessageRole = 'user' | 'assistant'
@@ -58,9 +61,18 @@ type ContextItem = {
   kind: 'Documento' | 'Informe' | 'Detalle'
   description: string
   sourceId: string
+  elementType: string
+  props: Record<string, unknown>
   url?: string
   mimeType?: string
 }
+
+// Element types that should render as a formatted A4 trade document sheet.
+const DOCUMENT_SHEET_TYPES = new Set([
+  'DocumentDetailsCard',
+  'CustomsClearancePanel',
+  'ShipmentDocumentsTimeline',
+])
 
 function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextItem[] {
   return Object.entries(spec.elements).map(([id, element], index) => {
@@ -75,6 +87,7 @@ function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextIt
       : typeof props.reference === 'string'
         ? props.reference
         : `${kind} ${index + 1}`
+    const url = typeof props.url === 'string' ? props.url : typeof props.fileUrl === 'string' ? props.fileUrl : undefined
     return {
       id: `${sourceId}-${id}`,
       title,
@@ -83,6 +96,10 @@ function contextItemsFromSpec(spec: JsonRenderSpec, sourceId: string): ContextIt
         ? props.description
         : `Información contextual de ${title.toLowerCase()}.`,
       sourceId,
+      elementType: element.type,
+      props,
+      url,
+      mimeType: typeof props.mimeType === 'string' ? props.mimeType : undefined,
     }
   })
 }
@@ -116,6 +133,20 @@ const initialConversation: ChatMessage[] = [
     text: 'Hola. Soy Ari. Puedo ayudarte y delegar la reconciliación de BL, Invoice y Packing List a Recon.',
   },
 ]
+
+const CHAT_STORAGE_KEY = 'nauta_chat_messages_v1'
+
+function loadStoredMessages(): ChatMessage[] | null {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed as ChatMessage[]
+  } catch (error) {
+    console.error('Error al leer historial local:', error)
+  }
+  return null
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -250,6 +281,8 @@ export default function AgentBuilderView({
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
   const [contextSpec, setContextSpec] = useState<JsonRenderSpec | null>(null)
   const [panelView, setPanelView] = useState<'detail' | 'trace'>('detail')
+  const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set())
+  const [savingDocId, setSavingDocId] = useState<string | null>(null)
 
   const shareConversation = async () => {
     const transcript = messages.map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`).join('\n\n')
@@ -432,6 +465,39 @@ export default function AgentBuilderView({
     }
   }, [messages, connectionStatus])
 
+  // Restore chat history from localStorage after mount (client only).
+  useEffect(() => {
+    const stored = loadStoredMessages()
+    if (stored) setMessages(stored)
+  }, [])
+
+  // Persist chat history whenever it changes, skipping the untouched seed.
+  useEffect(() => {
+    if (messages === initialConversation) return
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages))
+    } catch (error) {
+      console.error('Error al guardar historial local:', error)
+    }
+  }, [messages])
+
+  function handleClearChat() {
+    try {
+      localStorage.removeItem(CHAT_STORAGE_KEY)
+    } catch (error) {
+      console.error('Error al limpiar historial local:', error)
+    }
+    activeRunId.current = null
+    pendingRequestId.current = null
+    latestSequence.current = 0
+    setMessages(initialConversation)
+    setContextItems([])
+    setContextSpec(null)
+    setInput('')
+    setAttachments([])
+    onNotify(t.newChatDone)
+  }
+
   function dispatchMessage(text: string, atts: ChatAttachment[]) {
     const socket = socketRef.current
 
@@ -519,6 +585,8 @@ export default function AgentBuilderView({
       kind: 'Documento',
       description: `Vista previa de ${attachment.name}.`,
       sourceId,
+      elementType: 'Attachment',
+      props: {},
       url: attachment.url,
       mimeType: attachment.type,
     }
@@ -536,6 +604,46 @@ export default function AgentBuilderView({
 
   const selectedContext = contextItems.find((item) => item.id === selectedContextId)
   const showContextPanel = contextItems.length > 0
+
+  async function saveDocToS3(item: ContextItem) {
+    if (savedDocIds.has(item.id) || savingDocId) return
+    setSavingDocId(item.id)
+    try {
+      const response = await fetch(`${backendUrl}/documents/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: item.id,
+          type: item.elementType,
+          title: item.title,
+          reference: item.props.reference ?? null,
+          props: item.props,
+        }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      setSavedDocIds((current) => new Set(current).add(item.id))
+      onNotify(t.saveToS3Done)
+    } catch (error) {
+      console.error('[v0] Error guardando documento en S3:', error)
+      onNotify(t.saveToS3Error)
+    } finally {
+      setSavingDocId(null)
+    }
+  }
+
+  function downloadDoc(item: ContextItem) {
+    const scalarLines = Object.entries(item.props)
+      .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
+      .map(([key, value]) => `${key}: ${value}`)
+    const content = ['NAUTA FREIGHT & CUSTOMS', item.title, '', ...scalarLines].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${item.title.replace(/\s+/g, '-').toLowerCase()}.txt`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
   const traceSteps = contextSpec ? deriveTraceSteps(contextSpec) : []
   const showTraceTab = traceSteps.length > 0
   const statusLabel = {
@@ -568,6 +676,9 @@ export default function AgentBuilderView({
             <span />
             <b>{statusLabel}</b>
           </span>
+          <button type="button" className="chat-share-button" onClick={handleClearChat} aria-label={t.newChat}>
+            <RotateCcw size={14} /> <span>{t.newChat}</span>
+          </button>
           <button type="button" className="chat-share-button" onClick={() => void shareConversation()} aria-label={t.share}>
             <Share2 size={14} /> <span>{t.share}</span>
           </button>
@@ -779,7 +890,49 @@ export default function AgentBuilderView({
             </button>
           ))}
         </div>
-        {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">{t.viewFile}</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
+        {selectedContext && (
+          <div className="context-detail">
+            <span>{selectedContext.kind}</span>
+            <h3>{selectedContext.title}</h3>
+            {selectedContext.url ? (
+              <>
+                <p>{selectedContext.description}</p>
+                {selectedContext.mimeType?.startsWith('image/')
+                  ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} />
+                  : selectedContext.mimeType === 'application/pdf'
+                    ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} />
+                    : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">{t.viewFile}</a>}
+              </>
+            ) : DOCUMENT_SHEET_TYPES.has(selectedContext.elementType) ? (
+              <>
+                <div className="doc-sheet-toolbar">
+                  <span className="doc-ai-badge"><Sparkles size={12} /> {t.aiGenerated}</span>
+                  <div className="doc-sheet-actions">
+                    <button
+                      type="button"
+                      className={`secondary-button ${savedDocIds.has(selectedContext.id) ? 'saved' : ''}`}
+                      onClick={() => void saveDocToS3(selectedContext)}
+                      disabled={savingDocId === selectedContext.id || savedDocIds.has(selectedContext.id)}
+                    >
+                      {savedDocIds.has(selectedContext.id)
+                        ? <><CheckCircle2 size={13} /> {t.savedToS3}</>
+                        : savingDocId === selectedContext.id
+                          ? t.savingToS3
+                          : <><Save size={13} /> {t.saveToS3}</>}
+                    </button>
+                    <button type="button" className="secondary-button" onClick={() => downloadDoc(selectedContext)}>
+                      <Download size={13} /> {t.downloadDoc}
+                    </button>
+                  </div>
+                </div>
+                <DocumentSheetView title={selectedContext.title} props={selectedContext.props} />
+              </>
+            ) : (
+              <p>{selectedContext.description}</p>
+            )}
+            <small>Origen: {selectedContext.sourceId}</small>
+          </div>
+        )}
         </>}
         {panelView === 'trace' && showTraceTab && (
           <div className="context-trace">

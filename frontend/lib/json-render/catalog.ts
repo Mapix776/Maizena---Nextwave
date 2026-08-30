@@ -147,6 +147,18 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     ShipmentDocumentsTimeline: {
       props: shipmentDocumentsTimelinePropsSchema,
     },
+    InteractiveRouteMap: {
+      props: z.object({
+        title: z.string().min(1),
+        operationReference: z.string().optional(),
+        originPort: z.object({ name: z.string(), lat: z.number(), lng: z.number() }),
+        destinationPort: z.object({ name: z.string(), lat: z.number(), lng: z.number() }),
+        currentPosition: z.object({ name: z.string(), lat: z.number(), lng: z.number(), vessel: z.string().optional() }).optional(),
+        status: z.string(),
+        transportType: z.enum(['Sea', 'Land', 'Air']),
+        waypoints: z.array(z.object({ name: z.string(), lat: z.number(), lng: z.number(), status: z.enum(['completed', 'current', 'pending']) })).optional(),
+      }),
+    },
   },
 })
 
