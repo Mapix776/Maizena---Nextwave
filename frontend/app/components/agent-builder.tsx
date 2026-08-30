@@ -13,8 +13,8 @@ import {
   Send,
   Settings,
   Share2,
-  Sparkles,
   ThumbsUp,
+  Sparkles,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
@@ -150,6 +150,16 @@ export default function AgentBuilderView({
   const [saved, setSaved] = useState(false)
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
+
+  const shareConversation = async () => {
+    const transcript = messages.map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`).join('\n\n')
+    if (navigator.share) {
+      await navigator.share({ title: 'Conversación con Ari', text: transcript })
+    } else {
+      await navigator.clipboard?.writeText(transcript)
+      onNotify(t.responseShare)
+    }
+  }
 
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
@@ -377,6 +387,9 @@ export default function AgentBuilderView({
             <Sparkles size={18} />
             <span>Agent Studio · json-render tracer</span>
           </div>
+          <button type="button" className="chat-share-button" onClick={() => void shareConversation()} aria-label={t.share}>
+            <Share2 size={14} /> <span>{t.share}</span>
+          </button>
           <span
             className={`status-pill ${connected ? 'ok' : 'idle'}`}
             data-testid="chat-status"
@@ -402,11 +415,12 @@ export default function AgentBuilderView({
               <div className="chat-avatar">
                 {message.role === 'assistant' ? <Sparkles size={15} /> : 'AR'}
               </div>
-              <div
-                className={`chat-bubble ${message.spec ? 'json-render-bubble' : ''}`}
-                data-testid={message.spec ? 'json-render-response' : undefined}
-              >
-                <small>{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
+              <div className="chat-message-content">
+                <small className="chat-message-author">{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
+                <div
+                  className={`chat-bubble ${message.spec ? 'json-render-bubble json-render-inline' : ''}`}
+                  data-testid={message.spec ? 'json-render-response' : undefined}
+                >
                 {message.attachments && (
                   <div className="chat-attachments" aria-label="Archivos adjuntos">
                     {message.attachments.map((attachment) => (
@@ -430,29 +444,11 @@ export default function AgentBuilderView({
                 ) : (
                   <p>{message.text}</p>
                 )}
+                </div>
                 {message.role === 'assistant' && (
                   <div className="chat-actions">
-                    <button
-                      aria-label={t.responseRated}
-                      onClick={() => onNotify('Respuesta valorada')}
-                    >
-                      <ThumbsUp size={13} />
-                    </button>
-                    <button
-                      aria-label={t.copy}
-                      onClick={() => {
-                        void navigator.clipboard?.writeText(message.text)
-                        onNotify('Respuesta copiada')
-                      }}
-                    >
-                      <Copy size={13} />
-                    </button>
-                    <button
-                      aria-label={t.share}
-                      onClick={() => onNotify('Respuesta lista para compartir')}
-                    >
-                      <Share2 size={13} />
-                    </button>
+                    <button aria-label={t.responseRated} onClick={() => onNotify('Respuesta valorada')}><ThumbsUp size={13} /></button>
+                    <button aria-label={t.copy} onClick={() => { void navigator.clipboard?.writeText(message.text); onNotify('Respuesta copiada') }}><Copy size={13} /></button>
                   </div>
                 )}
               </div>
@@ -464,7 +460,6 @@ export default function AgentBuilderView({
                 <Sparkles size={15} />
               </div>
               <div className="chat-bubble typing-bubble">
-                <small>Ari</small>
                 <div className="chat-thinking-state" role="status" aria-label={t.thinking}>
                   <ThinkingAnimation type="thinking" />
                   <div>
