@@ -65,6 +65,34 @@ export function WorkTraceDisclosure({
     dispatch({ type: 'trace-status', status: trace.status })
   }, [trace.status])
 
+  if (trace.status === 'running' && currentStep) {
+    return (
+      <section
+        className="mb-4 w-full rounded-2xl border border-border/70 bg-card p-4 shadow-xs last:mb-0"
+        data-work-trace
+        data-live-work-step
+      >
+        <span className="sr-only" role="status" aria-atomic="true">
+          {announcement}
+        </span>
+        <div className="flex min-h-11 items-start gap-3">
+          <div className="-m-7 shrink-0 scale-[0.44]" aria-hidden="true">
+            <ThinkingAnimation type={currentStep.animationType} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">{currentStep.title}</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {currentStep.detail}
+            </p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+              {workingLabel}
+            </p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section
       className="mb-4 w-full rounded-2xl border border-border/70 bg-card px-4 shadow-xs last:mb-0"
@@ -78,9 +106,7 @@ export function WorkTraceDisclosure({
         onClick={() => dispatch({ type: 'manual-toggle' })}
       >
         <span className="min-w-0 truncate">
-          {trace.status === 'running'
-            ? workingLabel
-            : `${workedForLabel} ${formatWorkDuration(trace.durationMs)}`}
+          {`${workedForLabel} ${formatWorkDuration(trace.durationMs)}`}
         </span>
         <ChevronRight
           className={`ml-auto size-3.5 shrink-0 transition-transform ${disclosure.open ? 'rotate-90' : ''}`}

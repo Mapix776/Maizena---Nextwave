@@ -5,7 +5,11 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { getTranslations } from '@/lib/i18n'
 import { useOrderIncidents } from '@/lib/use-order-incidents'
-import { useDashboard, type DashboardItemKind } from '@/lib/use-dashboard'
+import {
+  useDashboard,
+  type DashboardItem,
+  type DashboardItemKind,
+} from '@/lib/use-dashboard'
 import { JsonRenderClient } from '@/app/json-render/render-client'
 import type { Spec } from '@json-render/core'
 import nextDynamic from 'next/dynamic'
@@ -35,6 +39,7 @@ import {
   Sun,
   Table2,
   Trash2,
+  X,
   Zap,
 } from 'lucide-react'
 

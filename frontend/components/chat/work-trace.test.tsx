@@ -13,8 +13,8 @@ const steps = [
     kind: 'thinking' as const,
     status: 'running' as const,
     animationType: 'thinking' as const,
-    title: 'Preparando',
-    detail: 'Organizando la solicitud.',
+    title: 'Preparing request',
+    detail: 'Preparing the shipment review.',
   },
   {
     id: 'trace-step-2',
@@ -27,7 +27,7 @@ const steps = [
   },
 ]
 
-test('the live trace renders one decorative animation and one persistent atomic status node', () => {
+test('the live trace renders only the latest active step with one animation', () => {
   const markup = renderToStaticMarkup(
     <WorkTraceDisclosure
       trace={{ status: 'running', durationMs: 25, steps }}
@@ -39,7 +39,11 @@ test('the live trace renders one decorative animation and one persistent atomic 
   assert.equal(markup.match(/animation-visual/g)?.length, 1)
   assert.equal(markup.match(/role="status"/g)?.length, 1)
   assert.match(markup, /aria-atomic="true"/)
-  assert.match(markup, /aria-expanded="true"/)
+  assert.match(markup, /data-live-work-step/)
+  assert.match(markup, /Reviewing operation/)
+  assert.doesNotMatch(markup, /Preparing request/)
+  assert.doesNotMatch(markup, /aria-expanded=/)
+  assert.doesNotMatch(markup, /Worked for/)
 })
 
 test('the conversation log is not live while each Work trace owns one atomic status node', () => {
