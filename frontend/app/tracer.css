@@ -127,7 +127,7 @@
   height: 28px;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: linear-gradient(120deg, #dc63c7, #8b5cf6);
+  background: var(--accent);
   color: #fff;
   font-size: 12px;
   font-weight: 800;
@@ -238,6 +238,166 @@
   font-weight: 700;
 }
 
+/* AI document sheet (A4 trade document) */
+.doc-sheet-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.doc-ai-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: #f3e8fb;
+  color: #8b3fb0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+.dark-mode .doc-ai-badge {
+  background: rgba(139, 92, 246, .22);
+  color: #e6c9fb;
+}
+
+.doc-sheet-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.doc-sheet-actions .secondary-button.saved {
+  color: #1d8a52;
+  border-color: #b8ecd2;
+  background: #e6f9f0;
+}
+
+.doc-sheet {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f1a38;
+  padding: 26px 24px;
+  box-shadow: 0 10px 30px rgba(80, 50, 110, .08);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.doc-sheet-header {
+  text-align: center;
+  border-bottom: 2px solid #1f1a38;
+  padding-bottom: 12px;
+}
+
+.doc-sheet-brand {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: .06em;
+  color: #1f1a38;
+}
+
+.doc-sheet-type {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  color: #6c5e8a;
+}
+
+.doc-sheet-refrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.doc-sheet-refrow span,
+.doc-sheet-party {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.doc-sheet-refrow small,
+.doc-sheet-party small,
+.doc-sheet-grid dt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #9a8dc7;
+}
+
+.doc-sheet-refrow b,
+.doc-sheet-party b {
+  font-size: 13px;
+  font-weight: 800;
+  font-family: var(--font-mono, monospace);
+  color: #1f1a38;
+}
+
+.doc-sheet-party span {
+  font-size: 10px;
+  color: #6c5e8a;
+}
+
+.doc-sheet-parties {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid #ece7f4;
+  border-bottom: 1px solid #ece7f4;
+}
+
+.doc-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.doc-sheet-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.doc-sheet-grid dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1f1a38;
+}
+
+.doc-sheet-seal {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 2px dashed;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  transform: rotate(-2deg);
+}
+
+.doc-sheet-seal.red {
+  color: #c0392b;
+  border-color: #c0392b;
+  background: rgba(192, 57, 43, .06);
+}
+
+.doc-sheet-seal.green {
+  color: #1d8a52;
+  border-color: #1d8a52;
+  background: rgba(29, 138, 82, .06);
+}
+
 .open-context-button {
   display: inline-flex;
   align-items: center;
@@ -287,7 +447,7 @@
 .save-card-button.saved {
   color: #fff;
   border-color: transparent;
-  background: linear-gradient(100deg, #dc63c7, #8b5cf6);
+  background: var(--accent);
 }
 
 .agent-builder.context-panel-hidden .builder-left {
@@ -537,8 +697,110 @@
   height: 14px;
   border: 3px solid white;
   border-radius: 50%;
-  background: linear-gradient(145deg, #eb59bf, #8b5cf6);
+  background: #8b5cf6;
   box-shadow: 0 3px 10px rgba(91, 50, 145, 0.35);
+}
+
+.route-map-marker-origin span { background: #8b5cf6; }
+.route-map-marker-destination span { background: #eb59bf; }
+.route-map-marker-completed span { background: #1d8a52; }
+.route-map-marker-pending span { background: #9a8dc7; }
+.route-map-marker-current span,
+.route-map-marker-currentpos span { background: #f59e0b; }
+.route-map-marker-current span {
+  animation: tracer-pulse 1.6s ease-in-out infinite;
+}
+
+/* InteractiveRouteMap json-render component */
+.route-map {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 640px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.route-map-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.route-map-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.route-map-transport {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--accent);
+}
+
+.route-map-title b {
+  display: block;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+}
+
+.route-map-title small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.route-map-status {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(139, 92, 246, 0.12);
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.route-map-canvas {
+  height: 300px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.route-map-loading {
+  background: var(--surface);
+}
+
+.route-map-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.route-map-endpoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: var(--foreground, #2a2444);
+}
+
+.route-map-arrow {
+  color: #8b5cf6;
+  font-weight: 800;
 }
 
 @keyframes tracer-pulse {
@@ -698,6 +960,38 @@
 .sidebar-icon-button:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--accent); }
 .sidebar-icon-button.notification i { position: absolute; right: 8px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--pink, #f27d9a); }
 
+/* Theme toggle in the brand row (top of sidebar) */
+.brand-theme-toggle {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.brand-theme-toggle:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.dark-mode .brand-theme-toggle {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.72);
+}
+.dark-mode .brand-theme-toggle:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+/* Keep badge counters legible when their nav item is active */
+.nav-item.active em { color: #fff; background: #a83fc7; }
+.dark-mode .nav-item.active em { color: #9e40bb; background: #fff; }
+
 .language-menu.language-menu-up {
   top: auto;
   bottom: calc(100% + 8px);
@@ -734,9 +1028,9 @@
 .chat-message:hover .chat-actions, .chat-actions:focus-within { opacity: 1; }
 .chat-message.rendered .json-render-inline { overflow: visible; }
 .chat-message.rendered .json-render-inline article, .chat-message.rendered .json-render-inline [data-slot="card"] { border-color: color-mix(in srgb, var(--accent) 16%, var(--line)); border-radius: 14px; box-shadow: 0 8px 24px rgba(45, 25, 73, .08); }
-.chat-composer { border-top: 1px solid var(--line); padding: 14px 18px 16px; background: var(--card); }
-.chat-composer input { min-height: 42px; border-radius: 13px; background: var(--background); }
-.send-button { width: 42px; height: 42px; border-radius: 13px; }
+.chat-composer { padding: 14px 18px 16px; background: transparent; }
+.chat-composer input { min-height: 42px; border-radius: 8px; background: var(--background); }
+.send-button { width: 42px; height: 42px; border-radius: 8px; }
 
 .app-shell .sidebar.open {
   position: sticky;
@@ -850,9 +1144,9 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 9px;
+  border-radius: 8px;
   color: #fff;
-  background: linear-gradient(145deg, #eb59bf, #8b5cf6);
+  background: var(--accent);
 }
 
 .chat-header-title > div {
@@ -909,7 +1203,7 @@
   width: fit-content;
   max-width: 100%;
   padding: 10px 18px 10px 20px;
-  border-radius: 4px 16px 16px 16px;
+  border-radius: 3px 10px 10px 10px;
   background: var(--accent-soft);
   color: var(--foreground);
 }
@@ -932,10 +1226,9 @@
 .chat-mode .chat-message.user .chat-bubble > p {
   margin-left: auto;
   padding: 10px 15px;
-  border-radius: 16px 16px 4px 16px;
-  background: linear-gradient(135deg, #b345d4, #8b5cf6);
+  border-radius: 10px 10px 3px 10px;
+  background: var(--accent);
   color: #fff;
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.22);
 }
 
 /* Empty state */
@@ -955,12 +1248,11 @@
 .chat-empty-avatar {
   display: grid;
   place-items: center;
-  width: 66px;
-  height: 66px;
-  border-radius: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
   color: #fff;
-  background: linear-gradient(145deg, #eb59bf, #8b5cf6);
-  box-shadow: 0 14px 34px rgba(139, 92, 246, 0.28);
+  background: var(--accent);
 }
 
 .chat-empty-state h2 {
@@ -978,21 +1270,31 @@
   line-height: 1.6;
 }
 
+.chat-empty-title {
+  margin: 18px 0 0 !important;
+  align-self: flex-start;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: .02em;
+  color: var(--foreground) !important;
+  text-transform: none;
+}
+
 .chat-empty-prompts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   width: 100%;
-  margin-top: 12px;
+  margin-top: 10px;
 }
 
 .chat-prompt-chip {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   border: 1px solid var(--line);
-  border-radius: 13px;
-  padding: 13px 14px;
+  border-radius: 8px;
+  padding: 10px 12px;
   background: var(--card);
   color: var(--foreground);
   font: inherit;
@@ -1000,31 +1302,23 @@
   font-weight: 700;
   text-align: left;
   cursor: pointer;
-  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .chat-prompt-chip:hover {
-  transform: translateY(-2px);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-  box-shadow: 0 10px 24px rgba(45, 25, 73, 0.1);
-}
-
-.chat-prompt-icon {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: 9px;
-  color: var(--accent);
   background: var(--accent-soft);
 }
 
-/* Modern composer */
+.chat-prompt-icon {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+/* Modern composer — floating input, no divider, no separate panel */
 .chat-mode .chat-composer {
-  border-top: 1px solid var(--line);
-  padding: 14px clamp(16px, 5%, 40px) 20px;
-  background: var(--card);
+  padding: 8px clamp(16px, 5%, 40px) 22px;
+  background: transparent;
 }
 
 .composer-inner {
@@ -1032,16 +1326,16 @@
   max-width: 780px;
   margin: 0 auto;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 10px;
   padding: 6px 6px 6px 8px;
   background: var(--card);
-  box-shadow: 0 6px 20px rgba(45, 25, 73, 0.07);
+  box-shadow: 0 2px 10px rgba(45, 25, 73, 0.06);
   transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .composer-inner:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .composer-inner.is-sending {
@@ -1085,15 +1379,14 @@
   width: 40px;
   height: 40px;
   flex: 0 0 auto;
-  border-radius: 12px;
   color: var(--muted);
+  background: transparent;
   cursor: pointer;
-  transition: color 140ms ease, background 140ms ease;
+  transition: color 140ms ease;
 }
 
 .chat-mode .attach-button:hover {
   color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .chat-mode .attach-button input {
@@ -1107,15 +1400,15 @@
   height: 40px;
   flex: 0 0 auto;
   border: 0;
-  border-radius: 12px;
+  border-radius: 8px;
   color: #fff;
-  background: linear-gradient(135deg, #dc63c7, #8b5cf6);
+  background: var(--accent);
   cursor: pointer;
-  transition: opacity 140ms ease, transform 140ms ease;
+  transition: opacity 140ms ease, background 140ms ease;
 }
 
 .chat-mode .send-button:not(:disabled):hover {
-  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--accent) 88%, #000);
 }
 
 .chat-mode .send-button:disabled {

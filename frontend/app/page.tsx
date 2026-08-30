@@ -105,13 +105,13 @@ function App() {
       <div className="dot-field" aria-hidden="true" />
       <button className="mobile-menu" aria-label="Abrir menú" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button>
       <aside className={mobileOpen ? 'sidebar open' : `sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
-        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span>route<span className="brand-dot">.</span>pilot</span></div>
+        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span>route<span className="brand-dot">.</span>pilot</span><button className="brand-theme-toggle" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button></div>
         <div className="workspace"><div className="workspace-avatar">MS</div><div><b>Muebles del Sur</b><small>{t.principalWorkspace}</small></div><ChevronRight size={15} /></div>
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Navegación principal">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
           <button className={active === 'Guardados' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Guardados')}><Bookmark size={17} /><span>{t.savedNav}</span>{saved.savedSpecs.length > 0 && <em>{saved.savedSpecs.length}</em>}</button>
-          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; return <button key={key} className={active === key ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas')}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
+          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; const target = key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas'; return <button key={key} className={active === target ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(target)}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
           <button className={active === 'Noticias' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Noticias')}><Newspaper size={17} /><span>Noticias</span><em className="news-dot">2</em></button>
         </nav>
         <p className="nav-label secondary-label">{t.workspace}</p>
@@ -120,7 +120,6 @@ function App() {
         <div className="sidebar-bottom">
           <div className="sidebar-controls">
             <div className="language-select"><button type="button" className="sidebar-control-button" aria-expanded={languageOpen} aria-haspopup="listbox" onClick={() => setLanguageOpen((open) => !open)}><Languages size={16} aria-hidden="true" /><span>{localeLabels[locale]}</span><ChevronDown size={14} aria-hidden="true" /></button>{languageOpen && <div className="language-menu language-menu-up" role="listbox" aria-label={t.language}>{(Object.keys(localeLabels) as Locale[]).map((key) => <button type="button" role="option" aria-selected={locale === key} className={locale === key ? 'language-option selected' : 'language-option'} key={key} onClick={() => { setLocale(key); setLanguageOpen(false); window.localStorage.setItem('route-pilot-locale', key) }}><span className={`language-flag ${key}`}>{key === 'es' ? 'ES' : key === 'en' ? 'EN' : 'PT'}</span><span>{localeLabels[key]}</span>{locale === key && <span className="language-check">✓</span>}</button>)}</div>}</div>
-            <button className="sidebar-icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
             <button className="sidebar-icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={17} /><i /></button>
           </div>
           <div className="profile"><div className="profile-avatar">AR</div><div><b>Alex Rivera</b><small>Administrador</small></div><MoreHorizontal size={17} /></div>
