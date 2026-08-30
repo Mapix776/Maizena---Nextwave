@@ -286,6 +286,21 @@ export function validateTracerSpec(spec: unknown): TracerSpec {
   return validation.data;
 }
 
+export interface JsonRenderPatch {
+  op: 'add' | 'update' | 'remove';
+  elementId: string;
+  targetMessageId?: string;
+  element?: unknown;
+}
+
+export interface UIReplacePayload {
+  uiVersion: number;
+  reason: string;
+  spec: TracerSpec;
+  traceSteps?: unknown[];
+  targetMessageId?: string;
+}
+
 export interface UIEnvelope<TPayload = unknown> {
   runId: string;
   sequence: number;
@@ -301,4 +316,5 @@ export interface RunSnapshot {
   facts: Record<string, unknown>;
   ui: TracerSpec | null;
   error?: string;
+  targetMessageId?: string;
 }

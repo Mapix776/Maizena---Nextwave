@@ -13,6 +13,10 @@ import {
   defaultSpeculativeEngine,
   SpeculativeEngine,
 } from '../services/speculative-engine.js';
+import {
+  defaultElementLocationTracker,
+  ElementLocationTracker,
+} from '../services/element-location-tracker.js';
 
 interface RunCoordinatorOptions {
   executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
@@ -21,6 +25,7 @@ interface RunCoordinatorOptions {
   createRunId?: () => string;
   now?: () => Date;
   speculativeEngine?: SpeculativeEngine;
+  locationTracker?: ElementLocationTracker;
 }
 
 export class RunCoordinator {
@@ -31,6 +36,7 @@ export class RunCoordinator {
   readonly #createRunId: () => string;
   readonly #now: () => Date;
   readonly #speculativeEngine: SpeculativeEngine;
+  readonly #locationTracker: ElementLocationTracker;
 
   constructor(options: RunCoordinatorOptions = {}) {
     this.#executeStep = options.executeStep ?? executeAriStep;
@@ -39,6 +45,7 @@ export class RunCoordinator {
     this.#createRunId = options.createRunId ?? randomUUID;
     this.#now = options.now ?? (() => new Date());
     this.#speculativeEngine = options.speculativeEngine ?? defaultSpeculativeEngine;
+    this.#locationTracker = options.locationTracker ?? defaultElementLocationTracker;
   }
 
   createRun(): RunSnapshot {
@@ -99,6 +106,13 @@ export class RunCoordinator {
         logTiming(`speculative_hit_saved_${speculative.savedMs}ms`);
         run.facts = { ...run.facts, ...speculative.factPatch };
         run.ui = validateTracerSpec(speculative.spec);
+
+        const elementKeys = Object.keys((run.ui as { elements: Record<string, unknown> }).elements);
+        const targetMessageId = this.#locationTracker.findTargetMessageForElements(elementKeys);
+        if (targetMessageId) {
+          console.log(`[in-place-update] runId=${runId} targetMessageId=${targetMessageId} updating components in existing bubble`);
+        }
+
         const traceSteps = [
           {
             title: 'Pre-generación especulativa aplicada',
@@ -112,6 +126,7 @@ export class RunCoordinator {
           reason: 'speculative-hit',
           spec: run.ui,
           traceSteps,
+          targetMessageId,
         });
         logTiming('ws_ui_replace_emitted');
 
@@ -144,11 +159,18 @@ export class RunCoordinator {
 
       run.facts = { ...run.facts, ...result.factPatch };
       run.ui = ui;
+
+      const elementKeys = Object.keys((ui as { elements: Record<string, unknown> }).elements);
+      const targetMessageId = this.#locationTracker.findTargetMessageForElements(elementKeys);
+      const messageId = targetMessageId || `assistant-${runId}`;
+      this.#locationTracker.registerMessageElements(messageId, runId, elementKeys);
+
       await this.#emitNext(run, 'ui:replace', {
         uiVersion: 1,
         reason: 'step-complete',
         spec: ui,
         traceSteps,
+        targetMessageId,
       });
       logTiming('ws_ui_replace_emitted');
 

@@ -149,6 +149,9 @@ export function composeRunUi(result: StepResult): unknown {
     elements['assistant-message']?.children.push(id);
   };
 
+  const deliveryId = result.factPatch?.deliveryId;
+  const opRef = operationSummary?.referenceCode || (typeof deliveryId === 'string' ? deliveryId : 'main');
+
   if (humanDecision) {
     addElement('decision-card', 'HumanDecisionCard', humanDecision);
   }
@@ -172,10 +175,10 @@ export function composeRunUi(result: StepResult): unknown {
     );
   }
   customsClearance?.forEach((props, index) =>
-    addElement(`customs-clearance-${index + 1}`, 'CustomsClearancePanel', props),
+    addElement(`customs-panel-${props.containerNumber || index + 1}`, 'CustomsClearancePanel', props),
   );
   etaRisks?.forEach((props, index) =>
-    addElement(`eta-risk-${index + 1}`, 'EtaRiskCard', props),
+    addElement(`eta-risk-${props.containerNumber || index + 1}`, 'EtaRiskCard', props),
   );
   if (stepProgressBar) {
     addElement('step-progress-bar', 'StepProgressBar', stepProgressBar);
@@ -188,14 +191,14 @@ export function composeRunUi(result: StepResult): unknown {
     );
   }
   documentDetails?.forEach((props, index) =>
-    addElement(`document-details-${index + 1}`, 'DocumentDetailsCard', props),
+    addElement(`document-details-${props.documentId || index + 1}`, 'DocumentDetailsCard', props),
   );
   if (agentRuns) {
     addElement('agent-runs', 'AgentRunTimeline', agentRuns);
   }
   shipmentMilestones?.forEach((props, index) =>
     addElement(
-      `shipment-milestones-${index + 1}`,
+      `shipment-milestones-${props.containerNumber || index + 1}`,
       'ShipmentMilestoneTimeline',
       props,
     ),
@@ -212,7 +215,6 @@ export function composeRunUi(result: StepResult): unknown {
 
   // Render the legacy delivery cards only when the tool supplied a complete,
   // valid delivery view. A text-only response must never invent shipment data.
-  const deliveryId = result.factPatch?.deliveryId;
   const from = result.factPatch?.from;
   const to = result.factPatch?.to;
   const transportType = result.factPatch?.transportType;
@@ -250,7 +252,7 @@ export function composeRunUi(result: StepResult): unknown {
       };
     }
     addElement(
-      'delivery-card',
+      `delivery-card-${deliveryId}`,
       hasIssue ? 'DeliveryIssueCard' : 'DeliveryCard',
       cardProps,
       hasIssue ? [] : ['container-progress'],

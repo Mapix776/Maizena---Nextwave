@@ -10,6 +10,8 @@ import {
   buildOperationsMetricsCatalogFacts,
   buildHumanDecisionCatalogFact,
 } from '../services/logistics-ui-facts.js';
+import { createAriAgent, executeAriStep } from './ari.js';
+import { DeterministicRenderModel } from './models.js';
 
 // =========================================================================
 // CANONICAL QA DEMO FIXTURES (docs/ari-comprehensive-qa-test-suite.md)
@@ -492,4 +494,15 @@ test('QA: Severity classification is strictly deterministic across risk conditio
   const facts = buildOperationsMetricsCatalogFacts(summaryWithCritical as never);
   assert.equal(facts.criticalAlertsCount, 2);
   assert.equal(facts.pendingDecisionsCount, 1);
+});
+
+test('QA: Direct "contenedores" query triggers immediate container inventory without boilerplate', async () => {
+  const agent = createAriAgent({ model: new DeterministicRenderModel() });
+  const result = await executeAriStep([{ role: 'user', content: 'contenedores' }], agent);
+  assert.equal(result.status, 'completed');
+  assert.ok(result.factPatch);
+  // Must have concise assistantResponse without mega descriptions
+  assert.ok(result.factPatch.assistantResponse);
+  assert.ok((result.factPatch.assistantResponse as string).length < 250);
+  assert.doesNotMatch(result.factPatch.assistantResponse as string, /recetas|cocina|Estoy dedicado exclusivamente/i);
 });

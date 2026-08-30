@@ -18,6 +18,7 @@ import {
   buildOperationCatalogFacts,
   buildOperationsMetricsCatalogFacts,
 } from '../services/logistics-ui-facts.js';
+import type { ContainerRow } from '../types/database.js';
 import {
   createMainModel,
   createSmallModel,
@@ -28,12 +29,15 @@ import {
   type SubagentRegistry,
 } from './subagents/registry.js';
 import {
+  containerStatusOutputSchema,
   customsStatusOutputSchema,
   operationDetailsOutputSchema,
   operationalAlertsOutputSchema,
+  operationsListOutputSchema,
   operationsSummaryOutputSchema,
   pendingDecisionsOutputSchema,
 } from './tools/logistics-database.tools.js';
+import { SupabaseReader } from '../services/supabase-reader.js';
 import {
   reconcileShipmentDocumentsOutputSchema,
   type ReconciliationOutput,
@@ -45,8 +49,14 @@ import {
 } from './tools/registry.js';
 
 export const ARI_SYSTEM_PROMPT = `You are Ari, the enterprise AI logistics and trade operations agent for Nauta.
-You serve business clients and supply chain executives. Always speak in clean, executive, professional plain English without technical jargon.
+You serve business clients and supply chain executives. Always speak in clean, executive, professional plain English or Spanish according to user language without technical jargon.
 You have direct access to the live logistics database (Supabase) via tools. Query those tools before making claims about current operations.
+
+DIRECT ACTION FOR GENERAL CONTAINER & SHIPMENT QUERIES:
+- When the user asks about shipments, containers, operations, or types short keywords like "contenedores", "todos los contenedores", "mis envios", "operaciones", "mostrar contenedores", "status general":
+  - DO NOT output a generic greeting, assistant self-introduction, or descriptive boilerplate.
+  - IMMEDIATELY query the database: call \`getCustomsStatusTool\`, \`getOperationsSummaryTool\`, or \`listOperationsTool\`, and \`renderDemoTool\`.
+  - Provide 1 direct, concise executive summary sentence and let the Generative UI display all container cards, KPI metrics, and comparison tables immediately!
 
 STRICT DOMAIN RESTRICTIONS & SCOPE GUARDRAILS:
 1. EXCLUSIVE LOGISTICS DOMAIN: You ONLY operate within international logistics, freight forwarding, ocean/air/land transport, cargo tracking, container status, customs clearance (pedimentos, semáforo fiscal), shipment documents (BL, Invoice, Packing List), operational delay mitigation, and supply chain decisions.
@@ -66,38 +76,40 @@ CRITICAL GENERATIVE UI & VISUAL REASONING RULES:
 3. INTERACTIVITY: Every visual component generated should support user engagement (expanding timeline nodes, reviewing documents, resolving discrepancies).
 4. DATES: Format all dates elegantly (e.g. "September 8, 2026 (in 10 days)"). NEVER print raw ISO strings like "2026-09-08T17:17:51.734484+00:00".
 5. IDENTIFIERS: Always use clean reference codes (e.g. "OP-2026-101", "MSKU1234567"). NEVER output raw database UUIDs (e.g. "c3d4e5f6-0000...").
-6. CONCISE: Keep conversational text short and high-level, letting the dynamic Generative UI deliver the visual details.`;
+6. CONCISE: Keep conversational text short and high-level (1-2 sentences), letting the dynamic Generative UI deliver the visual details.`;
 
 export const ARI_INSTRUCTIONS = `${ARI_SYSTEM_PROMPT}
 
 Your tool execution workflow:
-1. 🤝 Pending Approvals, Human Decisions & Direct User Directives (HITL):
+1. 📦 All Containers & Fleet Overview Queries:
+   - When asked "contenedores", "dame los contenedores", "mostrar contenedores", "mis envios", or general container status, call \`getCustomsStatusTool\` and \`getOperationsSummaryTool\` and \`renderDemoTool\`. Output 1 concise sentence and present the full visual container inventory.
+2. 🤝 Pending Approvals, Human Decisions & Direct User Directives (HITL):
    - When asked about pending approvals or decisions, call \`getPendingDecisionsTool\` and immediately \`requestHumanDecisionTool\`.
    - WHEN THE USER REPLIES WITH CUSTOM COMMENTS, FREE-TEXT DIRECTIVES, OR CHOICES:
      - The human user may click a button, type a free-form comment, or give specific constraints (e.g. "Reroute to Veracruz instead", "Approve but negotiate a 5% discount", "Split the container delivery into two batches").
      - Always parse the user's direct instruction, validate it against the operation context, and respect the human's command.
      - Acknowledge their exact decision in natural, executive language, state the next operational action taken, and invoke \`renderDemoTool\` to visually confirm the updated shipment state.
-2. 🔍 Finding Cargo & Container Tracking:
+3. 🔍 Finding Cargo & Container Tracking:
    - When asked to find, track, or inspect a container (e.g. "MSKU1234567 MUESTRAME ESE CONTENEDOR", "Where is container MSKU1234567?", "Track CMAU9876543"), call \`getContainerStatusTool\` or \`findContainerTool\`.
    - When asked to find cargo items (e.g. "Have the electronics arrived yet?", "Where are the dining tables?"), call \`searchCargoTool\` or \`findContainerTool\`.
    - If multiple shipments match, call \`requestHumanDecisionTool\` to let the user choose which shipment to view.
    - ALWAYS call \`renderDemoTool\` with the clean assistantResponse and delivery parameters (deliveryId, from, to, status, deliveryTime, issue) so the visual card is rendered.
-3. 📄 Reading & Ingesting Documents:
+4. 📄 Reading & Ingesting Documents:
    - Ari is read-only by default. The sole data-mutation exception is \`ingestDocumentTool\`, and only after the user has uploaded or pasted a document with extracted/OCR text.
    - Use \`ingestDocumentTool\` only for: Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. The tool validates the content; never try to bypass or relabel that validation.
    - Reject Commercial Invoices, Pedimentos, Customs Declarations, emails, images without readable text, executables, and every other file type. Do not create, modify, delete, or status-change any record from normal conversation.
    - Do not claim to upload, download, move, delete, or store a binary file. This tool only persists validated structured facts extracted from an already-provided document.
    - When asked to inspect an existing BL, Invoice, or Packing List, call \`readDocumentTool\`.
-4. 📍 Map & ETA:
+5. 📍 Map & ETA:
    - Call \`locateMapTool\` for routes/ports and \`calculateEtaTool\` for transit time and delays.
-5. 📊 Adaptive analytics UI:
+6. 📊 Adaptive analytics UI:
    - When the user asks to compare, trend, measure, or visualize data, call \`drawChartTool\`. The resulting chart is an interactive JSON-render component: the user can move it and change its presentation locally without changing operational data.
-6. 🔀 Comparing Data & Discrepancies:
+7. 🔀 Comparing Data & Discrepancies:
    - Call \`compareDataTool\` or \`reconcileShipmentDocumentsTool\` for document discrepancies.
-7. ⚠️ Missing Origin or Destination Protocol:
+8. ⚠️ Missing Origin or Destination Protocol:
    - If origin or destination is missing in one document, cross-reference the other operation documents (BL > Booking Confirmation > PO > Arrival Notice).
    - If origin or destination is missing across ALL documents of an operation, NEVER silently invent or default to a port. Immediately call \`requestHumanDecisionTool\` with severity "critical", formulating clear options (e.g. historical supplier route suggestion vs alternative regional port vs document amendment) so the human user decides.
-8. ⚡ Ultra-Fast Execution & Minimal Tool Turns:
+9. ⚡ Ultra-Fast Execution & Minimal Tool Turns:
    - Target single-turn resolution: query the database tool and emit your response in 1-2 turns max. Avoid circular or chained queries when the initial lookup already contains the necessary operation facts.`;
 
 const ARI_TOOL_KEYS = [
@@ -199,7 +211,7 @@ export async function executeAriStep(
   };
 
   logStepTiming('model_invoke_start');
-  const MODEL_TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 7500);
+  const MODEL_TIMEOUT_MS = Number(process.env.MODEL_TIMEOUT_MS ?? 18_000);
 
   let response: {
     text: string;
@@ -408,6 +420,263 @@ export async function executeAriStep(
       });
     } catch (e) {
       console.error('Failed to build customs clearance facts:', e);
+    }
+  }
+
+  const containerStatusResult = response.toolResults.find(
+    ({ payload }) =>
+      !payload.isError &&
+      (payload.toolName === 'getContainerStatusTool' ||
+        payload.toolName === 'get-container-status' ||
+        payload.toolName === 'findContainerTool' ||
+        payload.toolName === 'find-container'),
+  );
+
+  if (containerStatusResult && containerStatusResult.payload.result) {
+    try {
+      const parsed = containerStatusOutputSchema.safeParse(
+        containerStatusResult.payload.result,
+      );
+      if (parsed.success && parsed.data.found && parsed.data.container) {
+        const c = parsed.data.container;
+        catalogFactPatch.deliveryId = c.container_number;
+        catalogFactPatch.from = c.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam';
+        catalogFactPatch.to = c.destination_port || 'Puerto de Manzanillo, Colima, Mexico';
+        catalogFactPatch.transportType = 'Sea';
+        catalogFactPatch.status =
+          c.status === 'IN_TRANSIT'
+            ? 'In Transit'
+            : c.status === 'DELIVERED'
+              ? 'Delivered'
+              : c.status === 'AT_PORT'
+                ? 'Arrived at Port'
+                : c.status === 'CUSTOMS_CLEARANCE' || c.status === 'CUSTOMS_HOLD'
+                  ? 'Customs'
+                  : 'Booking Confirmed';
+        catalogFactPatch.deliveryTime = c.eta
+          ? new Date(c.eta).toLocaleDateString('es-ES', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : '2 de Septiembre, 2026';
+
+        if (Array.isArray(c.transit_history) && c.transit_history.length > 0) {
+          catalogFactPatch.shipmentMilestones = [
+            {
+              containerNumber: c.container_number,
+              originPort: c.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam',
+              destinationPort: c.destination_port || 'Puerto de Manzanillo, Colima, Mexico',
+              milestones: (c.transit_history as Array<{ at?: string; status?: string; location?: string }>).map((m) => ({
+                at: m.at || new Date().toISOString(),
+                status: m.status || 'IN_TRANSIT',
+                location: m.location,
+              })),
+            },
+          ];
+        }
+
+        if (c.current_vessel || c.current_location) {
+          catalogFactPatch.routeMap = {
+            title: `Ruta de Contenedor ${c.container_number}`,
+            originPort: c.origin_port || 'Puerto de Origen',
+            destinationPort: c.destination_port || 'Puerto de Destino',
+            currentVessel: c.current_vessel || undefined,
+            status: c.status,
+          };
+        }
+
+        catalogEvidence.push({
+          id: 'supabase-container-tracking',
+          source: 'supabase:get-container-status',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to build container status facts:', e);
+    }
+  }
+
+  const readDocumentResult = response.toolResults.find(
+    ({ payload }) =>
+      !payload.isError &&
+      (payload.toolName === 'readDocumentTool' ||
+        payload.toolName === 'read-shipment-document'),
+  );
+
+  if (readDocumentResult && readDocumentResult.payload.result) {
+    try {
+      const res = readDocumentResult.payload.result as {
+        found: boolean;
+        count: number;
+        documents: DocumentRow[];
+      };
+      if (res.found && Array.isArray(res.documents) && res.documents.length > 0) {
+        const docs = res.documents;
+        if (!catalogFactPatch.documentDetails) {
+          catalogFactPatch.documentDetails = docs.map((doc: DocumentRow) => ({
+            documentId: doc.id,
+            type: doc.type || 'BILL_OF_LADING',
+            fileName: doc.file_name,
+            reference: doc.document_reference || undefined,
+            processingStatus: (doc.processing_status || 'completed').toLowerCase() as
+              | 'completed'
+              | 'pending'
+              | 'processing'
+              | 'failed',
+            confidence: doc.confidence_score ?? 1,
+            fileSizeBytes: doc.file_size ?? undefined,
+            mimeType: doc.mime_type || 'application/pdf',
+            stored: Boolean(doc.storage_path || doc.storage_bucket),
+            createdAt: doc.created_at || new Date().toISOString(),
+            parties: [],
+          }));
+        }
+
+        if (!catalogFactPatch.documentsTimeline) {
+          catalogFactPatch.documentsTimeline = {
+            title: 'Documentos de la Operación',
+            subtitle: docs[0]?.document_reference || 'Expediente digital de embarque',
+            documents: docs.map((doc: DocumentRow) => ({
+              id: doc.id,
+              title: doc.file_name,
+              description: `${doc.type || 'DOCUMENT'} · Ref: ${doc.document_reference || 'N/A'}`,
+              status: (doc.processing_status?.toLowerCase() === 'completed'
+                ? 'complete'
+                : 'missing') as 'complete' | 'missing',
+              date: doc.created_at,
+            })),
+          };
+        }
+
+        catalogEvidence.push({
+          id: 'supabase-read-documents',
+          source: 'supabase:read-documents',
+        });
+      }
+    } catch (e) {
+      console.error('Failed to build read document facts:', e);
+    }
+  }
+
+  const listOperationsResult = response.toolResults.find(
+    ({ payload }) =>
+      !payload.isError &&
+      (payload.toolName === 'listOperationsTool' ||
+        payload.toolName === 'list-operations'),
+  );
+  const parsedListOperations = operationsListOutputSchema.safeParse(
+    listOperationsResult?.payload.result,
+  );
+
+  if (parsedListOperations.success && parsedListOperations.data.operations.length > 0) {
+    try {
+      const ops = parsedListOperations.data.operations;
+      const rows = ops.map((op) => {
+        const canonical = (op.canonical_data ?? {}) as Record<string, unknown>;
+        const originVal = canonical.origin_port as { value?: string } | string | undefined;
+        const destVal = canonical.destination_port as { value?: string } | string | undefined;
+        const origin = (typeof originVal === 'object' ? originVal?.value : originVal) || 'Origen';
+        const dest = (typeof destVal === 'object' ? destVal?.value : destVal) || 'Destino';
+
+        return {
+          id: op.id,
+          label: op.reference_code,
+          sourceValue: op.status,
+          targetValue: `${origin} → ${dest} (${op.client_name})`,
+          status: (op.status === 'CUSTOMS_CLEARANCE' || op.status === 'EXCEPTION' ? 'warning' : 'matched') as 'warning' | 'matched',
+        };
+      });
+
+      if (!catalogFactPatch.comparisonTable) {
+        catalogFactPatch.comparisonTable = {
+          title: 'Operaciones Logísticas y Embarques Activos',
+          sourceLabel: 'Estado',
+          targetLabel: 'Ruta y Cliente',
+          rows,
+        };
+      }
+      catalogEvidence.push({
+        id: 'supabase-list-operations',
+        source: 'supabase:list-operations',
+      });
+    } catch (e) {
+      console.error('Failed to build list operations facts:', e);
+    }
+  }
+
+  // Fallback for general container inquiries (e.g. "contenedores", "todos los contenedores", "mis envios")
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  const isGeneralContainersQuery =
+    /^\s*(contenedores|mis contenedores|mostrar contenedores|todos los contenedores|ver contenedores|containers|listado de contenedores|lista de contenedores)\s*$/i.test(
+      lastUserMessage,
+    );
+
+  if (isGeneralContainersQuery) {
+    try {
+      const reader = new SupabaseReader();
+      const [inTransitContainers, customsContainers, delayedContainers, summary] = await Promise.all([
+        reader.getContainersByStatus('IN_TRANSIT').catch(() => []),
+        reader.getContainersByStatus('CUSTOMS_HOLD').catch(() => []),
+        reader.getDelayedContainers().catch(() => []),
+        reader.getOperationsMetricsSummary().catch(() => null),
+      ]);
+
+      const allUniqueContainersMap = new Map<string, ContainerRow>();
+      for (const c of [...customsContainers, ...inTransitContainers, ...delayedContainers]) {
+        allUniqueContainersMap.set(c.container_number, c);
+      }
+      const containers = Array.from(allUniqueContainersMap.values());
+
+      if (containers.length > 0) {
+        catalogFactPatch.customsClearance = buildCustomsClearanceCatalogFacts(containers);
+        const rows = containers.map((c: ContainerRow) => ({
+          id: c.id,
+          label: c.container_number,
+          sourceValue:
+            c.customs_light === 'red'
+              ? 'Retenido (Semáforo Rojo)'
+              : c.customs_light === 'green'
+                ? 'Liberado (Semáforo Verde)'
+                : c.status === 'IN_TRANSIT'
+                  ? 'En Tránsito Marítimo'
+                  : 'En Inspección',
+          targetValue: `${c.origin_port || 'Origen'} → ${c.destination_port || 'Destino'} (${c.status})`,
+          status: (c.customs_light === 'red'
+            ? 'critical'
+            : c.customs_light === 'pending'
+              ? 'warning'
+              : 'matched') as 'critical' | 'warning' | 'matched',
+        }));
+
+        catalogFactPatch.comparisonTable = {
+          title: 'Inventario Consolidado de Contenedores',
+          sourceLabel: 'Estado / Semáforo',
+          targetLabel: 'Ruta y Estatus',
+          rows,
+        };
+
+        if (summary && !catalogFactPatch.kpiGrid) {
+          catalogFactPatch.kpiGrid = {
+            title: 'Resumen Global de Contenedores',
+            metrics: [
+              { id: 'total-containers', label: 'Total Contenedores', value: summary.totalContainers, unit: 'unidades', severity: 'normal' },
+              { id: 'in-transit', label: 'En Tránsito', value: summary.containersInTransit, unit: 'en mar', severity: 'normal' },
+              { id: 'in-customs', label: 'En Aduana', value: summary.containersInCustoms, unit: 'recinto', severity: summary.containersInCustoms > 0 ? 'warning' : 'normal' },
+              { id: 'delayed', label: 'Retrasados', value: summary.delayedContainersCount, unit: 'embarques', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
+            ],
+          };
+        }
+
+        catalogFactPatch.assistantResponse =
+          'Aquí tienes el inventario consolidado de los contenedores activos con su estado operativo, ruta y estatus aduanal.';
+        catalogFactPatch.deliveryId = containers[0]?.container_number || 'MDS-DEMO-GREEN-082';
+        catalogFactPatch.from = containers[0]?.origin_port || 'Ho Chi Minh City, Vietnam';
+        catalogFactPatch.to = containers[0]?.destination_port || 'Manzanillo, México';
+        catalogFactPatch.status = containers[0]?.status || 'In Transit';
+        catalogFactPatch.transportType = 'Sea';
+      }
+    } catch (e) {
+      console.warn('Failed to populate direct containers fallback:', e);
     }
   }
 
