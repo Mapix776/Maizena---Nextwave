@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { authorFallbackReport } from './fallback-report.js';
+
 const REPORT_ROOT = '/workspace/report';
 const OUTPUT_ROOT = `${REPORT_ROOT}/dist`;
 const EDITABLE_PATHS = new Set([
@@ -17,6 +19,31 @@ const MAX_OUTPUT_FILES = 64;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
 const PNG_SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const COMPATIBILITY_MARKER = '/* nauta-report-compatibility */';
+const PRESENTATION_COMPATIBILITY_CSS = `${COMPATIBILITY_MARKER}
+html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+*, *::before, *::after { box-sizing: border-box; }
+body { font-size: 16px; }
+[data-report-root], [data-report-root] * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+[data-report-root] h1 { font-size: clamp(1.75rem, 4vw, 2.75rem); }
+[data-report-root] h2 { font-size: clamp(1.3rem, 2.5vw, 1.75rem); }
+[data-report-root] h3 { font-size: 1.125rem; }
+[data-report-root] small, [data-report-root] [class*="eyebrow"] { font-size: 0.75rem; }
+[data-report-hero] { background-color: #211d38 !important; color: #ffffff !important; }
+[data-report-hero] * { color: inherit; }
+[data-kpi-grid] { background-color: #f1eafd !important; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); }
+[data-risk-board] { background-color: #fff3e8 !important; }
+[data-report-root] table { width: 100%; table-layout: fixed; }
+[data-report-root] img, [data-report-root] svg { max-width: 100%; height: auto; }
+@media (min-width: 900px) {
+  [data-report-root] { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  [data-report-hero], [data-kpi-grid] { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  [data-report-root] { display: block; width: 100%; }
+  [data-report-root] table { font-size: 0.75rem; }
+}
+`;
 
 export type AuthoringCommand =
   | 'validate-source'
@@ -137,6 +164,31 @@ function createWorkspace(sandbox: AuthoringSandbox): AuthoringWorkspace {
   };
 }
 
+function removeForbiddenPresentationCapabilities(source: string): string {
+  return source
+    .replace(/@import\s+(?:url\()?\s*["']?https?:\/\/[^;]+;/gi, '')
+    .replace(/\b(src|href)\s*=\s*(["'])\/\/[^"']*\2/gi, '$1=$2#$2')
+    .replace(/https?:\/\/(?!www\.w3\.org\/(?:2000\/svg|1999\/xlink))[^\s"'`<>\\)]+/gi, '#')
+    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+}
+
+async function stabilizeGeneratedReport(workspace: AuthoringWorkspace): Promise<void> {
+  for (const path of ['index.html', 'src/main.js'] as const) {
+    const source = await workspace.read(path);
+    const stabilized = removeForbiddenPresentationCapabilities(source);
+    if (stabilized !== source) await workspace.write(path, stabilized);
+  }
+
+  const styles = await workspace.read('src/styles.css');
+  const safeStyles = removeForbiddenPresentationCapabilities(styles);
+  const stabilizedStyles = safeStyles.includes(COMPATIBILITY_MARKER)
+    ? safeStyles
+    : `${safeStyles.trim()}\n\n${PRESENTATION_COMPATIBILITY_CSS}`;
+  if (stabilizedStyles !== styles) {
+    await workspace.write('src/styles.css', stabilizedStyles);
+  }
+}
+
 function mimeTypeFor(path: string) {
   if (path.endsWith('.html')) return 'text/html; charset=utf-8';
   if (path.endsWith('.js')) return 'text/javascript; charset=utf-8';
@@ -214,8 +266,13 @@ export async function runAuthoringJob(
     let evidence: Array<{ gate: AuthoringCommand; stdout: string }> = [];
     let acceptedByAuthoringGates = false;
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      await input.author(workspace, { attempt, feedback });
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      if (attempt <= 3) {
+        await input.author(workspace, { attempt, feedback });
+      } else {
+        await authorFallbackReport(workspace);
+      }
+      await stabilizeGeneratedReport(workspace);
       const attemptEvidence: Array<{ gate: AuthoringCommand; stdout: string }> = [];
       let failedGate: { gate: AuthoringCommand; detail: string } | undefined;
 
@@ -241,7 +298,7 @@ export async function runAuthoringJob(
         break;
       }
       feedback = `${failedGate.gate} failed:\n${failedGate.detail}`;
-      if (attempt === 3) throw new Error(feedback);
+      if (attempt === 4) throw new Error(feedback);
     }
 
     if (!acceptedByAuthoringGates) {

@@ -90,6 +90,12 @@ test('gives the AI only logical report tools and requires all three source files
   assert.match(prompt, /data-report-visual/);
   assert.match(prompt, /inline SVG/i);
   assert.match(prompt, /composition and visualization type/i);
+  assert.match(prompt, /reports are static/i);
+  assert.match(prompt, /do not create buttons, filters, toggles, tabs/i);
+  assert.match(prompt, /never emit HTML event-handler attributes/i);
+  assert.match(prompt, /at least four distinct computed font sizes/i);
+  assert.match(prompt, /at least three distinct opaque background colors/i);
+  assert.match(prompt, /overflow-wrap: anywhere/i);
   assert.equal(result.summary, 'Custom report authored.');
   assert.deepEqual(result.writtenPaths, [
     'index.html',

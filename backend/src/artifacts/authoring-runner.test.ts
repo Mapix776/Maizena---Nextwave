@@ -69,9 +69,15 @@ test('runs a no-network authoring job, exports a verified bundle, and kills the 
       return fake;
     },
     author: async (workspace) => {
-      await workspace.write('index.html', '<main id="app"></main>');
+      await workspace.write(
+        'index.html',
+        '<main id="app" onclick="bad()"><a href="https://example.com">Nauta</a></main>',
+      );
       await workspace.write('src/main.js', 'console.log("custom report")');
-      await workspace.write('src/styles.css', 'body { color: #17324d; }');
+      await workspace.write(
+        'src/styles.css',
+        '@import url("https://example.com/font.css"); body { color: #17324d; }',
+      );
     },
   });
 
@@ -105,6 +111,15 @@ test('runs a no-network authoring job, exports a verified bundle, and kills the 
       result.source.files.find(({ path }) => path === entry.path)?.contents.byteLength,
     );
   }
+  const stabilizedIndex = new TextDecoder().decode(
+    result.source.files.find(({ path }) => path === 'index.html')?.contents,
+  );
+  const stabilizedStyles = new TextDecoder().decode(
+    result.source.files.find(({ path }) => path === 'src/styles.css')?.contents,
+  );
+  assert.doesNotMatch(stabilizedIndex, /onclick|https?:\/\//i);
+  assert.doesNotMatch(stabilizedStyles, /@import|https?:\/\//i);
+  assert.match(stabilizedStyles, /nauta-report-compatibility/);
   assert.deepEqual(result.manifest?.map(({ path }) => path), [
     'assets/app.js',
     'index.html',
@@ -254,6 +269,55 @@ test('feeds bounded gate diagnostics back to the author and repairs in the same 
     'validate-browser',
     'assert-no-network',
   ]);
+});
+
+test('uses the trusted fixture-driven fallback after three invalid AI builds', async () => {
+  const fake = new FakeSandbox();
+  let buildAttempts = 0;
+  let authorAttempts = 0;
+  fake.run = async (command) => {
+    fake.commands.push(command);
+    if (command === 'build') {
+      buildAttempts += 1;
+      if (buildAttempts <= 3) {
+        return { exitCode: 1, stdout: '', stderr: 'generated JavaScript is invalid' };
+      }
+      fake.files.set(
+        '/workspace/report/dist/index.html',
+        new TextEncoder().encode('<main data-report-root>Fallback report</main>'),
+      );
+    }
+    if (command === 'validate-browser') {
+      fake.files.set(
+        '/workspace/report/report-validation.png',
+        Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]),
+      );
+    }
+    return { exitCode: 0, stdout: 'ok', stderr: '' };
+  };
+
+  const result = await runAuthoringJob({
+    jobId: 'job-fallback',
+    fixture: { operation: { reference: 'OP-2026-101' } },
+    createSandbox: async () => fake,
+    author: async (workspace) => {
+      authorAttempts += 1;
+      await workspace.write('index.html', '<main data-report-root></main>');
+      await workspace.write('src/main.js', 'broken source');
+      await workspace.write('src/styles.css', 'body { color: navy; }');
+    },
+  });
+
+  assert.equal(authorAttempts, 3);
+  assert.equal(buildAttempts, 4);
+  assert.equal(result.verdict, 'accepted');
+  assert.match(
+    new TextDecoder().decode(
+      result.source.files.find(({ path }) => path === 'src/main.js')?.contents,
+    ),
+    /fixture\.operation\.reference/,
+  );
+  assert.equal(fake.killed, true);
 });
 
 test('rejects paths outside the three-file authoring surface before writing', async () => {
