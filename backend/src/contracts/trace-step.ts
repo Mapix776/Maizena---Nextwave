@@ -13,12 +13,24 @@ export const executionStepKindSchema = z.enum([
   'generating_ui',
 ]);
 
-export type ExecutionStepKind = z.infer<typeof executionStepKindSchema>;
+export const thinkingAnimationTypeSchema = z.enum([
+  'thinking',
+  'reading',
+  'drawing',
+  'mapping',
+  'finding',
+  'findingBoat',
+  'eta',
+  'comparing',
+]);
+
+export type ThinkingAnimationType = z.infer<typeof thinkingAnimationTypeSchema>;
 
 export const executionTraceStepSchema = z.object({
   id: z.string(),
   stepNumber: z.number(),
   kind: executionStepKindSchema,
+  animationType: thinkingAnimationTypeSchema.default('thinking'),
   title: z.string(),
   detail: z.string(),
   toolName: z.string().optional(),
@@ -63,7 +75,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'reading_document',
-        title: 'Revisando documentos del envío',
+        animationType: 'reading',
+        title: 'Leyendo documento',
         detail: `Leí el ${docType} para verificar las cantidades, el peso declarado y validar que no falte información clave para la aduana.`,
         toolName,
         outputSummary: 'Datos del documento extraídos y comprobados con éxito.',
@@ -79,7 +92,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'drawing_chart',
-        title: 'Preparando gráfica de seguimiento',
+        animationType: 'drawing',
+        title: 'Dibujando gráficas',
         detail: `Estructuré las métricas de "${chartTitle}" para presentártelas en una gráfica interactiva clara y fácil de interpretar.`,
         toolName,
         outputSummary: 'Gráfica comparativa generada.',
@@ -104,7 +118,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'locating_map',
-        title: 'Ubicando la ruta en el mapa',
+        animationType: 'mapping',
+        title: 'Ubicando en el mapa',
         detail: `Consulté las coordenadas marítimas y la posición del barco ${vessel ? `"${vessel}"` : ''} ${routeText}.`,
         toolName,
         outputSummary: vessel ? `Ubicado a bordo de ${vessel}` : 'Ruta y coordenadas localizadas.',
@@ -121,7 +136,6 @@ export function mapToolToTraceStep(
       const vessel = getProp(result, ['container', 'current_vessel']);
       const location = getProp(result, ['container', 'current_location']);
       const status = getProp(result, ['container', 'status']);
-      const origin = getProp(result, ['container', 'origin_port']);
       const dest = getProp(result, ['container', 'destination_port']);
 
       let detail = `Rastreé el contenedor ${containerNo} en el registro de embarques.`;
@@ -133,7 +147,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'finding_container',
-        title: 'Rastreando tu contenedor',
+        animationType: 'findingBoat',
+        title: 'Container por barco',
         detail,
         toolName,
         outputSummary: status ? `Estatus: ${status}` : 'Contenedor localizado en el sistema.',
@@ -150,7 +165,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'finding_container',
-        title: 'Buscando tu mercancía',
+        animationType: 'finding',
+        title: 'Encontrando container',
         detail: `Revisé el catálogo y los manifiestos de carga buscando "${query}". Encontré ${count} embarque(s) coincidentes con las piezas declaradas.`,
         toolName,
         outputSummary: `Encontradas coincidencias para "${query}".`,
@@ -176,7 +192,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'calculating_eta',
-        title: 'Calculando fecha de llegada (ETA)',
+        animationType: 'eta',
+        title: 'Calculando ETA',
         detail,
         toolName,
         outputSummary: hasDelay ? `Alerta: +${delayDays} días de retraso` : 'Itinerario en tiempo normal.',
@@ -195,7 +212,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'comparing_data',
-        title: 'Comprobando que todo coincida',
+        animationType: 'comparing',
+        title: 'Comparando datos',
         detail: isClean
           ? 'Crucé los datos de la Factura Comercial, el Packing List y el Bill of Lading: los pesos, bultos y números de serie coinciden perfectamente.'
           : `Crucé los documentos de embarque y detecté ${discrepanciesCount || 'algunas'} diferencias en pesos o cantidades que requieren revisión preventiva.`,
@@ -212,6 +230,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'querying_database',
+        animationType: 'thinking',
         title: 'Revisando estatus de aduana',
         detail: 'Verifiqué el semáforo fiscal y el estado de pedimentos ante la autoridad aduanera para confirmar si la carga está liberada o requiere inspección previa.',
         toolName,
@@ -228,6 +247,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'querying_database',
+        animationType: 'thinking',
         title: 'Comprobando alertas operativas',
         detail: `Revisé el monitor de incidentes en tiempo real para verificar posibles congestiones portuarias, demoras climáticas o avisos de transportistas. (${count} alertas activas).`,
         toolName,
@@ -246,6 +266,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'querying_database',
+        animationType: 'thinking',
         title: 'Consultando registro en vivo',
         detail: `Cargué el expediente completo de ${ref}${client ? ` (${client})` : ''} desde Supabase: verifiqué contenedores asignados, historial de eventos y documentos asociados.`,
         toolName,
@@ -263,6 +284,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'querying_database',
+        animationType: 'thinking',
         title: 'Consultando balance general',
         detail: 'Consulté las estadísticas globales de todas tus importaciones activas, contenedores en navegación y trámites en aduana.',
         toolName,
@@ -281,6 +303,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'requesting_decision',
+        animationType: 'thinking',
         title: 'Pidiendo tu visto bueno',
         detail: `Preparé la tarjeta de decisión "${title}" con opciones claras para que elijas la acción adecuada con un solo clic.`,
         toolName,
@@ -297,6 +320,7 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'generating_ui',
+        animationType: 'thinking',
         title: 'Generando tarjeta de seguimiento',
         detail: `Construí la vista interactiva con el resumen de ${deliveryId}, ruta en tiempo real, fecha de llegada (ETA) y barra de progreso.`,
         toolName,
@@ -313,7 +337,8 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'reading_document',
-        title: 'Procesando tu documento',
+        animationType: 'reading',
+        title: 'Leyendo documento',
         detail: `Analicé el archivo "${fileName}", extraje sus datos estructurados y los ingresé a la base de datos para seguimiento inmediato.`,
         toolName,
         outputSummary: 'Documento procesado e ingresado al sistema.',
@@ -327,11 +352,12 @@ export function mapToolToTraceStep(
         id,
         stepNumber,
         kind: 'thinking',
-        title: 'Revisando información',
-        detail: 'Analizando los registros logísticos para responder a tu consulta de la manera más clara y precisa posible.',
+        animationType: 'thinking',
+        title: 'Pensando',
+        detail: 'Organizando la respuesta y preparando los siguientes pasos.',
         toolName,
         timestamp,
-        durationMs: 30,
+        durationMs: 20,
       };
   }
 }

@@ -793,6 +793,7 @@ export async function executeAriStep(
       id: 'step-1',
       stepNumber: 1,
       kind: 'thinking',
+      animationType: 'thinking',
       title: 'Entendiendo tu solicitud',
       detail:
         'Analizando lo que necesitas sobre tus envíos para darte una respuesta clara y directa.',
