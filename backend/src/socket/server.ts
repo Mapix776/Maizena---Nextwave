@@ -24,6 +24,11 @@ import {
   pinChartInputSchema,
   updatePinnedChartInputSchema,
 } from '../contracts/analytics.js';
+import { createDashboardStore } from '../services/dashboard.store.js';
+import {
+  saveDashboardItemInputSchema,
+  updateDashboardItemInputSchema,
+} from '../contracts/dashboard.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const startCommandSchema = z
@@ -68,6 +73,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   const incidentStore = createOrderIncidentStore();
   const analyticsService = new AnalyticsService();
   const pinnedChartStore = createPinnedChartStore();
+  const dashboardStore = createDashboardStore();
   const httpServer: HttpServer = createServer((request, response) => {
     const origin = request.headers.origin;
     if (isOriginAllowed(origin)) {
@@ -228,9 +234,55 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       return;
     }
 
-    if (request.method === 'DELETE' && pinnedChartMatch) {
-      const deleted = pinnedChartStore.delete(pinnedChartMatch[1]);
-      io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+    if (
+      request.method === 'GET' &&
+      request.url === '/api/dashboard/items'
+    ) {
+      sendJson(response, 200, dashboardStore.list());
+      return;
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.url === '/api/dashboard/items'
+    ) {
+      void readJsonBody(request).then((body) => {
+        const parsed = saveDashboardItemInputSchema.safeParse(body);
+        if (!parsed.success) {
+          sendJson(response, 400, { error: 'Invalid dashboard item payload' });
+          return;
+        }
+        const created = dashboardStore.save(parsed.data);
+        io.emit('dashboard:items:snapshot', dashboardStore.list());
+        sendJson(response, 201, created);
+      });
+      return;
+    }
+
+    const dashboardItemMatch = request.url?.match(
+      /^\/api\/dashboard\/items\/([^/]+)$/,
+    );
+    if (request.method === 'PUT' && dashboardItemMatch) {
+      void readJsonBody(request).then((body) => {
+        const parsed = updateDashboardItemInputSchema.safeParse(body);
+        if (!parsed.success) {
+          sendJson(response, 400, { error: 'Invalid update payload' });
+          return;
+        }
+        const updated = dashboardStore.update(dashboardItemMatch[1], parsed.data);
+        if (!updated) {
+          sendJson(response, 404, { error: 'Dashboard item not found' });
+          return;
+        }
+        io.emit('dashboard:items:snapshot', dashboardStore.list());
+        sendJson(response, 200, updated);
+      });
+      return;
+    }
+
+    if (request.method === 'DELETE' && dashboardItemMatch) {
+      const deleted = dashboardStore.delete(dashboardItemMatch[1]);
+      io.emit('dashboard:items:snapshot', dashboardStore.list());
       sendJson(response, 200, { ok: true, deleted });
       return;
     }
@@ -260,6 +312,44 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   io.on('connection', (socket) => {
     socket.emit('incidents:snapshot', incidentStore.snapshot());
     socket.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+    socket.emit('dashboard:items:snapshot', dashboardStore.list());
+
+    socket.on('dashboard:item:save', (payload: unknown, ack?: (res: { ok: boolean; item?: unknown; error?: string }) => void) => {
+      const parsed = saveDashboardItemInputSchema.safeParse(payload);
+      if (!parsed.success) {
+        ack?.({ ok: false, error: 'Invalid item payload' });
+        return;
+      }
+      const created = dashboardStore.save(parsed.data);
+      io.emit('dashboard:items:snapshot', dashboardStore.list());
+      ack?.({ ok: true, item: created });
+    });
+
+    socket.on('dashboard:item:delete', (id: string, ack?: (res: { ok: boolean }) => void) => {
+      const deleted = dashboardStore.delete(id);
+      io.emit('dashboard:items:snapshot', dashboardStore.list());
+      ack?.({ ok: deleted });
+    });
+
+    socket.on('dashboard:item:resize', (payload: { id: string; size: 'small' | 'medium' | 'large' }, ack?: (res: { ok: boolean }) => void) => {
+      const updated = dashboardStore.update(payload.id, { size: payload.size });
+      if (updated) {
+        io.emit('dashboard:items:snapshot', dashboardStore.list());
+        ack?.({ ok: true });
+      } else {
+        ack?.({ ok: false });
+      }
+    });
+
+    socket.on('dashboard:item:reorder', (payload: { id: string; order: number }, ack?: (res: { ok: boolean }) => void) => {
+      const updated = dashboardStore.update(payload.id, { order: payload.order });
+      if (updated) {
+        io.emit('dashboard:items:snapshot', dashboardStore.list());
+        ack?.({ ok: true });
+      } else {
+        ack?.({ ok: false });
+      }
+    });
 
     socket.on('analytics:pin', (payload: unknown, ack?: (res: { ok: boolean; chart?: unknown; error?: string }) => void) => {
       const parsed = pinChartInputSchema.safeParse(payload);
