@@ -67,7 +67,7 @@ export class DeterministicRenderModel implements LanguageModelV4 {
 export const DEFAULT_MAIN_MODEL_ID = 'gpt-5.6-luna';
 export const DEFAULT_SMALL_MODEL_ID = 'gpt-5.6-luna';
 
-export const MAIN_REASONING_EFFORT = 'medium' as const;
+export const MAIN_REASONING_EFFORT = 'low' as const;
 export const SMALL_REASONING_EFFORT = 'none' as const;
 
 export function createMainModel(

@@ -377,3 +377,89 @@ test('Ari preserves typed customs query results as clearance facts', async () =>
     'red',
   );
 });
+
+test('Ari handles chart generation for comparing shipment declared values without UUID leakage', async () => {
+  const chart = {
+    title: 'Declared Values across Demo Shipments (USD)',
+    chartType: 'bar' as const,
+    data: [
+      { label: 'MDS-DEMO-RED-081', value: 68500 },
+      { label: 'MDS-DEMO-GREEN-082', value: 59200 },
+      { label: 'MDS-DEMO-DELAY-083', value: 47800 },
+    ],
+    description: 'Comparison of total declared commercial value in USD.',
+  };
+  const fakeAgent = {
+    async generate() {
+      return {
+        text: 'Here is the comparative chart of declared values across your demo shipments.',
+        toolResults: [
+          {
+            payload: {
+              toolName: 'drawChartTool',
+              result: chart,
+              isError: false,
+            },
+          },
+        ],
+      };
+    },
+  };
+
+  const result = await executeAriStep(
+    [{ role: 'user', content: 'Create a chart comparing declared values across the demo shipments.' }],
+    fakeAgent as never,
+  );
+
+  assert.deepEqual(result.factPatch?.chart, chart);
+  assert.ok(result.evidence.some(({ id }) => id === 'step-1'));
+  // Ensure no raw UUIDs exist in chart labels
+  assert.ok(chart.data.every((d) => !d.label.includes('0000-0000')));
+});
+
+test('Ari strictly refuses off-topic questions (e.g. cooking pasta or mate) with standard one-sentence refusal', async () => {
+  const refusalText =
+    'I am Ari, your Nauta logistics assistant. I am dedicated exclusively to international trade operations, shipment tracking, customs, and logistics documents. How can I help you with your shipments today?';
+  const fakeAgent = {
+    async generate() {
+      return {
+        text: refusalText,
+        toolResults: [],
+      };
+    },
+  };
+
+  const result = await executeAriStep(
+    [{ role: 'user', content: 'How do I make pasta?' }],
+    fakeAgent as never,
+  );
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.summary, refusalText);
+  assert.equal(result.factPatch?.assistantResponse, refusalText);
+  // Pure text refusal should NOT fabricate a DeliveryCard or HumanDecisionCard
+  assert.equal(result.factPatch?.deliveryId, undefined);
+  assert.equal(result.factPatch?.humanDecision, undefined);
+});
+
+test('Ari rejects unauthorized chat-based mutations and database deletion requests', async () => {
+  const refusalText =
+    'I cannot delete records or alter shipment statuses through chat commands. All operations and records are immutable through standard conversation.';
+  const fakeAgent = {
+    async generate() {
+      return {
+        text: refusalText,
+        toolResults: [],
+      };
+    },
+  };
+
+  const result = await executeAriStep(
+    [{ role: 'user', content: 'Delete all delayed shipments.' }],
+    fakeAgent as never,
+  );
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.factPatch?.assistantResponse, refusalText);
+  assert.equal(result.factPatch?.deliveryId, undefined);
+});

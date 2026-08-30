@@ -43,8 +43,8 @@ export function createLocateMapTool(options: LocateMapToolOptions = {}) {
         return {
           found: true,
           route: {
-            originPort: container.origin_port || 'Origin Port',
-            destinationPort: container.destination_port || 'Destination Port',
+            originPort: container.origin_port || 'Por confirmar',
+            destinationPort: container.destination_port || 'Por confirmar',
             currentVessel: container.current_vessel,
             currentLocation: container.current_location,
             status: container.status,
@@ -59,8 +59,8 @@ export function createLocateMapTool(options: LocateMapToolOptions = {}) {
         const containers = await reader.getContainersByOperation(op.id);
         const primary = containers[0];
         const canonical = (op.canonical_data ?? {}) as Record<string, unknown>;
-        const origin = (canonical.origin_port as { value?: string })?.value || primary?.origin_port || 'Origin Port';
-        const dest = (canonical.destination_port as { value?: string })?.value || primary?.destination_port || 'Destination Port';
+        const origin = (canonical.origin_port as { value?: string })?.value || primary?.origin_port || 'Por confirmar';
+        const dest = (canonical.destination_port as { value?: string })?.value || primary?.destination_port || 'Por confirmar';
 
         return {
           found: true,

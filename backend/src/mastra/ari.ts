@@ -88,7 +88,9 @@ Your tool execution workflow:
    - Call \`compareDataTool\` or \`reconcileShipmentDocumentsTool\` for document discrepancies.
 7. ⚠️ Missing Origin or Destination Protocol:
    - If origin or destination is missing in one document, cross-reference the other operation documents (BL > Booking Confirmation > PO > Arrival Notice).
-   - If origin or destination is missing across ALL documents of an operation, NEVER silently invent or default to a port. Immediately call \`requestHumanDecisionTool\` with severity "critical", formulating clear options (e.g. historical supplier route suggestion vs alternative regional port vs document amendment) so the human user decides.`;
+   - If origin or destination is missing across ALL documents of an operation, NEVER silently invent or default to a port. Immediately call \`requestHumanDecisionTool\` with severity "critical", formulating clear options (e.g. historical supplier route suggestion vs alternative regional port vs document amendment) so the human user decides.
+8. ⚡ Ultra-Fast Execution & Minimal Tool Turns:
+   - Target single-turn resolution: query the database tool and emit your response in 1-2 turns max. Avoid circular or chained queries when the initial lookup already contains the necessary operation facts.`;
 
 const ARI_TOOL_KEYS = [
   'requestHumanDecisionTool',
@@ -311,7 +313,7 @@ export async function executeAriStep(
     });
   }
 
-  // Populate DeliveryCard facts dynamically when container tools run
+  // Populate DeliveryCard facts when container tools run
   const containerToolResult = response.toolResults.find(
     ({ payload }) =>
       !payload.isError &&
@@ -328,41 +330,19 @@ export async function executeAriStep(
     };
     if (rawData?.found && rawData.container) {
       const c = rawData.container;
-      const originPort = (c.origin_port as string) || (c.origin as string) || '';
-      const destPort = (c.destination_port as string) || (c.destination as string) || '';
-      const opRef = (c.operationReference as string) || (c.container_number as string) || '';
-      const eta = (c.eta as string) || '';
+      const originPort = (c.origin_port as string) || 'Por confirmar';
+      const destPort = (c.destination_port as string) || 'Por confirmar';
+      const opRef = (c.operationReference as string) || (c.container_number as string) || 'Embarque';
+      const eta = (c.eta as string);
 
-      if (opRef) {
-        catalogFactPatch.deliveryId = opRef;
-      }
-      if (originPort) {
-        catalogFactPatch.from = originPort;
-      }
-      if (destPort) {
-        catalogFactPatch.to = destPort;
-      }
-      catalogFactPatch.transportType = (c.transport_type as string) === 'Air' ? 'Air' : 'Sea';
-      const rawStatus = (c.status as string) || 'IN_TRANSIT';
-      catalogFactPatch.status =
-        rawStatus === 'DELIVERED'
-          ? 'Delivered'
-          : rawStatus === 'AT_PORT'
-            ? 'Arrived at Port'
-            : rawStatus === 'CUSTOMS_HOLD' || rawStatus === 'CUSTOMS_CLEARANCE'
-              ? 'Customs'
-              : 'In Transit';
-
-      if (eta) {
-        try {
-          const etaDate = new Date(eta);
-          catalogFactPatch.deliveryTime = !isNaN(etaDate.getTime())
-            ? etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-            : eta;
-        } catch {
-          catalogFactPatch.deliveryTime = eta;
-        }
-      }
+      catalogFactPatch.deliveryId = opRef;
+      catalogFactPatch.from = originPort;
+      catalogFactPatch.to = destPort;
+      catalogFactPatch.transportType = 'Sea';
+      catalogFactPatch.status = (c.status as string) || 'In Transit';
+      catalogFactPatch.deliveryTime = eta
+        ? `${new Date(eta).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : 'Por confirmar';
     }
   }
 

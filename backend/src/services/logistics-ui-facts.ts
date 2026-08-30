@@ -343,8 +343,8 @@ export function buildOperationCatalogFacts(
     return [
       shipmentMilestoneTimelinePropsSchema.parse({
         containerNumber: container.container_number,
-        originPort: container.origin_port,
-        destinationPort: container.destination_port,
+        originPort: container.origin_port || 'Por confirmar',
+        destinationPort: container.destination_port || 'Por confirmar',
         milestones,
       }),
     ];

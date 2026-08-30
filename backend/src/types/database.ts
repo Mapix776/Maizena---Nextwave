@@ -78,8 +78,8 @@ export interface ContainerRow {
   container_type: string | null;
   seal_number: string | null;
   status: string;
-  origin_port: string;
-  destination_port: string;
+  origin_port: string | null;
+  destination_port: string | null;
   eta: string | null;
   original_eta: string | null;
   actual_arrival: string | null;
