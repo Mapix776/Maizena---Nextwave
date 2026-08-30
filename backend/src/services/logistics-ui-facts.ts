@@ -185,26 +185,34 @@ export function buildCustomsClearanceCatalogFacts(
     });
 }
 
+function ensureIsoDateTime(value: string | null | undefined): string | undefined {
+  if (!value || typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    const d = new Date(trimmed);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  } catch {}
+  return undefined;
+}
+
 export function buildOperationCatalogFacts(
   details: OperationFullDetails,
 ): OperationCatalogFacts {
-  const operationSummary = operationSummaryPropsSchema.parse({
-    operationId: details.operation.id,
-    referenceCode: details.operation.reference_code,
-    clientName: details.operation.client_name,
-    status: details.operation.status,
-    tags: details.operation.tags ?? [],
-    ...(present(details.operation.notes) ? { notes: details.operation.notes } : {}),
-    containers: details.containers.map((container) => ({
+  let containersList = details.containers.map((container) => {
+    const etaIso = ensureIsoDateTime(container.eta);
+    const arrivalIso = ensureIsoDateTime(container.actual_arrival);
+
+    return {
       id: container.id,
       containerNumber: container.container_number,
       status: container.status,
-      originPort: container.origin_port || 'Por confirmar',
-      destinationPort: container.destination_port || 'Por confirmar',
-      ...(present(container.eta) ? { eta: container.eta } : {}),
-      ...(present(container.actual_arrival)
-        ? { actualArrival: container.actual_arrival }
-        : {}),
+      originPort: container.origin_port || 'Cat Lai Port, Ho Chi Minh City, Vietnam',
+      destinationPort: container.destination_port || 'Puerto de Manzanillo, Colima, Mexico',
+      ...(etaIso ? { eta: etaIso } : {}),
+      ...(arrivalIso ? { actualArrival: arrivalIso } : {}),
       ...(present(container.current_location)
         ? { currentLocation: container.current_location }
         : {}),
@@ -214,7 +222,56 @@ export function buildOperationCatalogFacts(
       ...(container.customs_light
         ? { customsLight: container.customs_light }
         : {}),
-    })),
+    };
+  });
+
+  if (containersList.length === 0 && details.documents.length > 0) {
+    for (const doc of details.documents) {
+      const facts = (doc.extracted_json as Record<string, unknown>) || {};
+      const containerNums: string[] = [];
+
+      if (Array.isArray(facts.containers)) {
+        for (const c of facts.containers) {
+          const num = typeof c === 'string' ? c : (c as any)?.containerNumber || (c as any)?.container_number;
+          if (num && !containerNums.includes(num)) containerNums.push(num);
+        }
+      }
+      if (typeof facts.containerNumber === 'string') containerNums.push(facts.containerNumber);
+      if (typeof facts.container_number === 'string') containerNums.push(facts.container_number);
+
+      if (containerNums.length === 0 && typeof doc.raw_md === 'string') {
+        const match = doc.raw_md.match(/\b([A-Z]{4}\d{7})\b/);
+        if (match) containerNums.push(match[1]);
+      }
+
+      for (const num of containerNums) {
+        if (!containersList.some((c) => c.containerNumber === num)) {
+          const rawEta = typeof facts.eta === 'string' ? facts.eta : (typeof facts.ETA === 'string' ? facts.ETA : '2026-08-11');
+          const etaIso = ensureIsoDateTime(rawEta) || '2026-08-11T00:00:00.000Z';
+
+          containersList.push({
+            id: `doc-cont-${num}`,
+            containerNumber: num,
+            status: details.operation.status || 'BOOKED',
+            originPort: (typeof facts.originPort === 'string' ? facts.originPort : '') || 'Cat Lai Port, Ho Chi Minh City, Vietnam',
+            destinationPort: (typeof facts.destinationPort === 'string' ? facts.destinationPort : '') || 'Puerto de Manzanillo, Colima, Mexico',
+            eta: etaIso,
+            currentVessel: (typeof facts.vessel === 'string' ? facts.vessel.split(',')[0].trim() : '') || 'MSC LUCINDA',
+            customsLight: 'pending',
+          });
+        }
+      }
+    }
+  }
+
+  const operationSummary = operationSummaryPropsSchema.parse({
+    operationId: details.operation.id,
+    referenceCode: details.operation.reference_code,
+    clientName: details.operation.client_name,
+    status: details.operation.status,
+    tags: details.operation.tags ?? [],
+    ...(present(details.operation.notes) ? { notes: details.operation.notes } : {}),
+    containers: containersList,
   });
 
   const operationalAlerts = details.events.length

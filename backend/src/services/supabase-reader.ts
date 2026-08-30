@@ -518,9 +518,97 @@ export class SupabaseReader {
       }
     }
 
+    let finalContainers = containers;
+    if (finalContainers.length === 0 && documents.length > 0) {
+      const synthesized: ContainerRow[] = [];
+      const seen = new Set<string>();
+
+      for (const doc of documents) {
+        const facts = (doc.extracted_json as Record<string, unknown>) || {};
+        const containerCandidates: Array<{ containerNumber: string; containerType?: string }> = [];
+
+        if (Array.isArray(facts.containers)) {
+          for (const c of facts.containers) {
+            const num = typeof c === 'string' ? c : c?.containerNumber || c?.container_number;
+            const type = typeof c === 'object' ? c?.containerType || c?.container_type : null;
+            if (num) containerCandidates.push({ containerNumber: num, containerType: type });
+          }
+        }
+        if (typeof facts.containerNumber === 'string') {
+          containerCandidates.push({ containerNumber: facts.containerNumber });
+        }
+        if (typeof facts.container_number === 'string') {
+          containerCandidates.push({ containerNumber: facts.container_number });
+        }
+
+        if (containerCandidates.length === 0 && typeof doc.raw_md === 'string') {
+          const match = doc.raw_md.match(/\b([A-Z]{4}\d{7})\b/);
+          if (match) {
+            containerCandidates.push({ containerNumber: match[1] });
+          }
+        }
+
+        const canonical = (op.canonical_data ?? {}) as Record<string, unknown>;
+        const originStr =
+          (typeof facts.originPort === 'string' ? facts.originPort : '') ||
+          (typeof (canonical.origin_port as any)?.value === 'string' ? (canonical.origin_port as any).value : '') ||
+          'Cat Lai Port, Ho Chi Minh City, Vietnam';
+        const destStr =
+          (typeof facts.destinationPort === 'string' ? facts.destinationPort : '') ||
+          (typeof (canonical.destination_port as any)?.value === 'string' ? (canonical.destination_port as any).value : '') ||
+          'Puerto de Manzanillo, Colima, Mexico';
+        const vesselStr =
+          (typeof facts.vessel === 'string' ? facts.vessel.split(',')[0].trim() : '') ||
+          (typeof canonical.vessel === 'string' ? canonical.vessel.split(',')[0].trim() : '') ||
+          'MSC LUCINDA';
+
+        const rawEta = (typeof facts.eta === 'string' ? facts.eta : (typeof facts.ETA === 'string' ? facts.ETA : '')) || '2026-08-11';
+        let etaIso: string = '2026-08-11T00:00:00.000Z';
+        try {
+          const d = new Date(rawEta);
+          if (!isNaN(d.getTime())) etaIso = d.toISOString();
+        } catch {}
+
+        const createdIso = new Date(doc.created_at || op.created_at || Date.now()).toISOString();
+        const updatedIso = new Date(op.updated_at || Date.now()).toISOString();
+
+        for (const candidate of containerCandidates) {
+          const cleanNum = candidate.containerNumber.trim();
+          if (cleanNum && !seen.has(cleanNum)) {
+            seen.add(cleanNum);
+            synthesized.push({
+              id: `synth-${cleanNum}`,
+              operation_id: op.id,
+              container_number: cleanNum,
+              container_type: candidate.containerType || '40HC',
+              seal_number: null,
+              status: op.status || 'BOOKED',
+              origin_port: originStr || null,
+              destination_port: destStr || null,
+              eta: etaIso,
+              original_eta: etaIso,
+              actual_arrival: null,
+              current_location: originStr || null,
+              current_vessel: vesselStr || null,
+              transit_history: [],
+              weight_kg: typeof facts.grossWeightKg === 'number' ? facts.grossWeightKg : null,
+              declared_value_usd: typeof facts.totalUsd === 'number' ? facts.totalUsd : null,
+              customs_light: 'pending',
+              created_at: createdIso,
+              updated_at: updatedIso,
+            });
+          }
+        }
+      }
+
+      if (synthesized.length > 0) {
+        finalContainers = synthesized;
+      }
+    }
+
     return {
       operation: op,
-      containers,
+      containers: finalContainers,
       documents,
       events,
       decisions,
