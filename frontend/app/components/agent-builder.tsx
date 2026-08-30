@@ -151,6 +151,16 @@ export default function AgentBuilderView({
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
 
+  const shareConversation = async () => {
+    const transcript = messages.map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`).join('\n\n')
+    if (navigator.share) {
+      await navigator.share({ title: 'Conversación con Ari', text: transcript })
+    } else {
+      await navigator.clipboard?.writeText(transcript)
+      onNotify(t.responseShare)
+    }
+  }
+
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
     socketRef.current = socket
@@ -377,6 +387,9 @@ export default function AgentBuilderView({
             <Sparkles size={18} />
             <span>Agent Studio · json-render tracer</span>
           </div>
+          <button type="button" className="chat-share-button" onClick={() => void shareConversation()} aria-label={t.share}>
+            <Share2 size={14} /> <span>{t.share}</span>
+          </button>
           <span
             className={`status-pill ${connected ? 'ok' : 'idle'}`}
             data-testid="chat-status"
@@ -403,7 +416,7 @@ export default function AgentBuilderView({
                 {message.role === 'assistant' ? <Sparkles size={15} /> : 'AR'}
               </div>
               <div
-                className={`chat-bubble ${message.spec ? 'json-render-bubble' : ''}`}
+                className={`chat-bubble ${message.spec ? 'json-render-bubble json-render-inline' : ''}`}
                 data-testid={message.spec ? 'json-render-response' : undefined}
               >
                 <small>{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
@@ -446,12 +459,6 @@ export default function AgentBuilderView({
                       }}
                     >
                       <Copy size={13} />
-                    </button>
-                    <button
-                      aria-label={t.share}
-                      onClick={() => onNotify('Respuesta lista para compartir')}
-                    >
-                      <Share2 size={13} />
                     </button>
                   </div>
                 )}
