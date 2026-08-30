@@ -51,6 +51,47 @@ export const interactiveChartPropsSchema = z
   })
   .strict();
 
+export const portLocationSchema = z
+  .object({
+    name: z.string().min(1),
+    lat: z.number(),
+    lng: z.number(),
+  })
+  .strict();
+
+export const currentPositionSchema = z
+  .object({
+    name: z.string().min(1),
+    lat: z.number(),
+    lng: z.number(),
+    vessel: z.string().optional(),
+  })
+  .strict();
+
+export const routeWaypointSchema = z
+  .object({
+    name: z.string().min(1),
+    lat: z.number(),
+    lng: z.number(),
+    status: z.enum(['completed', 'current', 'pending']),
+  })
+  .strict();
+
+export const interactiveRouteMapPropsSchema = z
+  .object({
+    title: z.string().min(1),
+    operationReference: z.string().optional(),
+    originPort: portLocationSchema,
+    destinationPort: portLocationSchema,
+    currentPosition: currentPositionSchema.optional(),
+    status: z.string().min(1),
+    transportType: z.enum(['Sea', 'Land', 'Air']).default('Sea'),
+    waypoints: z.array(routeWaypointSchema).optional(),
+  })
+  .strict();
+
+export type InteractiveRouteMapProps = z.infer<typeof interactiveRouteMapPropsSchema>;
+
 // Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
 // out of the backend while making component names and props catalog-bound.
 const reactSpecSchema = defineSchema((schema) => ({
@@ -92,6 +133,9 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
     },
     InteractiveChart: {
       props: interactiveChartPropsSchema,
+    },
+    InteractiveRouteMap: {
+      props: interactiveRouteMapPropsSchema,
     },
     OperationSummaryCard: {
       props: operationSummaryPropsSchema,

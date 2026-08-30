@@ -17,6 +17,7 @@ import type { StepResult } from '../contracts/step-result.js';
 import {
   containerStatuses,
   interactiveChartPropsSchema,
+  interactiveRouteMapPropsSchema,
 } from '../contracts/ui.js';
 
 type ContainerStatus = (typeof containerStatuses)[number];
@@ -107,6 +108,11 @@ export function composeRunUi(result: StepResult): unknown {
     result.factPatch?.chart,
     'interactive chart',
   );
+  const routeMap = parseFact(
+    interactiveRouteMapPropsSchema,
+    result.factPatch?.routeMap,
+    'interactive route map',
+  );
 
   const elements: Record<string, UiElement> = {
     'assistant-message': {
@@ -172,6 +178,9 @@ export function composeRunUi(result: StepResult): unknown {
   }
   if (chart) {
     addElement('interactive-chart', 'InteractiveChart', chart);
+  }
+  if (routeMap) {
+    addElement('interactive-route-map', 'InteractiveRouteMap', routeMap);
   }
 
   // Render the legacy delivery cards only when the tool supplied a complete,

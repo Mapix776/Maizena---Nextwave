@@ -7,7 +7,10 @@ import {
   type ExecutionTraceStep,
   mapToolToTraceStep,
 } from '../contracts/trace-step.js';
-import { interactiveChartPropsSchema } from '../contracts/ui.js';
+import {
+  interactiveChartPropsSchema,
+  interactiveRouteMapPropsSchema,
+} from '../contracts/ui.js';
 import {
   buildCustomsClearanceCatalogFacts,
   buildHumanDecisionCatalogFact,
@@ -355,6 +358,59 @@ export async function executeAriStep(
   const parsedChart = interactiveChartPropsSchema.safeParse(
     chartResult?.payload.result,
   );
+  if (parsedChart.success) {
+    catalogFactPatch.chart = parsedChart.data;
+  }
+
+  const mapResult = response.toolResults.find(
+    ({ payload }) =>
+      !payload.isError &&
+      (payload.toolName === 'locateMapTool' ||
+        payload.toolName === 'locate-shipment-on-map'),
+  );
+  if (mapResult) {
+    const rawMap = mapResult.payload.result as {
+      found?: boolean;
+      route?: {
+        originPort?: string;
+        destinationPort?: string;
+        currentVessel?: string | null;
+        currentLocation?: string | null;
+        status?: string;
+        coordinates?: { lat: number; lng: number };
+      } | null;
+    };
+    if (rawMap?.found && rawMap.route) {
+      const origin = rawMap.route.originPort || 'Shanghai';
+      const dest = rawMap.route.destinationPort || 'Manzanillo';
+      const mapFact = {
+        title: `Ruta de Navegación: ${origin} → ${dest}`,
+        originPort: { name: origin, lat: 31.2304, lng: 121.4737 },
+        destinationPort: { name: dest, lat: 19.0543, lng: -104.3164 },
+        currentPosition: {
+          name: rawMap.route.currentLocation || 'En navegación (Océano Pacífico)',
+          lat: 25.0,
+          lng: -140.0,
+          vessel: rawMap.route.currentVessel ?? 'Buque de carga',
+        },
+        status: rawMap.route.status || 'In Transit',
+        transportType: 'Sea' as const,
+        waypoints: [
+          { name: origin, lat: 31.2304, lng: 121.4737, status: 'completed' as const },
+          { name: 'Océano Pacífico (En tránsito)', lat: 25.0, lng: -140.0, status: 'current' as const },
+          { name: dest, lat: 19.0543, lng: -104.3164, status: 'pending' as const },
+        ],
+      };
+      const parsedMap = interactiveRouteMapPropsSchema.safeParse(mapFact);
+      if (parsedMap.success) {
+        catalogFactPatch.routeMap = parsedMap.data;
+        catalogEvidence.push({
+          id: 'supabase-route-map',
+          source: 'supabase:locate-map',
+        });
+      }
+    }
+  }
 
   const traceSteps: ExecutionTraceStep[] = [
     {

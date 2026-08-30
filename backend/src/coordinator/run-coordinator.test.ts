@@ -41,6 +41,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
     'EtaRiskCard',
     'HumanDecisionCard',
     'InteractiveChart',
+    'InteractiveRouteMap',
     'OperationSummaryCard',
     'OperationalAlertList',
     'OperationsMetricsCard',
