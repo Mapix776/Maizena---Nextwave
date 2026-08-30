@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Clock3, FileText, GitCompareArrows, LineChart, MapPin, Search, Sparkles } from 'lucide-react'
+import { Clock3, FileText, GitCompareArrows, LineChart, MapPin, Search, Ship, Sparkles } from 'lucide-react'
 import { ThinkingAnimation, type ThinkingAnimationType } from '@/components/chat/thinking-animation'
 
 const states: { key: ThinkingAnimationType; label: string; title: string; description: string; icon: typeof Sparkles }[] = [
@@ -10,6 +10,7 @@ const states: { key: ThinkingAnimationType; label: string; title: string; descri
   { key: 'drawing', label: 'Dibujando gráficas', title: 'Ari está construyendo', description: 'Transformando los datos en una visualización clara.', icon: LineChart },
   { key: 'mapping', label: 'Ubicando en el mapa', title: 'Ari está ubicando', description: 'Siguiendo la ruta y localizando los puntos del envío.', icon: MapPin },
   { key: 'finding', label: 'Encontrando container', title: 'Ari está buscando', description: 'Consultando el inventario para encontrar el container correcto.', icon: Search },
+  { key: 'findingBoat', label: 'Container por barco', title: 'Ari está navegando', description: 'Siguiendo el barco para localizar el container en ruta.', icon: Ship },
   { key: 'eta', label: 'Calculando ETA', title: 'Ari está calculando', description: 'Estimando la llegada con la ruta y el tráfico actuales.', icon: Clock3 },
   { key: 'comparing', label: 'Comparando datos', title: 'Ari está comparando', description: 'Contrastando métricas para encontrar la mejor lectura.', icon: GitCompareArrows },
 ]
