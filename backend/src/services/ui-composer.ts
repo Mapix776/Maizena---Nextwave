@@ -15,9 +15,12 @@ import {
 import { reconciliationFindingsPropsSchema } from '../contracts/reconciliation.js';
 import type { StepResult } from '../contracts/step-result.js';
 import {
+  comparisonTablePropsSchema,
   containerStatuses,
   interactiveChartPropsSchema,
   interactiveRouteMapPropsSchema,
+  kpiGridPropsSchema,
+  stepProgressBarPropsSchema,
 } from '../contracts/ui.js';
 
 type ContainerStatus = (typeof containerStatuses)[number];
@@ -113,6 +116,21 @@ export function composeRunUi(result: StepResult): unknown {
     result.factPatch?.routeMap,
     'interactive route map',
   );
+  const comparisonTable = parseFact(
+    comparisonTablePropsSchema,
+    result.factPatch?.comparisonTable,
+    'comparison table',
+  );
+  const kpiGrid = parseFact(
+    kpiGridPropsSchema,
+    result.factPatch?.kpiGrid,
+    'kpi grid',
+  );
+  const stepProgressBar = parseFact(
+    stepProgressBarPropsSchema,
+    result.factPatch?.stepProgressBar,
+    'step progress bar',
+  );
 
   const elements: Record<string, UiElement> = {
     'assistant-message': {
@@ -134,11 +152,17 @@ export function composeRunUi(result: StepResult): unknown {
   if (humanDecision) {
     addElement('decision-card', 'HumanDecisionCard', humanDecision);
   }
+  if (kpiGrid) {
+    addElement('kpi-grid', 'KpiGrid', kpiGrid);
+  }
   if (operationSummary) {
     addElement('operation-summary', 'OperationSummaryCard', operationSummary);
   }
   if (operationalAlerts) {
     addElement('operational-alerts', 'OperationalAlertList', operationalAlerts);
+  }
+  if (comparisonTable) {
+    addElement('comparison-table', 'ComparisonTable', comparisonTable);
   }
   if (reconciliationFindings) {
     addElement(
@@ -153,6 +177,9 @@ export function composeRunUi(result: StepResult): unknown {
   etaRisks?.forEach((props, index) =>
     addElement(`eta-risk-${index + 1}`, 'EtaRiskCard', props),
   );
+  if (stepProgressBar) {
+    addElement('step-progress-bar', 'StepProgressBar', stepProgressBar);
+  }
   if (documentsTimeline) {
     addElement(
       'shipment-documents',

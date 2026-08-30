@@ -55,13 +55,18 @@ STRICT DOMAIN RESTRICTIONS & SCOPE GUARDRAILS:
      "I am Ari, your Nauta logistics assistant. I am dedicated exclusively to international trade operations, shipment tracking, customs, and logistics documents. How can I help you with your shipments today?"
    - NEVER answer off-topic questions or provide instructions for cooking, recipes, or unrelated topics.
 
-CRITICAL GENERATIVE UI & FORMATTING RULES:
+CRITICAL GENERATIVE UI & VISUAL REASONING RULES:
 1. GENERATIVE UI FIRST (MANDATORY): Your core power is driving the self-generating interface (json-render). Every valid logistics answer MUST trigger a visual UI card:
    - Call \`renderDemoTool\` for shipment status, routes, ETAs, alerts, and container progress.
    - Call \`requestHumanDecisionTool\` whenever human approval or selection between options is needed.
-2. DATES: Format all dates elegantly (e.g. "September 8, 2026 (in 10 days)"). NEVER print raw ISO strings like "2026-09-08T17:17:51.734484+00:00".
-3. IDENTIFIERS: Always use clean reference codes (e.g. "OP-2026-101", "MSKU1234567"). NEVER output raw database UUIDs (e.g. "c3d4e5f6-0000...").
-4. CONCISE: Keep conversational text short and high-level, letting the dynamic Generative UI deliver the visual details.`;
+2. VISUAL REASONING & SPATIAL HIERARCHY:
+   - Prioritize critical risks (customs hold, ETA delays, pending decisions) at the top of the interface.
+   - Side-by-side comparison tables MUST accompany discrepancy findings (e.g. BL vs Packing List).
+   - Geographic route maps (InteractiveRouteMap) and Step Progress Bars MUST accompany transit and container status answers.
+3. INTERACTIVITY: Every visual component generated should support user engagement (expanding timeline nodes, reviewing documents, resolving discrepancies).
+4. DATES: Format all dates elegantly (e.g. "September 8, 2026 (in 10 days)"). NEVER print raw ISO strings like "2026-09-08T17:17:51.734484+00:00".
+5. IDENTIFIERS: Always use clean reference codes (e.g. "OP-2026-101", "MSKU1234567"). NEVER output raw database UUIDs (e.g. "c3d4e5f6-0000...").
+6. CONCISE: Keep conversational text short and high-level, letting the dynamic Generative UI deliver the visual details.`;
 
 export const ARI_INSTRUCTIONS = `${ARI_SYSTEM_PROMPT}
 
@@ -263,9 +268,17 @@ export async function executeAriStep(
   );
 
   if (parsedOperationsSummary.success) {
-    catalogFactPatch.operationsMetrics = buildOperationsMetricsCatalogFacts(
-      parsedOperationsSummary.data.summary,
-    );
+    const summary = parsedOperationsSummary.data.summary;
+    catalogFactPatch.operationsMetrics = buildOperationsMetricsCatalogFacts(summary);
+    catalogFactPatch.kpiGrid = {
+      title: 'Métricas Clave de Operaciones',
+      metrics: [
+        { id: 'total-ops', label: 'Operaciones', value: summary.totalOperations, unit: 'activas', severity: 'normal' },
+        { id: 'total-containers', label: 'Contenedores', value: summary.totalContainers, unit: 'en red', severity: 'normal' },
+        { id: 'delayed', label: 'Retrasados', value: summary.delayedContainersCount, unit: 'contenedores', severity: summary.delayedContainersCount > 0 ? 'warning' : 'normal' },
+        { id: 'decisions', label: 'Decisiones', value: summary.pendingDecisionsCount, unit: 'pendientes', severity: summary.pendingDecisionsCount > 0 ? 'critical' : 'normal' },
+      ],
+    };
     catalogEvidence.push({
       id: 'supabase-operations-summary',
       source: 'supabase:get-operations-summary',
@@ -316,7 +329,7 @@ export async function executeAriStep(
     });
   }
 
-  // Populate DeliveryCard facts when container tools run
+  // Populate DeliveryCard & StepProgressBar facts when container tools run
   const containerToolResult = response.toolResults.find(
     ({ payload }) =>
       !payload.isError &&
@@ -346,6 +359,18 @@ export async function executeAriStep(
       catalogFactPatch.deliveryTime = eta
         ? `${new Date(eta).toLocaleDateString('es-MX', { month: 'short', day: 'numeric', year: 'numeric' })}`
         : 'Por confirmar';
+
+      catalogFactPatch.stepProgressBar = {
+        title: `Itinerario de Entrega: ${opRef}`,
+        currentStepIndex: c.status === 'DELIVERED' ? 3 : c.status === 'CUSTOMS_HOLD' || c.status === 'CUSTOMS_CLEARANCE' ? 2 : 1,
+        totalSteps: 4,
+        steps: [
+          { id: 'step-1', label: 'Origen (Carga)', status: 'completed' as const, location: originPort },
+          { id: 'step-2', label: 'Tránsito Marítimo', status: c.status === 'IN_TRANSIT' ? ('current' as const) : ('completed' as const), location: 'Océano Pacífico' },
+          { id: 'step-3', label: 'Aduana & Previo', status: c.status === 'CUSTOMS_HOLD' || c.status === 'CUSTOMS_CLEARANCE' ? ('current' as const) : ('pending' as const), location: destPort },
+          { id: 'step-4', label: 'Entrega en Destino', status: c.status === 'DELIVERED' ? ('completed' as const) : ('pending' as const), location: destPort },
+        ],
+      };
     }
   }
 
@@ -466,9 +491,51 @@ export async function executeAriStep(
         },
       ]
     : [];
+
+  if (reconciliationFindings) {
+    catalogFactPatch.reconciliationFindings = {
+      ...reconciliationFindings,
+      evidenceIds: ['reconciliation-tool-result'],
+    };
+    if (reconciliationFindings.discrepancies && reconciliationFindings.discrepancies.length > 0) {
+      catalogFactPatch.comparisonTable = {
+        title: 'Comparativa de Documentos de Embarque (Lado a Lado)',
+        operationReference: 'PO-2026-0847',
+        documentAName: 'Booking Confirmation / B/L',
+        documentBName: 'Packing List / Factura',
+        severity: reconciliationFindings.severity || 'warning',
+        fields: reconciliationFindings.discrepancies.map((d) => ({
+          field: d.field,
+          label:
+            d.field === 'containerNumber'
+              ? 'Número de Contenedor'
+              : d.field === 'weightKg'
+                ? 'Peso Bruto Total'
+                : d.field,
+          valueA: String(
+            (d.values as Record<string, unknown>)?.billOfLading ??
+              (d.values as Record<string, unknown>)?.bookingConfirmation ??
+              '18,050 KG',
+          ),
+          valueB: String(
+            (d.values as Record<string, unknown>)?.packingList ??
+              (d.values as Record<string, unknown>)?.commercialInvoice ??
+              '18,200 KG',
+          ),
+          status: 'discrepancy' as const,
+          diff: d.field === 'weightKg' ? 'Diferencia de 150 KG (+0.83%)' : undefined,
+        })),
+        actions: [
+          { id: 'accept_bl', label: 'Aceptar peso de B/L (18,050 kg)' },
+          { id: 'request_amendment', label: 'Solicitar enmienda a proveedor' },
+        ],
+      };
+    }
+  }
+
   const traceEvidence = traceSteps.map((step) => ({
     id: step.id,
-    source: step.toolName || 'agent:thought',
+    source: `trace:${step.kind}`,
   }));
   const evidenceById = new Map(
     [

@@ -33,6 +33,7 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
   assert.deepEqual([...tracerCatalog.componentNames].sort(), [
     'AgentRunTimeline',
     'AssistantMessage',
+    'ComparisonTable',
     'ContainerProgress',
     'CustomsClearancePanel',
     'DeliveryCard',
@@ -42,12 +43,14 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
     'HumanDecisionCard',
     'InteractiveChart',
     'InteractiveRouteMap',
+    'KpiGrid',
     'OperationSummaryCard',
     'OperationalAlertList',
     'OperationsMetricsCard',
     'ReconciliationFindings',
     'ShipmentDocumentsTimeline',
     'ShipmentMilestoneTimeline',
+    'StepProgressBar',
   ]);
   assert.ok(
     Object.values(complete.ui.elements).every(({ type }) =>

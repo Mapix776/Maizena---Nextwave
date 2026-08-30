@@ -128,3 +128,58 @@ test('text-only results do not fabricate a shipment card', () => {
     'AssistantMessage',
   ]);
 });
+
+test('composes interactive ComparisonTable, KpiGrid, and StepProgressBar with stable IDs and actions', () => {
+  const spec = validateTracerSpec(
+    composeRunUi({
+      status: 'completed',
+      summary: 'Comparison and KPIs ready.',
+      factPatch: {
+        assistantResponse: 'Discrepancy analyzed and KPIs refreshed.',
+        kpiGrid: {
+          title: 'Métricas de Red',
+          metrics: [
+            { id: 'delays', label: 'Retrasados', value: 2, unit: 'unidades', severity: 'warning' },
+          ],
+        },
+        comparisonTable: {
+          title: 'Comparativa BL vs Packing List',
+          documentAName: 'Bill of Lading',
+          documentBName: 'Packing List',
+          severity: 'warning',
+          fields: [
+            {
+              field: 'grossWeightKg',
+              label: 'Peso Bruto',
+              valueA: '18,050 KG',
+              valueB: '18,200 KG',
+              status: 'discrepancy',
+              diff: '150 KG',
+            },
+          ],
+          actions: [
+            { id: 'accept_bl', label: 'Aceptar peso de B/L' },
+          ],
+        },
+        stepProgressBar: {
+          title: 'Progreso de Embarque',
+          currentStepIndex: 1,
+          totalSteps: 3,
+          steps: [
+            { id: 'step-1', label: 'Origen', status: 'completed' },
+            { id: 'step-2', label: 'Tránsito', status: 'current' },
+            { id: 'step-3', label: 'Destino', status: 'pending' },
+          ],
+        },
+      },
+      evidence: [{ id: 'kpi-test', source: 'test' }],
+    }),
+  );
+
+  assert.ok(spec.elements['kpi-grid']);
+  assert.equal(spec.elements['kpi-grid']?.type, 'KpiGrid');
+  assert.ok(spec.elements['comparison-table']);
+  assert.equal(spec.elements['comparison-table']?.type, 'ComparisonTable');
+  assert.ok(spec.elements['step-progress-bar']);
+  assert.equal(spec.elements['step-progress-bar']?.type, 'StepProgressBar');
+});

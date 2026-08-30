@@ -90,7 +90,80 @@ export const interactiveRouteMapPropsSchema = z
   })
   .strict();
 
-export type InteractiveRouteMapProps = z.infer<typeof interactiveRouteMapPropsSchema>;
+export const comparisonFieldSchema = z
+  .object({
+    field: z.string().min(1),
+    label: z.string().min(1),
+    valueA: z.union([z.string(), z.number()]),
+    valueB: z.union([z.string(), z.number()]),
+    status: z.enum(['match', 'discrepancy']),
+    diff: z.string().optional(),
+  })
+  .strict();
+
+export const comparisonTablePropsSchema = z
+  .object({
+    title: z.string().min(1),
+    operationReference: z.string().optional(),
+    documentAName: z.string().min(1),
+    documentBName: z.string().min(1),
+    severity: z.enum(['normal', 'warning', 'critical']).default('normal'),
+    fields: z.array(comparisonFieldSchema).min(1),
+    actions: z
+      .array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          actionPayload: z.string().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .strict();
+
+export type ComparisonTableProps = z.infer<typeof comparisonTablePropsSchema>;
+
+export const kpiMetricSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    value: z.union([z.string(), z.number()]),
+    unit: z.string().optional(),
+    subtext: z.string().optional(),
+    severity: z.enum(['normal', 'warning', 'critical']).default('normal'),
+    trend: z.enum(['up', 'down', 'neutral']).optional(),
+  })
+  .strict();
+
+export const kpiGridPropsSchema = z
+  .object({
+    title: z.string().min(1),
+    metrics: z.array(kpiMetricSchema).min(1),
+  })
+  .strict();
+
+export type KpiGridProps = z.infer<typeof kpiGridPropsSchema>;
+
+export const progressStepNodeSchema = z
+  .object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    status: z.enum(['completed', 'current', 'pending']),
+    date: z.string().optional(),
+    location: z.string().optional(),
+  })
+  .strict();
+
+export const stepProgressBarPropsSchema = z
+  .object({
+    title: z.string().min(1),
+    currentStepIndex: z.number(),
+    totalSteps: z.number(),
+    steps: z.array(progressStepNodeSchema).min(2),
+  })
+  .strict();
+
+export type StepProgressBarProps = z.infer<typeof stepProgressBarPropsSchema>;
 
 // Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
 // out of the backend while making component names and props catalog-bound.
@@ -117,6 +190,9 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
     AssistantMessage: {
       props: z.object({ text: z.string().min(1) }).strict(),
     },
+    ComparisonTable: {
+      props: comparisonTablePropsSchema,
+    },
     ContainerProgress: {
       props: z
         .object({ currentStatus: z.enum(containerStatuses) })
@@ -137,11 +213,17 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
     InteractiveRouteMap: {
       props: interactiveRouteMapPropsSchema,
     },
+    KpiGrid: {
+      props: kpiGridPropsSchema,
+    },
     OperationSummaryCard: {
       props: operationSummaryPropsSchema,
     },
     OperationalAlertList: {
       props: operationalAlertListPropsSchema,
+    },
+    StepProgressBar: {
+      props: stepProgressBarPropsSchema,
     },
     ShipmentDocumentsTimeline: {
       props: shipmentDocumentsTimelinePropsSchema,
