@@ -279,14 +279,12 @@ function App() {
       <div className="dot-field" aria-hidden="true" />
       <button className="mobile-menu" aria-label="Open menu" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button>
       <aside className={mobileOpen ? 'sidebar open' : `sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
-        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span>route<span className="brand-dot">.</span>pilot</span><button className="brand-theme-toggle" aria-label="Change theme" onClick={toggleTheme}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button></div>
-        <div className="workspace"><div className="workspace-avatar">MS</div><div><b>Muebles del Sur</b><small>{t.principalWorkspace}</small></div><ChevronRight size={15} /></div>
+        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span className="font-bold tracking-tight">Ari<span className="brand-dot">.</span>Nauta</span><button className="brand-theme-toggle" aria-label="Change theme" onClick={toggleTheme}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button></div>
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Main navigation">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
-          <button className={active === 'Dashboards' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Dashboards')}><LayoutDashboard size={17} /><span>{t.dashboardsNav}</span>{dashboard.items.length > 0 && <em>{dashboard.items.length}</em>}</button>
-          {navItems.map(({ key, icon: Icon }) => { const label = t[key as keyof typeof t]; const destination = key === 'issues' ? 'Incidents' : 'Map'; return <button key={key} className={active === destination ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(destination)}><Icon size={17} /><span>{label}</span>{key === 'issues' && incidents.length > 0 && <em>{incidents.length}</em>}</button> })}
-          <button className={active === 'News' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('News')}><Newspaper size={17} /><span>{t.news}</span><em className="news-dot">2</em></button>
+          <button className={active === 'Dashboards' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Dashboards')}><LayoutDashboard size={17} /><span>Dashboards</span>{dashboard.items.length > 0 && <em>{dashboard.items.length}</em>}</button>
+          {navItems.map(({ key, icon: Icon }) => { const label = t[key as keyof typeof t] || (key === 'issues' ? 'Incidents' : 'Map'); const destination = key === 'issues' ? 'Incidents' : 'Map'; return <button key={key} className={active === destination ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(destination)}><Icon size={17} /><span>{label}</span>{key === 'issues' && incidents.length > 0 && <em>{incidents.length}</em>}</button> })}
         </nav>
         <p className="nav-label secondary-label">{t.workspace}</p>
         <button className="nav-item" onClick={() => notify('Settings ready to configure')}><Settings size={17} /><span>{t.settings}</span></button>
@@ -295,7 +293,6 @@ function App() {
           <div className="sidebar-controls">
             <button className="sidebar-icon-button notification" aria-label={t.notifications} onClick={() => notify('You have 3 new notifications')}><Bell size={17} /><i /></button>
           </div>
-          <div className="profile"><div className="profile-avatar">AR</div><div><b>Alex Rivera</b><small>{t.administrator}</small></div><MoreHorizontal size={17} /></div>
         </div>
       </aside>
 

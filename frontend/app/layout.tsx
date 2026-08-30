@@ -5,8 +5,8 @@ import './globals.css'
 import './tracer.css'
 
 export const metadata: Metadata = {
-  title: 'route.pilot — Operations center',
-  description: 'Operational dashboard to manage runs, fleet and logistics routes.',
+  title: 'Ari Nauta — Logistics AI Operating System',
+  description: 'Enterprise AI Logistics Operating System powered by Ari and json-render.',
   generator: 'v0.app',
   icons: {
     icon: [
