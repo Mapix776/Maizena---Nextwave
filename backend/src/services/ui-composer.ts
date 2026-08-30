@@ -174,9 +174,20 @@ export function composeRunUi(result: StepResult): unknown {
       reconciliationFindings,
     );
   }
-  customsClearance?.forEach((props, index) =>
-    addElement(`customs-panel-${props.containerNumber || index + 1}`, 'CustomsClearancePanel', props),
-  );
+  customsClearance?.forEach((props, index) => {
+    const isCriticalOrExplicit =
+      props.status === 'INSPECTION' ||
+      props.status === 'CUSTOMS_HOLD' ||
+      props.lightStatus === 'red' ||
+      !operationSummary;
+    if (isCriticalOrExplicit) {
+      addElement(
+        `customs-panel-${props.containerNumber || index + 1}`,
+        'CustomsClearancePanel',
+        props,
+      );
+    }
+  });
   etaRisks?.forEach((props, index) =>
     addElement(`eta-risk-${props.containerNumber || index + 1}`, 'EtaRiskCard', props),
   );
@@ -189,10 +200,11 @@ export function composeRunUi(result: StepResult): unknown {
       'ShipmentDocumentsTimeline',
       documentsTimeline,
     );
+  } else {
+    documentDetails?.forEach((props, index) =>
+      addElement(`document-details-${props.documentId || index + 1}`, 'DocumentDetailsCard', props),
+    );
   }
-  documentDetails?.forEach((props, index) =>
-    addElement(`document-details-${props.documentId || index + 1}`, 'DocumentDetailsCard', props),
-  );
   if (agentRuns) {
     addElement('agent-runs', 'AgentRunTimeline', agentRuns);
   }
@@ -213,8 +225,8 @@ export function composeRunUi(result: StepResult): unknown {
     addElement('interactive-route-map', 'InteractiveRouteMap', routeMap);
   }
 
-  // Render the legacy delivery cards only when the tool supplied a complete,
-  // valid delivery view. A text-only response must never invent shipment data.
+  // Render the legacy delivery cards only when there is no OperationSummaryCard
+  // or when an explicit issue/alert is being highlighted.
   const from = result.factPatch?.from;
   const to = result.factPatch?.to;
   const transportType = result.factPatch?.transportType;
@@ -230,7 +242,7 @@ export function composeRunUi(result: StepResult): unknown {
     containerStatuses.includes(rawStatus as ContainerStatus) &&
     typeof deliveryTime === 'string';
 
-  if (hasDelivery) {
+  if (hasDelivery && (!operationSummary || typeof issue === 'string')) {
     const status = rawStatus as ContainerStatus;
     const hasIssue = typeof issue === 'string';
     const cardProps = {
