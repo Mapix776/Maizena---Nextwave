@@ -26,7 +26,6 @@ import {
   Paperclip,
   PanelLeftClose,
   PanelLeftOpen,
-  Search,
   Settings,
   ShieldAlert,
   Sparkles,
@@ -34,7 +33,6 @@ import {
   Truck,
   UserRound,
   WalletCards,
-  X,
   Zap,
 } from 'lucide-react'
 
@@ -150,11 +148,18 @@ function App() {
         <p className="nav-label secondary-label">{t.workspace}</p>
         <button className="nav-item" onClick={() => notify('Ajustes listos para configurar')}><Settings size={17} /><span>{t.settings}</span></button>
         <button className="nav-item" onClick={() => notify('Centro de ayuda abierto')}><CircleHelp size={17} /><span>{t.help}</span></button>
-        <div className="sidebar-bottom"><div className="profile"><div className="profile-avatar">AR</div><div><b>Alex Rivera</b><small>Administrador</small></div><MoreHorizontal size={17} /></div></div>
+        <div className="sidebar-bottom">
+          <div className="sidebar-controls">
+            <div className="language-select"><button type="button" className="sidebar-control-button" aria-expanded={languageOpen} aria-haspopup="listbox" onClick={() => setLanguageOpen((open) => !open)}><Languages size={16} aria-hidden="true" /><span>{localeLabels[locale]}</span><ChevronDown size={14} aria-hidden="true" /></button>{languageOpen && <div className="language-menu language-menu-up" role="listbox" aria-label={t.language}>{(Object.keys(localeLabels) as Locale[]).map((key) => <button type="button" role="option" aria-selected={locale === key} className={locale === key ? 'language-option selected' : 'language-option'} key={key} onClick={() => { setLocale(key); setLanguageOpen(false); window.localStorage.setItem('route-pilot-locale', key) }}><span className={`language-flag ${key}`}>{key === 'es' ? 'ES' : key === 'en' ? 'EN' : 'PT'}</span><span>{localeLabels[key]}</span>{locale === key && <span className="language-check">✓</span>}</button>)}</div>}</div>
+            <button className="sidebar-icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <button className="sidebar-icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={17} /><i /></button>
+          </div>
+          <div className="profile"><div className="profile-avatar">AR</div><div><b>Alex Rivera</b><small>Administrador</small></div><MoreHorizontal size={17} /></div>
+        </div>
       </aside>
 
       <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions"><div className="language-select"><button type="button" className="language-trigger" aria-expanded={languageOpen} aria-haspopup="listbox" onClick={() => setLanguageOpen((open) => !open)}><Languages size={15} aria-hidden="true" /><span>{localeLabels[locale]}</span><ChevronDown size={14} aria-hidden="true" /></button>{languageOpen && <div className="language-menu" role="listbox" aria-label={t.language}>{(Object.keys(localeLabels) as Locale[]).map((key) => <button type="button" role="option" aria-selected={locale === key} className={locale === key ? 'language-option selected' : 'language-option'} key={key} onClick={() => { setLocale(key); setLanguageOpen(false); window.localStorage.setItem('route-pilot-locale', key) }}><span className={`language-flag ${key}`}>{key === 'es' ? 'ES' : key === 'en' ? 'EN' : 'PT'}</span><span>{localeLabels[key]}</span>{locale === key && <span className="language-check">✓</span>}</button>)}</div>}</div><label className="search"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} aria-label={t.search} />{query && <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={14} /></button>}</label>{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}<button className="icon-button" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={18} /> : <Moon size={18} />}</button><button className="icon-button notification" aria-label="Notificaciones" onClick={() => notify('Tienes 3 notificaciones nuevas')}><Bell size={18} /><i /></button><div className="top-avatar">AR</div></div></header>
+        <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions">{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}</div></header>
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">{t.operationalSummary} <Activity size={13} /></span><h2>{t.allControl}</h2><p>{t.networkCapacity} <strong>94%</strong> de capacidad. {t.decisionsAttention}</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify(t.review) }}>{t.review} <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
