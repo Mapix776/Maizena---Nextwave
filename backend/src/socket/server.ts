@@ -45,6 +45,10 @@ import {
   updateDashboardItemInputSchema,
 } from '../contracts/dashboard.js';
 import { ElementLocationTracker } from '../services/element-location-tracker.js';
+import {
+  DocumentContentGateway,
+  SupabaseDocumentContentRepository,
+} from '../documents/document-content-gateway.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const clearConversationCommandSchema = z.object({}).strict();
@@ -184,6 +188,7 @@ interface NautaServerOptions {
   documentStore?: SupabaseDocumentStore;
   artifactGenerationService?: ArtifactGenerationService;
   artifactContentGateway?: Pick<ArtifactContentGateway, 'get'>;
+  documentContentGateway?: Pick<DocumentContentGateway, 'get'>;
   originPolicy?: FrontendOriginPolicy;
   artifactFailureLogger?: ArtifactFailureLogger;
 }
@@ -206,6 +211,11 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   const artifactContentGateway =
     options.artifactContentGateway ??
     new ArtifactContentGateway(new SupabaseArtifactContentRepository(), {
+      originPolicy,
+    });
+  const documentContentGateway =
+    options.documentContentGateway ??
+    new DocumentContentGateway(new SupabaseDocumentContentRepository(), {
       originPolicy,
     });
   const inFlightArtifactRequests = new Map<
@@ -438,6 +448,36 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
           revisionId: contentMatch[2],
           path,
         })
+        .then((result) => {
+          if (result.status === 404) {
+            sendJson(response, 404, { error: 'Not found' });
+            return;
+          }
+          for (const [name, value] of Object.entries(result.headers)) {
+            response.setHeader(name, value);
+          }
+          response.writeHead(200);
+          response.end(Buffer.from(result.bytes));
+        })
+        .catch(() => sendJson(response, 404, { error: 'Not found' }));
+      return;
+    }
+
+    const documentContentMatch = request.url
+      ? new URL(request.url, 'http://localhost').pathname.match(
+          /^\/api\/documents\/([^/]+)\/content$/,
+        )
+      : null;
+    if (request.method === 'GET' && documentContentMatch) {
+      let documentId: string;
+      try {
+        documentId = decodeURIComponent(documentContentMatch[1]);
+      } catch {
+        sendJson(response, 404, { error: 'Not found' });
+        return;
+      }
+      void documentContentGateway
+        .get(documentId)
         .then((result) => {
           if (result.status === 404) {
             sendJson(response, 404, { error: 'Not found' });

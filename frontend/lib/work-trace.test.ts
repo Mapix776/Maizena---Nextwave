@@ -34,3 +34,24 @@ test('frontend validation discards traces outside the strict shared contract', (
     undefined,
   )
 })
+
+test('frontend validation accepts safe sources and rejects malformed source URLs and storage fields', () => {
+  const source = {
+    id: 'trace-source-1',
+    title: 'Bill of Lading.pdf',
+    mimeType: 'application/pdf',
+    contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content',
+  }
+  assert.ok(parseWorkTrace({
+    ...validTrace,
+    steps: [{ ...validTrace.steps[0], sources: [source] }],
+  }))
+  assert.equal(parseWorkTrace({
+    ...validTrace,
+    steps: [{ ...validTrace.steps[0], sources: [{ ...source, contentUrl: 'https://example.com/raw.pdf' }] }],
+  }), undefined)
+  assert.equal(parseWorkTrace({
+    ...validTrace,
+    steps: [{ ...validTrace.steps[0], sources: [{ ...source, storage_bucket: 'private' }] }],
+  }), undefined)
+})

@@ -4,7 +4,7 @@ import test from 'node:test'
 
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { WorkTraceDisclosure } from './work-trace'
+import { openWorkTraceSource, WorkTraceDisclosure } from './work-trace'
 
 const steps = [
   {
@@ -81,4 +81,37 @@ test('terminal trace starts collapsed while its status node remains outside the 
 
   assert.match(markup, /aria-expanded="false"/)
   assert.ok(markup.indexOf('role="status"') < markup.indexOf('hidden=""'))
+})
+
+test('source controls render only when present and invoke the pane-opening seam', () => {
+  const source = {
+    id: 'trace-source-1' as const,
+    title: 'Commercial Invoice.pdf',
+    mimeType: 'application/pdf' as const,
+    contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content' as const,
+  }
+  const markup = renderToStaticMarkup(
+    <WorkTraceDisclosure
+      trace={{ status: 'completed', durationMs: 25, steps: [{ ...steps[0], status: 'completed', sources: [source] }] }}
+      workedForLabel="Worked for"
+      workingLabel="Working"
+      sourcesLabel="Sources"
+      onOpenSource={() => undefined}
+    />,
+  )
+  assert.match(markup, /Sources/)
+  assert.match(markup, /Commercial Invoice\.pdf/)
+  const opened: unknown[] = []
+  openWorkTraceSource(source, (value) => opened.push(value))
+  assert.deepEqual(opened, [source])
+
+  const withoutSources = renderToStaticMarkup(
+    <WorkTraceDisclosure
+      trace={{ status: 'completed', durationMs: 25, steps: [{ ...steps[0], status: 'completed' }] }}
+      workedForLabel="Worked for"
+      workingLabel="Working"
+      sourcesLabel="Sources"
+    />,
+  )
+  assert.doesNotMatch(withoutSources, /Sources/)
 })

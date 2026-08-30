@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect, useId, useReducer } from 'react'
 
 import { ThinkingAnimation } from '@/components/chat/thinking-animation'
-import type { WorkTrace } from '@/lib/work-trace'
+import type { WorkTrace, WorkTraceSource } from '@/lib/work-trace'
 import {
   createDisclosureState,
   reduceDisclosureState,
@@ -25,14 +25,25 @@ export function formatWorkDuration(durationMs: number): string {
   return parts.join(' ')
 }
 
+export function openWorkTraceSource(
+  source: WorkTraceSource,
+  onOpenSource: (source: WorkTraceSource) => void,
+) {
+  onOpenSource(source)
+}
+
 export function WorkTraceDisclosure({
   trace,
   workedForLabel,
   workingLabel,
+  sourcesLabel = 'Sources',
+  onOpenSource,
 }: {
   trace: WorkTrace
   workedForLabel: string
   workingLabel: string
+  sourcesLabel?: string
+  onOpenSource?: (source: WorkTraceSource) => void
 }) {
   const [disclosure, dispatch] = useReducer(
     reduceDisclosureState,
@@ -111,6 +122,23 @@ export function WorkTraceDisclosure({
                       ? 'Completado'
                       : 'No completado'}
                 </p>
+                {step.sources?.length ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2" aria-label={sourcesLabel}>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {sourcesLabel}
+                    </span>
+                    {step.sources.map((source) => (
+                      <button
+                        key={source.id}
+                        type="button"
+                        className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-left text-xs font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => onOpenSource && openWorkTraceSource(source, onOpenSource)}
+                      >
+                        {source.title}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </li>
           ))}

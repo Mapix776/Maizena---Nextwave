@@ -28,6 +28,28 @@ export type ThinkingAnimationType = z.infer<
   typeof thinkingAnimationTypeSchema
 >;
 
+const documentIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const workTraceSourceSchema = z
+  .object({
+    id: z.string().regex(/^trace-source-[1-9]\d*$/).max(32),
+    title: z.string().trim().min(1).max(200),
+    mimeType: z.literal('application/pdf'),
+    contentUrl: z
+      .string()
+      .max(256)
+      .regex(/^\/api\/documents\/[0-9a-f-]+\/content$/i),
+  })
+  .strict()
+  .superRefine(({ contentUrl }, context) => {
+    const documentId = contentUrl.split('/')[3] ?? '';
+    if (!documentIdPattern.test(documentId)) {
+      context.addIssue({ code: 'custom', message: 'Invalid document content URL' });
+    }
+  });
+
+export type WorkTraceSource = z.infer<typeof workTraceSourceSchema>;
+
 export const executionTraceStepSchema = z.object({
   id: z.string(),
   stepNumber: z.number(),
@@ -41,6 +63,7 @@ export const executionTraceStepSchema = z.object({
   outputSummary: z.string().optional(),
   durationMs: z.number().default(0),
   timestamp: z.string(),
+  sources: z.array(workTraceSourceSchema).max(8).optional(),
 });
 
 export type ExecutionTraceStep = z.infer<typeof executionTraceStepSchema>;
@@ -118,6 +141,7 @@ export const workTraceStepSchema = executionTraceStepSchema
     status: z.enum(['running', 'completed', 'failed']),
     title: z.string().min(1).max(120),
     detail: z.string().min(1).max(600),
+    sources: z.array(workTraceSourceSchema).max(8).optional(),
   })
   .strict();
 
@@ -148,6 +172,60 @@ export const workTraceSchema = z
 export type WorkTraceStep = z.infer<typeof workTraceStepSchema>;
 export type WorkTrace = z.infer<typeof workTraceSchema>;
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function extractWorkTraceSources(
+  toolName: string,
+  output: unknown,
+): WorkTraceSource[] {
+  const result = record(output);
+  if (!result) return [];
+  const supported =
+    toolName === 'readDocumentTool' || toolName === 'read-shipment-document'
+      ? result.documents
+      : toolName === 'getOperationDetailsTool' || toolName === 'get-operation-details'
+        ? record(result.details)?.documents
+        : undefined;
+  if (!Array.isArray(supported)) return [];
+
+  const seen = new Set<string>();
+  const sources: WorkTraceSource[] = [];
+  for (const candidate of supported) {
+    const document = record(candidate);
+    if (!document) continue;
+    const id = typeof document.id === 'string' ? document.id : '';
+    const title = typeof document.file_name === 'string' ? document.file_name.trim() : '';
+    if (
+      !documentIdPattern.test(id) ||
+      !title ||
+      title.length > 200 ||
+      document.mime_type !== 'application/pdf' ||
+      typeof document.storage_bucket !== 'string' ||
+      !document.storage_bucket ||
+      typeof document.storage_path !== 'string' ||
+      !document.storage_path ||
+      seen.has(id)
+    ) {
+      continue;
+    }
+    seen.add(id);
+    sources.push(
+      workTraceSourceSchema.parse({
+        id: `trace-source-${sources.length + 1}`,
+        title,
+        mimeType: 'application/pdf',
+        contentUrl: `/api/documents/${id}/content`,
+      }),
+    );
+    if (sources.length === 8) break;
+  }
+  return sources;
+}
+
 export function createWorkTrace(traceInput: {
   status?: 'running' | 'completed' | 'failed';
   durationMs: number;
@@ -168,7 +246,7 @@ export function createWorkTrace(traceInput: {
   return workTraceSchema.parse({
     status: traceInput.status ?? 'completed',
     durationMs: Math.max(0, Math.round(traceInput.durationMs)),
-    steps: orderedSteps.map(({ stepNumber, kind, status, animationType, title, detail, input: internalInput }) => ({
+    steps: orderedSteps.map(({ stepNumber, kind, status, animationType, title, detail, sources, input: internalInput }) => ({
       id: `trace-step-${stepNumber}`,
       stepNumber,
       kind,
@@ -176,6 +254,7 @@ export function createWorkTrace(traceInput: {
       animationType,
       title: sanitizePublicText(title, internalInput),
       detail: sanitizePublicText(detail, internalInput),
+      ...(sources?.length ? { sources } : {}),
     })),
   });
 }

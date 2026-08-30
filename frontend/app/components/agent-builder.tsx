@@ -67,6 +67,7 @@ import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 import { WorkTraceDisclosure } from '@/components/chat/work-trace'
+import type { WorkTraceSource } from '@/lib/work-trace'
 import { DocumentSheetView } from '@/components/logistics/document-sheet-view'
 import { JsonRenderClient } from '@/app/json-render/render-client'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -90,11 +91,13 @@ type CatalogPaneTab = {
   id: string
   title: string
   kind: 'catalog'
-  category: 'Documento' | 'Informe' | 'Detalle'
+  category: 'document' | 'report' | 'detail'
   description: string
   sourceId: string
+  sourceLabel?: string
   elementType: string
   props: Record<string, unknown>
+  facts: Array<{ label: string; value: string }>
   url?: string
   mimeType?: string
 }
@@ -109,7 +112,16 @@ type CustomReportPaneTab = {
   status: 'accepted'
 }
 
-type PaneTab = CatalogPaneTab | CustomReportPaneTab
+type TraceSourcePaneTab = {
+  id: string
+  kind: 'trace-source'
+  title: string
+  sourceId: string
+  url: string
+  mimeType: 'application/pdf'
+}
+
+type PaneTab = CatalogPaneTab | CustomReportPaneTab | TraceSourcePaneTab
 
 type ReportArtifactResponse = Omit<CustomReportPaneTab, 'id'> & {
   createdAt: string
@@ -125,41 +137,41 @@ function paneTabsFromSpec(
   spec: JsonRenderSpec,
   sourceId: string,
 ): CatalogPaneTab[] {
-  return Object.entries(spec.elements).map(([id, element], index) => {
+  return Object.entries(spec.elements).flatMap(([id, element]) => {
+    if (element.type !== 'ContextArtifact') return []
     const props = element.props as Record<string, unknown>
-    const kind = element.type.toLowerCase().includes('issue')
-      ? 'Informe'
-      : element.type.toLowerCase().includes('document')
-        ? 'Documento'
-        : 'Detalle'
-    const title =
-      typeof props.title === 'string'
-        ? props.title
-        : typeof props.reference === 'string'
-          ? props.reference
-          : `${kind} ${index + 1}`
-    const url =
-      typeof props.url === 'string'
-        ? props.url
-        : typeof props.fileUrl === 'string'
-          ? props.fileUrl
-          : undefined
+    const facts = Array.isArray(props.facts)
+      ? props.facts.flatMap((fact) => {
+          if (!fact || typeof fact !== 'object') return []
+          const candidate = fact as Record<string, unknown>
+          return typeof candidate.label === 'string' &&
+            typeof candidate.value === 'string'
+            ? [{ label: candidate.label, value: candidate.value }]
+            : []
+        })
+      : []
+    const category =
+      props.category === 'document' ||
+      props.category === 'report' ||
+      props.category === 'detail'
+        ? props.category
+        : 'detail'
 
     return {
-      id: `${sourceId}-${id}`,
-      title,
+      id: `${sourceId}-${typeof props.id === 'string' ? props.id : id}`,
+      title: typeof props.title === 'string' ? props.title : 'Generated detail',
       kind: 'catalog',
-      category: kind,
+      category,
       description:
         typeof props.description === 'string'
           ? props.description
-          : `Información contextual de ${title.toLowerCase()}.`,
+          : '',
       sourceId,
+      sourceLabel:
+        typeof props.sourceLabel === 'string' ? props.sourceLabel : undefined,
       elementType: element.type,
       props,
-      url,
-      mimeType:
-        typeof props.mimeType === 'string' ? props.mimeType : undefined,
+      facts,
     }
   })
 }
@@ -176,6 +188,15 @@ function isAcceptedReportArtifact(value: unknown): value is ReportArtifactRespon
     typeof artifact.previewUrl === 'string' &&
     typeof artifact.createdAt === 'string'
   )
+}
+
+function artifactCategoryLabel(
+  category: CatalogPaneTab['category'],
+  t: ReturnType<typeof getTranslations>,
+) {
+  if (category === 'document') return t.document
+  if (category === 'report') return t.customReportTab
+  return t.detailTab
 }
 
 function assertUnreachable(value: never): never {
@@ -664,6 +685,7 @@ function ChatMessageRow({
   onNotify,
   onOpenAttachment,
   onOpenContext,
+  onOpenTraceSource,
   onSaveComponent,
   t,
 }: {
@@ -672,6 +694,7 @@ function ChatMessageRow({
   onNotify: (message: string) => void
   onOpenAttachment: (attachment: ChatAttachment, sourceId: string) => void
   onOpenContext: (spec: JsonRenderSpec, sourceId: string) => void
+  onOpenTraceSource: (source: WorkTraceSource) => void
   onSaveComponent?: (input: SaveDashboardInput) => boolean
   t: ReturnType<typeof getTranslations>
 }) {
@@ -683,19 +706,27 @@ function ChatMessageRow({
   )
   const fullTitle = message.spec ? fullResultTitle(message.spec as JsonRenderSpec, message.text) : ''
   const saved = isSaved?.(fullTitle, 'full_spec') ?? false
+  const contextArtifacts = message.spec
+    ? paneTabsFromSpec(message.spec as JsonRenderSpec, message.id)
+    : []
 
-  const specActions = message.spec ? (
+  const specActions = message.spec && (contextArtifacts.length > 0 || onSaveComponent) ? (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="rounded-full"
-        onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
-      >
-        <FileText className="size-3.5" />
-        {t.openInfo}
-      </Button>
+      {contextArtifacts.length > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="rounded-full"
+          onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
+        >
+          <FileText className="size-3.5" />
+          {t.openInfo}
+          {contextArtifacts.length > 1 && (
+            <span className="text-muted-foreground">{contextArtifacts.length}</span>
+          )}
+        </Button>
+      )}
       {onSaveComponent && (
         <Button
           type="button"
@@ -794,6 +825,8 @@ function ChatMessageRow({
             trace={message.workTrace}
             workedForLabel={t.workedFor}
             workingLabel={t.thinkingStatus}
+            sourcesLabel={t.sources}
+            onOpenSource={onOpenTraceSource}
           />
         )}
         {hasMessageContent && (
@@ -947,6 +980,7 @@ export default function AgentBuilderView({
 
   function openContextPanel(spec: JsonRenderSpec, sourceId: string) {
     const tabs = paneTabsFromSpec(spec, sourceId)
+    if (tabs.length === 0) return
     setPaneTabs((current) => [
       ...current.filter((existing) => !tabs.some((tab) => tab.id === existing.id)),
       ...tabs,
@@ -959,11 +993,12 @@ export default function AgentBuilderView({
       id: `${sourceId}-${attachment.id}`,
       title: attachment.name,
       kind: 'catalog',
-      category: 'Documento',
+      category: 'document',
       description: `Vista previa de ${attachment.name}.`,
       sourceId,
       elementType: 'Attachment',
       props: {},
+      facts: [],
       url: attachment.url,
       mimeType: attachment.type,
     }
@@ -971,6 +1006,21 @@ export default function AgentBuilderView({
       ...current.filter((existing) => existing.id !== item.id),
       item,
     ])
+    setSelectedPaneTabId(item.id)
+  }
+
+  function openTraceSource(source: WorkTraceSource) {
+    const item: TraceSourcePaneTab = {
+      id: `trace-source-${source.contentUrl}`,
+      kind: 'trace-source',
+      title: source.title,
+      sourceId: source.id,
+      url: new URL(source.contentUrl, `${getBackendUrl()}/`).toString(),
+      mimeType: source.mimeType,
+    }
+    setPaneTabs((current) =>
+      current.some((tab) => tab.id === item.id) ? current : [...current, item],
+    )
     setSelectedPaneTabId(item.id)
   }
 
@@ -1095,10 +1145,12 @@ export default function AgentBuilderView({
           typeof value === 'string' || typeof value === 'number',
       )
       .map(([key, value]) => `${key}: ${value}`)
+    const factLines = item.facts.map(({ label, value }) => `${label}: ${value}`)
     const content = [
       'NAUTA FREIGHT & CUSTOMS',
       item.title,
       '',
+      ...factLines,
       ...scalarLines,
     ].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
@@ -1241,6 +1293,7 @@ export default function AgentBuilderView({
                     onNotify={onNotify}
                     onOpenAttachment={openAttachment}
                     onOpenContext={openContextPanel}
+                    onOpenTraceSource={openTraceSource}
                     onSaveComponent={onSaveComponent}
                     t={t}
                   />
@@ -1318,7 +1371,7 @@ export default function AgentBuilderView({
                   <div
                     key={item.id}
                     role="presentation"
-                    title={item.kind === 'catalog' ? item.category : t.customReportTab}
+                    title={item.kind === 'catalog' ? artifactCategoryLabel(item.category, t) : item.kind === 'custom-report' ? t.customReportTab : t.sources}
                     className={`group flex h-8 min-w-24 max-w-[220px] shrink-0 items-center gap-0.5 rounded-t-md border border-b-0 transition-colors ${
                       selected
                         ? 'border-border bg-background text-foreground shadow-[inset_0_-2px_0_0_var(--primary)]'
@@ -1415,6 +1468,20 @@ export default function AgentBuilderView({
                     referrerPolicy="no-referrer"
                   />
                 </div>
+              ) : selectedPaneTab.kind === 'trace-source' ? (
+                <div
+                  id={`pane-panel-${paneTabDomId(selectedPaneTab.id)}`}
+                  role="tabpanel"
+                  aria-labelledby={`pane-tab-${paneTabDomId(selectedPaneTab.id)}`}
+                  className="h-[calc(100dvh-3.5rem)] min-h-[32rem] bg-background"
+                >
+                  <iframe
+                    className="h-full min-h-[32rem] w-full border-0 bg-white"
+                    src={selectedPaneTab.url}
+                    title={selectedPaneTab.title}
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               ) : selectedPaneTab.kind === 'catalog' ? (
               <div
                 id={`pane-panel-${paneTabDomId(selectedPaneTab.id)}`}
@@ -1422,7 +1489,7 @@ export default function AgentBuilderView({
                 aria-labelledby={`pane-tab-${paneTabDomId(selectedPaneTab.id)}`}
                 className="space-y-3 p-4"
               >
-                <span className={kickerClass}>{selectedPaneTab.category}</span>
+                <span className={kickerClass}>{artifactCategoryLabel(selectedPaneTab.category, t)}</span>
                 <h3 className="text-base font-semibold tracking-tight">{selectedPaneTab.title}</h3>
                 <p className="text-sm leading-6 text-muted-foreground">{selectedPaneTab.description}</p>
                 {selectedPaneTab.url ? (
@@ -1447,6 +1514,68 @@ export default function AgentBuilderView({
                       {t.viewFile}
                     </Button>
                   )
+                ) : selectedPaneTab.elementType === 'ContextArtifact' ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                        <Sparkles className="size-3.5" />
+                        {t.aiGenerated}
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant={savedDocIds.has(selectedPaneTab.id) ? 'secondary' : 'outline'}
+                          size="sm"
+                          disabled={savedDocIds.has(selectedPaneTab.id) || savingDocId !== null}
+                          onClick={() => void saveDocToS3(selectedPaneTab)}
+                        >
+                          {savedDocIds.has(selectedPaneTab.id) ? (
+                            <BookmarkCheck className="size-4" />
+                          ) : (
+                            <Save className="size-4" />
+                          )}
+                          {savedDocIds.has(selectedPaneTab.id)
+                            ? t.savedToS3
+                            : savingDocId === selectedPaneTab.id
+                              ? t.savingToS3
+                              : t.saveToS3}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadDoc(selectedPaneTab)}
+                        >
+                          <Download className="size-4" />
+                          {t.downloadDoc}
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+                      <div className="border-b border-border bg-muted/40 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                          Nauta · {artifactCategoryLabel(selectedPaneTab.category, t)}
+                        </p>
+                        {typeof selectedPaneTab.props.reference === 'string' && (
+                          <p className="mt-1 text-sm font-medium text-foreground">
+                            {selectedPaneTab.props.reference}
+                          </p>
+                        )}
+                      </div>
+                      <dl className="grid gap-px bg-border sm:grid-cols-2">
+                        {selectedPaneTab.facts.map(({ label, value }) => (
+                          <div key={label} className="bg-card p-4">
+                            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                              {label}
+                            </dt>
+                            <dd className="mt-1 text-sm font-semibold leading-5 text-foreground">
+                              {value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  </div>
                 ) : DOCUMENT_SHEET_TYPES.has(selectedPaneTab.elementType) ? (
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3">
@@ -1490,11 +1619,16 @@ export default function AgentBuilderView({
                     />
                   </div>
                 ) : null}
-                <small className="block text-xs text-muted-foreground">Origen: {selectedPaneTab.sourceId}</small>
+                {selectedPaneTab.sourceLabel && (
+                  <small className="block text-xs text-muted-foreground">
+                    Origen: {selectedPaneTab.sourceLabel}
+                  </small>
+                )}
               </div>
               ) : assertUnreachable(selectedPaneTab)
             )}
 
+            {selectedPaneTab?.kind !== 'trace-source' && (
             <section className="space-y-4 border-t border-border p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1619,6 +1753,7 @@ export default function AgentBuilderView({
                 </p>
               </div>
             </section>
+            )}
           </div>
         </aside>
       )}

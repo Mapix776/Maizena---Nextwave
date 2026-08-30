@@ -17,6 +17,7 @@ import type { StepResult } from '../contracts/step-result.js';
 import {
   comparisonTablePropsSchema,
   containerStatuses,
+  contextArtifactPropsSchema,
   interactiveChartPropsSchema,
   interactiveRouteMapPropsSchema,
   kpiGridPropsSchema,
@@ -131,6 +132,11 @@ export function composeRunUi(result: StepResult): unknown {
     result.factPatch?.stepProgressBar,
     'step progress bar',
   );
+  const contextArtifacts = parseFact(
+    z.array(contextArtifactPropsSchema).max(3),
+    result.factPatch?.contextArtifacts,
+    'context artifacts',
+  );
 
   const elements: Record<string, UiElement> = {
     'assistant-message': {
@@ -224,6 +230,9 @@ export function composeRunUi(result: StepResult): unknown {
   if (routeMap) {
     addElement('interactive-route-map', 'InteractiveRouteMap', routeMap);
   }
+  contextArtifacts?.forEach((props) =>
+    addElement(`context-artifact-${props.id}`, 'ContextArtifact', props),
+  );
 
   // Render the legacy delivery cards only when there is no OperationSummaryCard
   // or when an explicit issue/alert is being highlighted.

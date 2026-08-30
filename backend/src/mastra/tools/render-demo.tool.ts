@@ -2,7 +2,10 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 
 import type { StepResult } from '../../contracts/step-result.js';
-import { containerStatuses } from '../../contracts/ui.js';
+import {
+  containerStatuses,
+  contextArtifactPropsSchema,
+} from '../../contracts/ui.js';
 
 interface RenderDemoToolOptions {
   onExecution?: () => void;
@@ -25,6 +28,13 @@ export function createRenderDemoTool(options: RenderDemoToolOptions = {}) {
       transportType: z.enum(['Sea', 'Land']).optional().default('Sea'),
       issue: z.string().optional().describe('Optional issue description if an exception/alert exists.'),
       deliveryTime: z.string().optional().describe('ETA or estimated transit remaining time.'),
+      contextArtifacts: z
+        .array(contextArtifactPropsSchema)
+        .max(3)
+        .optional()
+        .describe(
+          'Optional high-value artifacts for the side pane. Omit for ordinary answers. Include only evidence-backed detail that would be useful to inspect separately and would otherwise overcrowd the main response.',
+        ),
     }),
     execute: async ({
       assistantResponse,
@@ -35,6 +45,7 @@ export function createRenderDemoTool(options: RenderDemoToolOptions = {}) {
       transportType,
       issue,
       deliveryTime,
+      contextArtifacts,
     }): Promise<StepResult> => {
       options.onExecution?.();
       return {
@@ -49,6 +60,7 @@ export function createRenderDemoTool(options: RenderDemoToolOptions = {}) {
           transportType,
           issue,
           deliveryTime,
+          ...(contextArtifacts?.length ? { contextArtifacts } : {}),
         },
         evidence: [
           {

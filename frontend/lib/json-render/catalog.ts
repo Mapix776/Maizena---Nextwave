@@ -106,6 +106,19 @@ const stepProgressBarPropsSchema: z.ZodType<StepProgressBarProps> = z.object({
   }).strict()).min(2),
 }).strict()
 
+const contextArtifactPropsSchema = z.object({
+  id: z.string().min(1).max(80),
+  title: z.string().min(1).max(120),
+  category: z.enum(['document', 'report', 'detail']),
+  description: z.string().min(1).max(320),
+  reference: z.string().min(1).max(120).optional(),
+  sourceLabel: z.string().min(1).max(160).optional(),
+  facts: z.array(z.object({
+    label: z.string().min(1).max(80),
+    value: z.string().min(1).max(240),
+  }).strict()).min(1).max(12),
+}).strict()
+
 export const jsonRenderSchema = defineSchema((s) => ({
   spec: s.object({
     root: s.string(),
@@ -132,6 +145,9 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     },
     ContainerProgress: {
       props: z.object({ currentStatus: z.enum(containerStatuses) }),
+    },
+    ContextArtifact: {
+      props: contextArtifactPropsSchema,
     },
     DeliveryCard: {
       props: deliveryProps,

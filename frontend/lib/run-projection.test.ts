@@ -830,3 +830,24 @@ test('malformed stored messages and privacy fields are rejected at the projectio
     ]),
   )
 })
+
+test('stored messages preserve safe PDF sources and reject arbitrary source URLs', () => {
+  const source = {
+    id: 'trace-source-1',
+    title: 'Packing List.pdf',
+    mimeType: 'application/pdf',
+    contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content',
+  }
+  const safe = createChatState([{
+    id: 'assistant-source', role: 'assistant', text: '',
+    workTrace: { ...runningTrace, steps: [{ ...runningTrace.steps[0], sources: [source] }] },
+  }])
+  assert.deepEqual(safe.messages[0].workTrace?.steps[0].sources, [source])
+  assert.throws(() => createChatState([{
+    id: 'assistant-source', role: 'assistant', text: '',
+    workTrace: {
+      ...runningTrace,
+      steps: [{ ...runningTrace.steps[0], sources: [{ ...source, contentUrl: 'https://evil.example/raw.pdf' }] }],
+    },
+  }]))
+})

@@ -87,7 +87,11 @@ CRITICAL GENERATIVE UI & VISUAL REASONING RULES:
    - NEVER concatenate multiple bullet points onto a single run-on line with hyphens (e.g. NEVER output: "- **Key:** Value - **Key:** Value").
    - When asked for an operational briefing or status review (e.g. "Give me a full operational briefing on OP-2026-9201..."):
      - Provide a polished 2-3 sentence executive briefing highlighting the shipment's current status, vessel/carrier, key port milestones, and document readiness.
-     - Call \`getOperationDetailsTool\` and \`renderDemoTool\` to present the complete visual operational dossier (Operation card, container details, document timeline).`;
+     - Call \`getOperationDetailsTool\` and \`renderDemoTool\` to present the complete visual operational dossier (Operation card, container details, document timeline).
+8. CONTEXT ARTIFACTS ARE OPTIONAL AND EARNED:
+   - When calling \`renderDemoTool\`, add \`contextArtifacts\` only when verified tool results contain useful detail that deserves a separate side-pane view (for example a source document record, customs evidence, or a compact executive report).
+   - Never add a context artifact merely because a visual response exists. Omit it for ordinary summaries and status cards.
+   - Keep each artifact self-contained, non-duplicative, and grounded in the tool results. Use a concise title and description, a truthful source label, and only the facts that help the user inspect or act on the result.`;
 
 export const ARI_INSTRUCTIONS = `${ARI_SYSTEM_PROMPT}
 

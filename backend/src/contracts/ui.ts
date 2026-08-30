@@ -166,6 +166,30 @@ export const stepProgressBarPropsSchema = z
 
 export type StepProgressBarProps = z.infer<typeof stepProgressBarPropsSchema>;
 
+export const contextArtifactPropsSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    title: z.string().min(1).max(120),
+    category: z.enum(['document', 'report', 'detail']),
+    description: z.string().min(1).max(320),
+    reference: z.string().min(1).max(120).optional(),
+    sourceLabel: z.string().min(1).max(160).optional(),
+    facts: z
+      .array(
+        z
+          .object({
+            label: z.string().min(1).max(80),
+            value: z.string().min(1).max(240),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(12),
+  })
+  .strict();
+
+export type ContextArtifactProps = z.infer<typeof contextArtifactPropsSchema>;
+
 // Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
 // out of the backend while making component names and props catalog-bound.
 const reactSpecSchema = defineSchema((schema) => ({
@@ -198,6 +222,9 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
       props: z
         .object({ currentStatus: z.enum(containerStatuses) })
         .strict(),
+    },
+    ContextArtifact: {
+      props: contextArtifactPropsSchema,
     },
     DeliveryCard: {
       props: deliveryProps,

@@ -48,7 +48,7 @@ test('gives the AI only logical report tools and requires all three source files
   let exposedToolNames: string[] = [];
 
   const result = await authorCustomReport(workspace, {
-    userPrompt: 'Highlight customs risk and delayed containers.',
+    userPrompt: 'Use a monochrome editorial newspaper style while highlighting customs risk.',
     createAgent: (tools) => ({
       async generate(messages) {
         prompt = String(messages[0]?.content ?? '');
@@ -73,7 +73,14 @@ test('gives the AI only logical report tools and requires all three source files
 
   assert.deepEqual(exposedToolNames, ['reportList', 'reportRead', 'reportWrite']);
   assert.match(prompt, /sanitized logistics fixture/i);
-  assert.match(prompt, /Highlight customs risk and delayed containers\./);
+  assert.match(prompt, /Use a monochrome editorial newspaper style while highlighting customs risk\./);
+  assert.match(prompt, /Ari visual language is the default/i);
+  assert.match(prompt, /#fbf9ff/i);
+  assert.match(prompt, /#211d38/i);
+  assert.match(prompt, /#ba46d6/i);
+  assert.match(prompt, /explicit user-requested visual style.*overrides.*Ari/i);
+  assert.match(prompt, /do not blend.*Ari palette/i);
+  assert.match(prompt, /palette within the active art direction/i);
   assert.match(prompt, /no external/i);
   assert.match(prompt, /design tokens/i);
   assert.match(prompt, /Intl\.NumberFormat/);
@@ -82,7 +89,7 @@ test('gives the AI only logical report tools and requires all three source files
   assert.match(prompt, /data-kpi-grid/);
   assert.match(prompt, /data-report-visual/);
   assert.match(prompt, /inline SVG/i);
-  assert.match(prompt, /composition, palette, and visualization/i);
+  assert.match(prompt, /composition and visualization type/i);
   assert.equal(result.summary, 'Custom report authored.');
   assert.deepEqual(result.writtenPaths, [
     'index.html',

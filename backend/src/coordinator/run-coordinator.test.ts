@@ -111,6 +111,63 @@ test('the Work trace commit queue isolates rejection and drains reverse-settled 
   assert.equal(snapshot.status, 'completed');
 });
 
+test('document sources appear only after successful observed settlement', async () => {
+  const envelopes: Array<{ type: string; payload: any }> = [];
+  const completedCorrelation = {};
+  const failedCorrelation = {};
+  const document = {
+    id: '11111111-1111-4111-8111-111111111111',
+    file_name: 'Commercial Invoice.pdf',
+    mime_type: 'application/pdf',
+    storage_bucket: 'private-documents',
+    storage_path: 'operations/private/invoice.pdf',
+  };
+  const coordinator = new RunCoordinator({
+    createRunId: () => 'run-document-sources',
+    executeStep: async (_messages, options) => {
+      options?.traceSink.observe({
+        type: 'started', correlation: completedCorrelation,
+        toolName: 'readDocumentTool', input: { operationIdOrRef: 'private' },
+      });
+      options?.traceSink.observe({
+        type: 'started', correlation: failedCorrelation,
+        toolName: 'getOperationDetailsTool', input: { operationIdOrRef: 'private' },
+      });
+      options?.traceSink.observe({
+        type: 'settled', correlation: completedCorrelation, outcome: 'completed',
+        output: { documents: [document] },
+      });
+      options?.traceSink.observe({
+        type: 'settled', correlation: failedCorrelation, outcome: 'failed',
+        output: { details: { documents: [document] } },
+      });
+      return HELLO_STEP_RESULT;
+    },
+    emit: (envelope) => envelopes.push(envelope as never),
+  });
+  const run = coordinator.createRun();
+  await coordinator.execute(run.runId);
+
+  const projections = envelopes
+    .filter(({ type }) => type === 'work-trace:replace')
+    .map(({ payload }) => payload.workTrace);
+  const beforeSettlement = projections.find((trace) =>
+    trace.steps.some((step: any) => step.title === 'Leyendo documento' && step.status === 'running'),
+  );
+  assert.ok(beforeSettlement);
+  assert.equal(beforeSettlement.steps.some((step: any) => step.sources), false);
+  const finalTrace = (envelopes.find(({ type }) => type === 'ui:replace') as any).payload.workTrace;
+  assert.deepEqual(finalTrace.steps[1].sources, [{
+    id: 'trace-source-1',
+    title: 'Commercial Invoice.pdf',
+    mimeType: 'application/pdf',
+    contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content',
+  }]);
+  assert.equal(finalTrace.steps[2].status, 'failed');
+  assert.equal(finalTrace.steps[2].sources, undefined);
+  assert.doesNotMatch(JSON.stringify(finalTrace), /private-documents|storage_path|storage_bucket/);
+});
+
 test('normal terminal projection retries atomically after emitter rejection before publishing target authority', async () => {
   const tracker = new ElementLocationTracker();
   const runIds = ['terminal-retry', 'later-same-scope'];

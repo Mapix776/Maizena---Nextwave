@@ -29,7 +29,9 @@ Requirements:
 - Include at least one data-derived inline SVG visualization with three or more visible shapes, such as a status distribution, risk bars, or route timeline. It must use only fixture values.
 - Use semantic accessible HTML, a bounded max-width, responsive CSS grid, and at least one media query. At 390px the report must not scroll horizontally.
 - Art-direct the page around one strong visual concept: use a confident hero, layered surfaces, deliberate asymmetry, purposeful whitespace, and a clear reading path. Avoid a plain white document, five equal-height columns, raw bullet-list sections, oversized headings, or squeezing operational tables into narrow cards. Dense tables or matrices must receive enough width to remain scannable.
-- Vary composition, palette, and visualization type to fit the data. These requirements measure visual quality; they do not prescribe section order, colors, or a reusable template.
+- Ari visual language is the default only when the user has not requested a visual style. Its reference anchors are a calm #fbf9ff canvas, white surfaces, deep-plum #211d38 text, restrained #ba46d6 accents, #f1eafd lavender fills, #eee9fa soft borders, compact Inter/system typography, 12–18px corner radii, small uppercase eyebrows, and sparing pink-to-violet gradients. Express that language freshly for the report instead of copying a fixed template.
+- Any explicit user-requested visual style, palette, brand, era, or medium overrides the Ari visual language completely. Follow that art direction with substantial creative freedom while preserving factual accuracy, information completeness, accessibility, responsiveness, isolation, and the measurable quality gates. Do not blend in the Ari palette, gradients, or rounded-card language unless the user asks for Ari styling or a hybrid.
+- Vary composition and visualization type to fit the data, and vary the palette within the active art direction: the explicit user style when present, otherwise Ari. These requirements measure visual quality; they do not prescribe section order or a reusable template.
 - index.html must contain a non-empty title, a [data-report-root] element, and load the local src/main.js as a module.
 - src/main.js must render from the imported ../data/fixture.json snapshot and set document.body.dataset.reportReady = "true" after rendering.
 - No external URLs, remote fonts, remote images, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, dynamic import, or runtime package installation.
@@ -135,7 +137,7 @@ export async function authorCustomReport(
   const tools = createReportAuthoringTools(workspace, (path) => writtenPaths.add(path));
   const agent = options.createAgent?.(tools) ?? createDefaultAgent(tools);
   const requestedReport = userPrompt
-    ? `${REPORT_AUTHOR_PROMPT}\n\nUser-requested report focus (follow it only where supported by the fixture):\n${userPrompt}`
+    ? `${REPORT_AUTHOR_PROMPT}\n\nUser-requested report brief:\n${userPrompt}\n\nFollow requested facts and operational emphasis only where supported by the fixture. Follow explicit visual and art direction even though style is not fixture data; it overrides Ari's default visual language.`
     : REPORT_AUTHOR_PROMPT;
   const repairPrompt = options.feedback
     ? `${requestedReport}\n\nThe previous fixed validation attempt failed. Inspect the current files, correct the problem, and rewrite all three required files. Bounded validator diagnostic:\n${options.feedback.slice(0, 8_000)}`

@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { mapToolToTraceStep } from './trace-step.js';
-import { createWorkTrace, workTraceSchema } from './work-trace.js';
+import {
+  createWorkTrace,
+  extractWorkTraceSources,
+  workTraceSchema,
+} from './work-trace.js';
 
 const timestamp = '2026-08-30T12:00:00.000Z';
 
@@ -333,4 +337,68 @@ test('mapped tool summaries carry private input provenance into central sanitiza
       { stepNumber: 2, title: 'Encontrando container' },
     ],
   );
+});
+
+test('PDF sources are extracted only from supported settled tool results, deduplicated, and bounded', () => {
+  const document = (index: number) => ({
+    id: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+    file_name: `Document ${index}.pdf`,
+    mime_type: 'application/pdf',
+    storage_bucket: 'private-documents',
+    storage_path: `operations/private/document-${index}.pdf`,
+  });
+  const documents = Array.from({ length: 10 }, (_, index) => document(index + 1));
+  const sources = extractWorkTraceSources('readDocumentTool', {
+    documents: [documents[0], documents[0], ...documents.slice(1)],
+  });
+
+  assert.equal(sources.length, 8);
+  assert.deepEqual(sources[0], {
+    id: 'trace-source-1',
+    title: 'Document 1.pdf',
+    mimeType: 'application/pdf',
+    contentUrl: '/api/documents/11111111-1111-4111-8111-000000000001/content',
+  });
+  assert.doesNotMatch(JSON.stringify(sources), /storage_bucket|storage_path|private-documents/);
+  assert.deepEqual(
+    extractWorkTraceSources('getOperationDetailsTool', {
+      details: { documents: [document(2)] },
+    }),
+    [{ ...sources[0], title: 'Document 2.pdf', contentUrl: '/api/documents/11111111-1111-4111-8111-000000000002/content' }],
+  );
+  assert.deepEqual(extractWorkTraceSources('genericTool', { documents }), []);
+  assert.deepEqual(
+    extractWorkTraceSources('readDocumentTool', {
+      documents: [
+        { ...document(1), mime_type: 'text/plain' },
+        { ...document(2), storage_path: null },
+      ],
+    }),
+    [],
+  );
+});
+
+test('public source descriptors are optional, strict, and reject arbitrary or raw storage fields', () => {
+  const trace = createWorkTrace({
+    status: 'completed',
+    durationMs: 1,
+    executionSteps: [{
+      id: 'internal', stepNumber: 1, kind: 'reading_document', status: 'completed',
+      animationType: 'reading', title: 'Read', detail: 'Read a stored PDF.',
+      durationMs: 1, timestamp,
+      sources: [{
+        id: 'trace-source-1', title: 'Invoice.pdf', mimeType: 'application/pdf',
+        contentUrl: '/api/documents/11111111-1111-4111-8111-111111111111/content',
+      }],
+    }],
+  });
+  assert.equal(trace.steps[0].sources?.length, 1);
+  const source = trace.steps[0].sources?.[0];
+  for (const invalid of [
+    { ...source, contentUrl: 'https://example.com/invoice.pdf' },
+    { ...source, storage_path: 'private/invoice.pdf' },
+    { ...source, rawSignedUrl: 'secret' },
+  ]) {
+    assert.equal(workTraceSchema.safeParse({ ...trace, steps: [{ ...trace.steps[0], sources: [invalid] }] }).success, false);
+  }
 });

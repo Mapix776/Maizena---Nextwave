@@ -8,6 +8,7 @@ import {
 } from '../contracts/trace-step.js';
 import {
   createWorkTrace,
+  extractWorkTraceSources,
   type ExecutionTraceStep,
   type WorkTrace,
 } from '../contracts/work-trace.js';
@@ -291,6 +292,14 @@ export class RunCoordinator {
               title: 'No se pudo completar la consulta',
               detail: 'La consulta observada terminó sin completarse.',
               outputSummary: undefined,
+            }
+          : {}),
+        ...(frozen.outcome === 'completed'
+          ? {
+              sources: extractWorkTraceSources(
+                current.toolName ?? '',
+                frozen.output,
+              ),
             }
           : {}),
         input: {

@@ -6,6 +6,7 @@ import { io, type Socket } from 'socket.io-client';
 import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
 import type { ReportArtifactDescriptor } from '../artifacts/artifact-contracts.js';
 import { createFrontendOriginPolicy } from '../artifacts/frontend-origin-policy.js';
+import { DocumentContentGateway } from '../documents/document-content-gateway.js';
 import { createNautaServer } from './server.js';
 
 async function connectClient(port: number): Promise<Socket> {
@@ -305,6 +306,66 @@ test('the artifact content route emits bytes and gateway headers without JSON MI
     revisionId: '22222222-2222-4222-8222-222222222222',
     path: 'assets/app.js',
   }]);
+});
+
+test('the document content route proxies injected full PDF bytes and controlled 404 failures', async (context) => {
+  const calls: string[] = [];
+  const pdfBytes = new TextEncoder().encode('%PDF-1.7 full document bytes');
+  const gateway = new DocumentContentGateway({
+    async findStoredDocument(documentId) {
+      calls.push(documentId);
+      if (documentId === '11111111-1111-4111-8111-111111111111') {
+        return {
+          fileName: 'Invoice.pdf', mimeType: 'application/pdf',
+          storageBucket: 'private', storagePath: 'invoice.pdf',
+        };
+      }
+      if (documentId === '11111111-1111-4111-8111-222222222222') {
+        return {
+          fileName: 'Notes.txt', mimeType: 'text/plain',
+          storageBucket: 'private', storagePath: 'notes.txt',
+        };
+      }
+      return null;
+    },
+    async download(bucket, path) {
+      assert.equal(bucket, 'private');
+      assert.equal(path, 'invoice.pdf');
+      return pdfBytes;
+    },
+  });
+  const server = createNautaServer({
+    documentContentGateway: gateway,
+  });
+  const port = await server.start(0);
+  context.after(() => server.stop());
+
+  const success = await fetch(
+    `http://127.0.0.1:${port}/api/documents/11111111-1111-4111-8111-111111111111/content`,
+  );
+  assert.equal(success.status, 200);
+  assert.equal(success.headers.get('content-type'), 'application/pdf');
+  assert.equal(success.headers.get('content-disposition'), 'inline; filename="Invoice.pdf"');
+  assert.equal(success.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(success.headers.get('cache-control'), 'private, no-store');
+  assert.deepEqual(new Uint8Array(await success.arrayBuffer()), pdfBytes);
+
+  for (const id of [
+    'malformed',
+    '11111111-1111-4111-8111-333333333333',
+    '11111111-1111-4111-8111-222222222222',
+  ]) {
+    const response = await fetch(
+      `http://127.0.0.1:${port}/api/documents/${id}/content`,
+    );
+    assert.equal(response.status, 404);
+    assert.deepEqual(await response.json(), { error: 'Not found' });
+  }
+  assert.deepEqual(calls, [
+    '11111111-1111-4111-8111-111111111111',
+    '11111111-1111-4111-8111-333333333333',
+    '11111111-1111-4111-8111-222222222222',
+  ]);
 });
 
 test('run:start acknowledges before asynchronous execution completes', async (context) => {

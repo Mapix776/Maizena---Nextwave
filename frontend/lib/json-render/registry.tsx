@@ -30,6 +30,7 @@ export const { registry } = defineRegistry(catalog, {
     AssistantMessage: ({ props, children }) => <AssistantMessage text={props.text} children={children} />,
     ComparisonTable: ({ props }) => <ComparisonTable {...props} />,
     ContainerProgress: ({ props }) => <ContainerProgress currentStatus={props.currentStatus} />,
+    ContextArtifact: () => null,
     DeliveryCard: ({ props, children }) => <DeliveryCard delivery={props} children={children} />,
     DeliveryIssueCard: ({ props }) => <DeliveryIssueCard delivery={props} />,
     HumanDecisionCard: ({ props }) => <HumanDecisionCard {...props} />,
