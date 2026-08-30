@@ -4,8 +4,10 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { getTranslations, localeLabels, type Locale } from '@/lib/i18n'
+import { useOrderIncidents } from '@/lib/use-order-incidents'
 import { useSavedSpecs } from '@/lib/use-saved-specs'
 import nextDynamic from 'next/dynamic'
+import type { OrderIncident } from '../../backend/src/contracts/order-incident'
 import {
   Activity,
   BarChart3,
@@ -33,7 +35,7 @@ const AgentBuilderView = nextDynamic(() => import('@/app/components/agent-builde
 const SavedView = nextDynamic(() => import('@/app/components/saved-view'), { ssr: false })
 
 const navItems = [
-  { key: 'issues', icon: ShieldAlert, badge: '3' },
+  { key: 'issues', icon: ShieldAlert },
   { key: 'map', icon: MapPinned },
   { key: 'analytics', icon: BarChart3 },
 ]
@@ -43,13 +45,17 @@ function AnalyticsView({ onNotify, t }: { onNotify: (message: string) => void; t
   return <div className="analytics-screen"><div className="view-heading"><div><p className="section-kicker">{t.intelligence}</p><h2>{t.analytics}</h2><p>{t.analyticsDescription}</p></div><button className="primary-button" onClick={() => onNotify('Informe exportado en modo demo')}>Exportar informe <ChevronRight size={15} /></button></div><div className="analytics-kpis"><div><span>Entrega a tiempo</span><strong>94,2%</strong><small className="positive">+3,8% este mes</small></div><div><span>Km recorridos</span><strong>128.460</strong><small className="positive">+12,4% vs. anterior</small></div><div><span>Coste medio / run</span><strong>602€</strong><small className="positive">-6,1% optimizado</small></div><div><span>Incidencias resueltas</span><strong>87%</strong><small>12 abiertas</small></div></div><div className="analytics-grid"><div className="panel analytics-chart"><div className="panel-heading"><div><p className="section-kicker">Volumen de operaciones</p><h3>Runs completados</h3></div><button className="filter-button" onClick={() => onNotify('Periodo cambiado a este mes')}>Este mes <ChevronRight size={13} /></button></div><div className="analytics-bars">{bars.map((height, index) => <div className="analytics-bar-col" key={index}><div className="analytics-bar-track"><span style={{ height: `${height}%` }} /></div><small>{['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul'][index]}</small></div>)}</div></div><div className="panel analytics-ring-panel"><div className="panel-heading"><div><p className="section-kicker">Salud de red</p><h3>Eficiencia global</h3></div><button className="dots-button" onClick={() => onNotify('Detalle de eficiencia abierto')}><MoreHorizontal size={18} /></button></div><div className="analytics-ring"><span>94<small>%</small></span></div><div className="legend"><span><i className="legend-pink" /> En objetivo <b>76%</b></span><span><i className="legend-violet" /> Necesita revisión <b>18%</b></span><span><i className="legend-gray" /> Sin datos <b>6%</b></span></div></div><div className="panel analytics-chart wide"><div className="panel-heading"><div><p className="section-kicker">Comparativa de rutas</p><h3>Coste por kilómetro</h3></div><span className="chart-value">0,84€ <small>media actual</small></span></div><div className="cost-lines"><div className="cost-line"><span>Madrid → Lyon</span><div><i style={{ width: '82%' }} /></div><b>0,72€</b></div><div className="cost-line"><span>Valencia → Lisboa</span><div><i style={{ width: '67%' }} /></div><b>0,68€</b></div><div className="cost-line"><span>Bilbao → París</span><div><i style={{ width: '94%' }} /></div><b>0,91€</b></div><div className="cost-line"><span>Sevilla → Marsella</span><div><i style={{ width: '76%' }} /></div><b>0,79€</b></div></div></div></div></div>
 }
 
-function ViewScreen({ active, onNotify, t, locale, sidebarOpen, onToggleSidebar, saved, onNavigate }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale; sidebarOpen: boolean; onToggleSidebar: () => void; saved: ReturnType<typeof useSavedSpecs>; onNavigate: (label: string) => void }) {
+function IncidentsView({ incidents, onAcknowledge }: { incidents: OrderIncident[]; onAcknowledge: (incidentId: string) => Promise<void> }) {
+  return <div className="view-screen"><div className="view-heading"><div><p className="section-kicker">Atención</p><h2>Incidencias</h2><p>Revisa las alertas activas que requieren una decisión humana.</p></div>{incidents.length > 0 && <span className="incident-total">{incidents.length} {incidents.length === 1 ? 'activa' : 'activas'}</span>}</div>{incidents.length === 0 ? <div className="incident-empty"><ShieldAlert size={24} /><b>No hay incidencias activas</b><span>Las nuevas incidencias de pedidos aparecerán aquí en tiempo real.</span></div> : <div className="incident-list">{incidents.map((incident) => <article className={`incident-row ${incident.severity}`} key={incident.incidentId}><span className="incident-row-icon"><ShieldAlert size={18} /></span><div className="incident-row-copy"><div><strong>{incident.orderId}</strong><span>{incident.type}</span><em>{incident.severity === 'critical' ? 'Crítica' : 'Advertencia'}</em></div><p>{incident.message}</p><small>{new Intl.DateTimeFormat('es-ES', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(incident.raisedAt))}</small></div><button className="secondary-button" onClick={() => void onAcknowledge(incident.incidentId)}>Reconocer</button></article>)}</div>}</div>
+}
+
+function ViewScreen({ active, onNotify, t, locale, sidebarOpen, onToggleSidebar, saved, onNavigate, incidents, onAcknowledge }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale; sidebarOpen: boolean; onToggleSidebar: () => void; saved: ReturnType<typeof useSavedSpecs>; onNavigate: (label: string) => void; incidents: OrderIncident[]; onAcknowledge: (incidentId: string) => Promise<void> }) {
   if (active === 'Mapa') return <OperationsMapView />
   if (active === 'Analíticas') return <AnalyticsView onNotify={onNotify} t={t} />
   if (active === 'Guardados') return <SavedView savedSpecs={saved.savedSpecs} onRemove={saved.removeSpec} onNotify={onNotify} onGoToChat={() => onNavigate('Chat')} t={t} dateLocale={t.dateLocale} />
   if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} isSaved={saved.isSaved} onToggleSave={saved.toggleSave} />
+  if (active === 'Incidencias') return <IncidentsView incidents={incidents} onAcknowledge={onAcknowledge} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
-    Incidencias: { kicker: 'Atención', title: 'Incidencias', description: 'Revisa las alertas que requieren una decisión humana.', items: ['Retraso de 35 min · RUN-2046', 'Documentación pendiente · RUN-2047', 'Cambio de muelle solicitado · Centro Lyon'] },
     Chat: { kicker: 'Comunicación', title: 'Chat del equipo', description: 'Coordina decisiones rápidas con las personas de operaciones.', items: ['Lucía · ¿Confirmamos la salida de Valencia?', 'Diego · El muelle 4 ya está disponible', 'Marina · He actualizado el ETA de Lyon'] },
     Noticias: { kicker: 'Comunicación', title: 'Noticias', description: 'Mantente al día de cambios relevantes para tu red logística.', items: ['Nueva ventana de circulación en Lyon', 'Seur amplía cobertura para Lisboa', 'Actualización de tarifas para junio'] },
     Ajustes: { kicker: 'Workspace', title: 'Ajustes', description: 'Personaliza las preferencias de tu centro de operaciones.', items: ['Notificaciones y alertas', 'Usuarios y permisos', 'Preferencias de visualización'] },
@@ -70,6 +76,8 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [currentDate, setCurrentDate] = useState('')
   const saved = useSavedSpecs()
+  const { incidents, acknowledge } = useOrderIncidents()
+  const newestIncident = incidents[0]
 
   useEffect(() => {
     const savedLocale = window.localStorage.getItem('route-pilot-locale') as Locale | null
@@ -111,7 +119,7 @@ function App() {
         <nav aria-label="Navegación principal">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
           <button className={active === 'Guardados' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Guardados')}><Bookmark size={17} /><span>{t.savedNav}</span>{saved.savedSpecs.length > 0 && <em>{saved.savedSpecs.length}</em>}</button>
-          {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; const target = key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas'; return <button key={key} className={active === target ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(target)}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
+          {navItems.map(({ key, icon: Icon }) => { const label = t[key as keyof typeof t]; const destination = key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas'; return <button key={key} className={active === destination ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(destination)}><Icon size={17} /><span>{label}</span>{key === 'issues' && incidents.length > 0 && <em>{incidents.length}</em>}</button> })}
           <button className={active === 'Noticias' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Noticias')}><Newspaper size={17} /><span>Noticias</span><em className="news-dot">2</em></button>
         </nav>
         <p className="nav-label secondary-label">{t.workspace}</p>
@@ -129,8 +137,9 @@ function App() {
       <section className={active === 'Chat' ? 'content-area chat-mode' : 'content-area'}>
         {active !== 'Chat' && <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active}</h1></div></header>}
 
-        <ViewScreen active={active} onNotify={notify} t={t} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} saved={saved} onNavigate={handleNav} />
+        <ViewScreen active={active} onNotify={notify} t={t} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} saved={saved} onNavigate={handleNav} incidents={incidents} onAcknowledge={acknowledge} />
       </section>
+      {newestIncident && <aside className={`incident-alert ${newestIncident.severity}`} role="alert" aria-live="assertive"><span className="incident-alert-icon"><ShieldAlert size={19} /></span><div className="incident-alert-copy"><div><strong>{newestIncident.severity === 'critical' ? 'Incidencia crítica' : 'Advertencia de pedido'}</strong>{incidents.length > 1 && <em>{incidents.length} activas</em>}</div><p><b>{newestIncident.orderId}</b> · {newestIncident.message}</p></div><button onClick={() => handleNav('Incidencias')}>Ver incidencia <ChevronRight size={15} /></button></aside>}
       {active !== 'Chat' && <button className="floating-chat" aria-label="Abrir chatbot de IA" onClick={() => { setActive('Chat'); setMobileOpen(false); notify('Chat con route.pilot AI abierto') }}><Sparkles size={19} /><span>Chat IA</span></button>}
       {notice && <div className="toast"><Sparkles size={15} />{notice}</div>}
     </main>

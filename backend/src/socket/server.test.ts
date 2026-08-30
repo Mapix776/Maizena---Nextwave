@@ -47,6 +47,45 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
+interface IncidentSnapshot {
+  incidents: Array<{
+    incidentId: string;
+    orderId: string;
+    type: string;
+    severity: 'warning' | 'critical';
+    message: string;
+    raisedAt: string;
+  }>;
+}
+
+function nextIncidentSnapshot(
+  socket: Socket,
+  expectedIncidentCount: number,
+): Promise<IncidentSnapshot> {
+  return new Promise((resolve) => {
+    const onSnapshot = (snapshot: IncidentSnapshot) => {
+      if (snapshot.incidents.length !== expectedIncidentCount) return;
+      socket.off('incidents:snapshot', onSnapshot);
+      resolve(snapshot);
+    };
+
+    socket.on('incidents:snapshot', onSnapshot);
+  });
+}
+
+async function raiseIncident(port: number) {
+  return fetch(`http://127.0.0.1:${port}/api/demo/incidents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      orderId: '  ORD-2046  ',
+      type: '  delay  ',
+      severity: 'critical',
+      message: '  Carrier reported a 48-hour delay  ',
+    }),
+  });
+}
+
 test('run:start acknowledges before asynchronous execution completes', async (context) => {
   const step = deferred<unknown>();
   const server = createNautaServer({ executeStep: () => step.promise });
@@ -288,4 +327,181 @@ test('concurrent runs maintain strict room isolation with no event bleed', async
   for (const env of clientBEvents as Array<{ runId: string }>) {
     assert.equal(env.runId, ackB.runId, 'Client B received bleed event from another run');
   }
+});
+
+test('raising an order incident broadcasts the active snapshot to every client', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+  const firstClient = await connectClient(port);
+  const secondClient = await connectClient(port);
+
+  context.after(async () => {
+    firstClient.disconnect();
+    secondClient.disconnect();
+    await server.stop();
+  });
+
+  const firstSnapshot = nextIncidentSnapshot(firstClient, 1);
+  const secondSnapshot = nextIncidentSnapshot(secondClient, 1);
+  const response = await raiseIncident(port);
+
+  assert.equal(response.status, 201);
+  const incident = (await response.json()) as IncidentSnapshot['incidents'][number];
+  assert.match(incident.incidentId, /^[0-9a-f-]{36}$/i);
+  assert.equal(incident.orderId, 'ORD-2046');
+  assert.equal(incident.type, 'delay');
+  assert.equal(incident.severity, 'critical');
+  assert.equal(incident.message, 'Carrier reported a 48-hour delay');
+  assert.doesNotThrow(() => new Date(incident.raisedAt).toISOString());
+
+  const expected = { incidents: [incident] };
+  assert.deepEqual(await within(firstSnapshot, 250), expected);
+  assert.deepEqual(await within(secondSnapshot, 250), expected);
+});
+
+test('a newly connected client receives the current active incident snapshot', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+
+  context.after(async () => {
+    await server.stop();
+  });
+
+  const response = await raiseIncident(port);
+  assert.equal(response.status, 201);
+  const incident = (await response.json()) as IncidentSnapshot['incidents'][number];
+
+  const socket = io(`http://127.0.0.1:${port}`, {
+    autoConnect: false,
+    forceNew: true,
+    transports: ['websocket'],
+  });
+  context.after(() => socket.disconnect());
+  const snapshot = nextIncidentSnapshot(socket, 1);
+  socket.connect();
+
+  assert.deepEqual(await within(snapshot, 250), { incidents: [incident] });
+});
+
+test('acknowledging an order incident updates every connected client', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+  const firstClient = await connectClient(port);
+  const secondClient = await connectClient(port);
+
+  context.after(async () => {
+    firstClient.disconnect();
+    secondClient.disconnect();
+    await server.stop();
+  });
+
+  const raisedOnFirst = nextIncidentSnapshot(firstClient, 1);
+  const raisedOnSecond = nextIncidentSnapshot(secondClient, 1);
+  const raiseResponse = await raiseIncident(port);
+  const incident = (await raiseResponse.json()) as IncidentSnapshot['incidents'][number];
+  await Promise.all([raisedOnFirst, raisedOnSecond]);
+
+  const acknowledgedOnFirst = nextIncidentSnapshot(firstClient, 0);
+  const acknowledgedOnSecond = nextIncidentSnapshot(secondClient, 0);
+  const acknowledgeResponse = await fetch(
+    `http://127.0.0.1:${port}/api/demo/incidents/${incident.incidentId}/acknowledge`,
+    { method: 'POST' },
+  );
+
+  assert.equal(acknowledgeResponse.status, 200);
+  assert.deepEqual(await acknowledgeResponse.json(), { incidents: [] });
+  assert.deepEqual(await within(acknowledgedOnFirst, 250), { incidents: [] });
+  assert.deepEqual(await within(acknowledgedOnSecond, 250), { incidents: [] });
+});
+
+test('resetting order incidents clears every connected client', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+  const firstClient = await connectClient(port);
+  const secondClient = await connectClient(port);
+
+  context.after(async () => {
+    firstClient.disconnect();
+    secondClient.disconnect();
+    await server.stop();
+  });
+
+  const raisedOnFirst = nextIncidentSnapshot(firstClient, 1);
+  const raisedOnSecond = nextIncidentSnapshot(secondClient, 1);
+  await raiseIncident(port);
+  await Promise.all([raisedOnFirst, raisedOnSecond]);
+
+  const resetOnFirst = nextIncidentSnapshot(firstClient, 0);
+  const resetOnSecond = nextIncidentSnapshot(secondClient, 0);
+  const response = await fetch(
+    `http://127.0.0.1:${port}/api/demo/incidents/reset`,
+    { method: 'POST' },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { incidents: [] });
+  assert.deepEqual(await within(resetOnFirst, 250), { incidents: [] });
+  assert.deepEqual(await within(resetOnSecond, 250), { incidents: [] });
+});
+
+test('an invalid order incident payload is rejected', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+
+  context.after(async () => {
+    await server.stop();
+  });
+
+  const response = await fetch(
+    `http://127.0.0.1:${port}/api/demo/incidents`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orderId: ' ',
+        type: 'delay',
+        severity: 'urgent',
+        message: 'Carrier reported a delay',
+        unexpected: true,
+      }),
+    },
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), {
+    error: 'Invalid incident payload',
+  });
+});
+
+test('the incident API answers browser CORS preflight requests', async (context) => {
+  const server = createNautaServer();
+  const port = await server.start(0);
+
+  context.after(async () => {
+    await server.stop();
+  });
+
+  const response = await fetch(
+    `http://127.0.0.1:${port}/api/demo/incidents/example/acknowledge`,
+    {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3000',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    },
+  );
+
+  assert.equal(response.status, 204);
+  assert.equal(
+    response.headers.get('access-control-allow-origin'),
+    'http://localhost:3000',
+  );
+  assert.match(response.headers.get('access-control-allow-methods') ?? '', /POST/);
+  assert.match(response.headers.get('access-control-allow-methods') ?? '', /OPTIONS/);
+  assert.match(
+    response.headers.get('access-control-allow-headers') ?? '',
+    /Content-Type/i,
+  );
 });

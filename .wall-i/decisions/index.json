@@ -97,6 +97,50 @@
       "consequences": ["The legacy openai v4 dependency is dropped", "Provider swap stays cheap until real reasoning steps land"],
       "introducedByTask": "nauta-ari-agent",
       "evidence": ["backend/.env.example"]
+    },
+    {
+      "id": "D008",
+      "title": "Use one demo-wide in-memory order incident lifecycle",
+      "status": "accepted",
+      "context": "The stage demo needs a manually triggered order problem to appear immediately in every connected frontend, and the project already uses Socket.IO with in-memory state.",
+      "decision": "Raise flexible order incidents through an HTTP API, keep active incidents in backend memory, broadcast lifecycle changes to every connected frontend, replay unacknowledged incidents to reconnecting clients, acknowledge globally, and provide an explicit reset operation.",
+      "consequences": [
+        "Every demo client sees the same active incident set",
+        "One client's acknowledgment updates all clients",
+        "Backend restart clears incidents",
+        "User/workspace targeting and durable persistence remain out of scope"
+      ],
+      "alternatives": [
+        "Hard-code one timed frontend notification",
+        "Persist incidents in Supabase",
+        "Scope incidents to authenticated users or workspaces"
+      ],
+      "introducedByTask": "realtime-order-incident-demo",
+      "evidence": [
+        ".wall-i/runs/realtime-order-incident-demo/intake/resolved.md"
+      ],
+      "promoteToAdr": false
+    },
+    {
+      "id": "D009",
+      "title": "Keep order incident demo operations unauthenticated",
+      "status": "accepted",
+      "context": "The user prioritized the fastest happy-path demo and explicitly rejected protection for the manual incident API.",
+      "decision": "Raise, acknowledge, and reset operations remain open and unauthenticated for this demo slice.",
+      "consequences": [
+        "Any caller that can reach the backend can create, acknowledge, or clear demo incidents",
+        "The feature must be labeled demo-only and is not production-safe",
+        "Authentication, authorization, rate limiting, and abuse protection are deferred"
+      ],
+      "alternatives": [
+        "Require a shared X-Demo-Key header",
+        "Require authenticated operator access"
+      ],
+      "introducedByTask": "realtime-order-incident-demo",
+      "evidence": [
+        ".wall-i/runs/realtime-order-incident-demo/intake/resolved.md"
+      ],
+      "promoteToAdr": false
     }
   ]
 }

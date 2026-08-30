@@ -1,4 +1,9 @@
-import { createServer, type Server as HttpServer } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { Server as SocketServer } from 'socket.io';
@@ -6,11 +11,13 @@ import { z } from 'zod';
 
 import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import { chatMessagesSchema, type ChatMessage } from '../contracts/chat.js';
+import { raiseOrderIncidentInputSchema } from '../contracts/order-incident.js';
 import type { StepResult } from '../contracts/step-result.js';
 import {
   SupabaseDocumentStore,
   saveDocumentInputSchema,
 } from '../services/supabase-documents.js';
+import { createOrderIncidentStore } from '../services/order-incidents.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const startCommandSchema = z
@@ -49,7 +56,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   };
 
   const documentStore = options.documentStore ?? new SupabaseDocumentStore();
-
+  const incidentStore = createOrderIncidentStore();
   const httpServer: HttpServer = createServer((request, response) => {
     const origin = request.headers.origin;
     if (isOriginAllowed(origin)) {
@@ -58,7 +65,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
     response.setHeader('Vary', 'Origin');
     response.setHeader('Content-Type', 'application/json; charset=utf-8');
 
-    // CORS preflight for the documents endpoint.
+    // CORS preflight for the browser-facing HTTP endpoints.
     if (request.method === 'OPTIONS') {
       response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -68,7 +75,12 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       return;
     }
 
-    if (request.method === 'GET' && (request.url === '/healthz' || request.url === '/health' || request.url === '/')) {
+    if (
+      request.method === 'GET' &&
+      (request.url === '/healthz' ||
+        request.url === '/health' ||
+        request.url === '/')
+    ) {
       response.writeHead(200);
       response.end(JSON.stringify({ ok: true, status: 'ok', timestamp: new Date().toISOString() }));
       return;
@@ -119,6 +131,42 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       return;
     }
 
+    if (request.method === 'POST' && request.url === '/api/demo/incidents') {
+      void readJsonBody(request).then((body) => {
+        const parsed = raiseOrderIncidentInputSchema.safeParse(body);
+
+        if (!parsed.success) {
+          sendJson(response, 400, { error: 'Invalid incident payload' });
+          return;
+        }
+
+        const incident = incidentStore.raise(parsed.data);
+        io.emit('incidents:snapshot', incidentStore.snapshot());
+        sendJson(response, 201, incident);
+      });
+      return;
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.url === '/api/demo/incidents/reset'
+    ) {
+      const snapshot = incidentStore.reset();
+      io.emit('incidents:snapshot', snapshot);
+      sendJson(response, 200, snapshot);
+      return;
+    }
+
+    const acknowledgeMatch = request.url?.match(
+      /^\/api\/demo\/incidents\/([^/]+)\/acknowledge$/,
+    );
+    if (request.method === 'POST' && acknowledgeMatch) {
+      const snapshot = incidentStore.acknowledge(acknowledgeMatch[1]);
+      io.emit('incidents:snapshot', snapshot);
+      sendJson(response, 200, snapshot);
+      return;
+    }
+
     response.writeHead(404);
     response.end(JSON.stringify({ error: 'Not found' }));
   });
@@ -142,6 +190,8 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   });
 
   io.on('connection', (socket) => {
+    socket.emit('incidents:snapshot', incidentStore.snapshot());
+
     socket.on('run:start', (command, acknowledge) => {
       const parsed = startCommandSchema.safeParse(command);
 
@@ -236,6 +286,28 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       });
     },
   };
+}
+
+async function readJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
+function sendJson(
+  response: ServerResponse,
+  status: number,
+  body: unknown,
+): void {
+  response.writeHead(status);
+  response.end(JSON.stringify(body));
 }
 
 function roomName(runId: string): string {

@@ -86,6 +86,22 @@
       "status": "accepted",
       "introducedByTask": "nauta-ari-agent",
       "evidence": [".wall-i/runs/nauta-ari-agent/intake/resolved.md"]
+    },
+    {
+      "id": "T010",
+      "term": "Order incident",
+      "definition": "A manually raised, actionable problem associated with an order. For the demo it contains an order ID, type, severity, and message; the backend owns its ID, timestamp, and global acknowledgment state.",
+      "aliases": ["incident", "order alert"],
+      "antiDefinitions": [
+        "Not a Run incident: Run is reserved for one agent execution.",
+        "Not a transient notification: it remains actionable until globally acknowledged."
+      ],
+      "source": "user",
+      "status": "accepted",
+      "introducedByTask": "realtime-order-incident-demo",
+      "evidence": [
+        ".wall-i/runs/realtime-order-incident-demo/intake/resolved.md"
+      ]
     }
   ]
 }
