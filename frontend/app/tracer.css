@@ -264,8 +264,69 @@
 .chat-message.rendered .json-render-bubble {
   width: min(100%, 620px);
   max-width: calc(100% - 40px);
-  padding: 12px;
-  background: #fbf8ff;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chat-bubble {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.chat-bubble > small {
+  display: block;
+  margin-bottom: 6px;
+  padding: 0 3px;
+}
+
+.chat-bubble > p {
+  width: fit-content;
+  max-width: min(100%, 620px);
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 13px;
+  background: var(--surface);
+  color: var(--foreground);
+  line-height: 1.55;
+}
+
+.chat-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+  padding-left: 3px;
+}
+
+.chat-actions button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.dark-mode .chat-message.rendered .json-render-bubble {
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.chat-message.user .chat-bubble > p {
+  margin-left: auto;
+  background: var(--accent-soft);
+}
+
+.typing-bubble {
+  padding: 0;
+}
+
+.typing-bubble .chat-thinking-state {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: var(--surface);
 }
 
 .rendered-assistant-message {
@@ -304,6 +365,12 @@
 .send-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.dark-mode .chat-message.rendered .json-render-bubble {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .route-map-marker {
