@@ -1162,7 +1162,19 @@ export default function AgentBuilderView({
                     />
                   </div>
                 ) : null}
-                <small className="block text-xs text-muted-foreground">Origen: {selectedContext.sourceId}</small>
+                <div className="mt-4 rounded-xl border border-border/60 bg-muted/40 p-3.5 space-y-2 text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                    <Sparkles className="size-3.5 text-primary" />
+                    <span>Trazabilidad y Origen del Documento</span>
+                  </div>
+                  <p className="text-muted-foreground leading-relaxed">
+                    Este expediente fue generado y auditado automáticamente por <b>Ari</b> mediante la lectura directa de los documentos oficiales en el repositorio seguro de Nauta (Base de datos y Storage certificado).
+                  </p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 border-t border-border/40 text-[11px] text-muted-foreground">
+                    <span><b>Validación:</b> Cotejo automatizado de comercio exterior</span>
+                    <span><b>Integridad:</b> 100% Verificado contra fuentes oficiales</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>

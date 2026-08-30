@@ -110,7 +110,13 @@ function normalizeDocumentStatus(value: string): ShipmentDocumentStatus {
 export function buildHumanDecisionCatalogFact(
   decisions: DecisionRow[],
 ): HumanDecisionCardProps | undefined {
-  const pendingDecision = decisions[0];
+  const pendingDecision = decisions.find(
+    (d) =>
+      (d.status === 'PENDING' || d.status === 'pending') &&
+      !d.resolved_at &&
+      d.status !== 'resolved' &&
+      d.status !== 'RESOLVED',
+  );
   const decisionOptions = pendingDecision
     ? decisionOptionsSchema.safeParse(pendingDecision.options_json)
     : undefined;

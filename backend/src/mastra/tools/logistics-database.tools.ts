@@ -286,16 +286,21 @@ export function createGetPendingDecisionsTool(options: LogisticsToolsOptions = {
   return createTool({
     id: 'get-pending-decisions',
     description:
-      'Retrieve pending human-in-the-loop decisions waiting for user approval or resolution (e.g. rerouting approval, discrepancy resolution, customs escalation).',
+      'Retrieve pending human-in-the-loop decisions waiting for user approval or resolution (e.g. rerouting approval, discrepancy resolution, customs escalation). Pass operationIdOrRef to get decisions for a specific shipment (e.g. "OP-2026-9201" or UUID).',
     inputSchema: z.object({
+      operationIdOrRef: z
+        .string()
+        .optional()
+        .describe('Optional operation reference code (e.g. "OP-2026-9201") or UUID to filter pending decisions.'),
       operationId: z
         .string()
         .optional()
-        .describe('Optional operation UUID to filter pending decisions.'),
+        .describe('Legacy alias for operation UUID or reference code.'),
     }),
     outputSchema: pendingDecisionsOutputSchema,
     execute: async (input) => {
-      const decisions = await reader.getPendingDecisions(input.operationId);
+      const targetOp = input.operationIdOrRef || input.operationId;
+      const decisions = await reader.getPendingDecisions(targetOp);
       return {
         count: decisions.length,
         decisions,

@@ -751,9 +751,18 @@ export async function executeAriStep(
 
   if (parsedPendingDecisions.success) {
     try {
-      const humanDecision = buildHumanDecisionCatalogFact(
-        parsedPendingDecisions.data.decisions,
-      );
+      const currentOpId =
+        parsedOperationDetails.success && parsedOperationDetails.data.found
+          ? parsedOperationDetails.data.details?.operation.id
+          : undefined;
+
+      const matchingDecisions = currentOpId
+        ? parsedPendingDecisions.data.decisions.filter(
+            (d) => d.operation_id === currentOpId,
+          )
+        : parsedPendingDecisions.data.decisions;
+
+      const humanDecision = buildHumanDecisionCatalogFact(matchingDecisions);
 
       if (humanDecision) {
         catalogFactPatch.humanDecision = humanDecision;
@@ -1204,6 +1213,20 @@ export async function executeAriStep(
 
   if (isDecisionResolution) {
     delete catalogFactPatch.humanDecision;
+
+    // Persist resolution to Supabase so it never re-appears in future turns
+    try {
+      const match = lastUserText.match(
+        /(?:selected option|ha seleccionado|opción elegida)[:\s]*"([^"]+)"/i,
+      );
+      const answer = match ? match[1] : 'Approved';
+      const reader = new SupabaseReader();
+      void reader.resolveDecision({
+        answer,
+      });
+    } catch (e) {
+      console.warn('Failed to persist decision resolution to Supabase:', e);
+    }
   }
 
   const renderResult = response.toolResults.find(

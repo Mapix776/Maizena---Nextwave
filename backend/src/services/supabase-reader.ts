@@ -418,12 +418,76 @@ export class SupabaseReader {
   // ===========================================================================
 
   /** Obtener decisiones Human-in-the-Loop pendientes enriquecidas con código de operación y cliente */
-  async getPendingDecisions(operationId?: string): Promise<DecisionRow[]> {
-    let path = `decisions?status=eq.PENDING&select=*&order=created_at.desc`;
-    if (operationId) {
-      path += `&operation_id=eq.${operationId}`;
+  async getPendingDecisions(operationIdOrRef?: string): Promise<DecisionRow[]> {
+    let resolvedOpId = operationIdOrRef;
+    if (
+      operationIdOrRef &&
+      (operationIdOrRef.startsWith('OP-') ||
+        operationIdOrRef.startsWith('MDS-') ||
+        operationIdOrRef.startsWith('PO-') ||
+        operationIdOrRef.length < 32)
+    ) {
+      const op = await this.getOperationByReferenceOrId(operationIdOrRef).catch(() => null);
+      if (op) resolvedOpId = op.id;
     }
-    return this.request<DecisionRow[]>(path);
+
+    let path = `decisions?status=eq.PENDING&resolved_at=is.null&select=*&order=created_at.desc`;
+    if (resolvedOpId) {
+      path += `&operation_id=eq.${resolvedOpId}`;
+    }
+    const rows = await this.request<DecisionRow[]>(path);
+    return rows.filter(
+      (d) =>
+        (d.status === 'PENDING' || d.status === 'pending') &&
+        !d.resolved_at &&
+        (!resolvedOpId || d.operation_id === resolvedOpId),
+    );
+  }
+
+  /** Marcar decisión como resuelta en Supabase */
+  async resolveDecision(params: {
+    decisionId?: string;
+    operationIdOrRef?: string;
+    actionType?: string;
+    answer: string;
+  }): Promise<boolean> {
+    try {
+      let opId = params.operationIdOrRef;
+      if (
+        params.operationIdOrRef &&
+        (params.operationIdOrRef.startsWith('OP-') ||
+          params.operationIdOrRef.startsWith('MDS-') ||
+          params.operationIdOrRef.startsWith('PO-'))
+      ) {
+        const op = await this.getOperationByReferenceOrId(params.operationIdOrRef).catch(() => null);
+        if (op) opId = op.id;
+      }
+
+      const queryParts: string[] = [];
+      if (params.decisionId) {
+        queryParts.push(`id=eq.${params.decisionId}`);
+      } else if (opId) {
+        queryParts.push(`operation_id=eq.${opId}`);
+      }
+      if (params.actionType) {
+        queryParts.push(`action_type=eq.${encodeURIComponent(params.actionType)}`);
+      }
+
+      if (queryParts.length === 0) return false;
+
+      await this.request(`decisions?${queryParts.join('&')}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'ACCEPTED',
+          answer: params.answer,
+          resolved_at: new Date().toISOString(),
+        }),
+      });
+      return true;
+    } catch (e) {
+      console.warn('Failed to resolve decision in Supabase:', e);
+      return false;
+    }
   }
 
   async getEnrichedPendingDecisions(operationId?: string) {
