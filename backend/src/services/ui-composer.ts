@@ -21,6 +21,7 @@ interface ChartData {
   chartType: 'bar' | 'line' | 'pie';
   data: Array<{ label: string; value: number }>;
   description?: string;
+  [key: string]: unknown;
 }
 
 export function composeRunUi(result: StepResult): unknown {
@@ -41,22 +42,27 @@ export function composeRunUi(result: StepResult): unknown {
 
   if (humanDecision) {
     elements['decision-card'] = {
-          type: 'HumanDecisionCard',
-          props: {
-            title: humanDecision.title,
-            question: humanDecision.question,
-            severity: humanDecision.severity ?? 'normal',
-            options: humanDecision.options,
-          },
-          children: [],
-        };
+      type: 'HumanDecisionCard',
+      props: {
+        title: humanDecision.title,
+        question: humanDecision.question,
+        severity: humanDecision.severity ?? 'normal',
+        options: humanDecision.options,
+      },
+      children: [],
+    };
     elements['assistant-message'].children.push('decision-card');
   }
 
   if (chart) {
     elements['interactive-chart'] = {
       type: 'InteractiveChart',
-      props: chart,
+      props: {
+        title: chart.title,
+        chartType: chart.chartType,
+        data: chart.data,
+        ...(chart.description ? { description: chart.description } : {}),
+      },
       children: [],
     };
     elements['assistant-message'].children.push('interactive-chart');
