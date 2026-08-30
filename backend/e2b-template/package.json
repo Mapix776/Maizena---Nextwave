@@ -1,0 +1,15 @@
+{
+  "name": "nauta-report-builder",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --emptyOutDir",
+    "validate:source": "node scripts/validate-source.mjs",
+    "validate:browser": "node scripts/validate-browser.mjs",
+    "validate:network": "node scripts/assert-no-network.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "vite": "8.2.2"
+  }
+}

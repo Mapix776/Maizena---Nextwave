@@ -6,6 +6,7 @@ Rendered from `terms.json`. Accepted terms bind all future work; drafts are pend
 
 - **engine tracer** — the first vertical slice, user-defined: the full setup where the AI returns a hello world through one deterministic tool that always returns the same result — Mastra agent → RunCoordinator → Socket.IO → json-render in the Next frontend. Everything else extends from this base.
 - **Order incident** — a manually raised, actionable order problem containing an order ID, type, severity, and message; the backend owns its identity, time, and global acknowledgment state. It remains actionable until acknowledged and is not an agent Run incident.
+- **Work trace** — a run-scoped, user-visible account of Ari's observable work: elapsed wall-clock time plus concise summaries of orchestration and tool activity. It is not raw hidden chain-of-thought, inferred component narration, infrastructure logs, or payload dumps.
 
 ## Draft (from the spec, pending brief validation)
 

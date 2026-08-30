@@ -1,0 +1,117 @@
+{
+  "snapshot": {
+    "id": "fixture-nauta-e2b-001",
+    "generatedAt": "2026-08-30T14:00:00Z",
+    "freshness": "Sanitized tracer fixture — not live operational data"
+  },
+  "operation": {
+    "reference": "OP-2026-101",
+    "client": "Muebles del Sur — Demo",
+    "mode": "Ocean FCL",
+    "status": "CUSTOMS_CLEARANCE",
+    "origin": "Ho Chi Minh City, Vietnam",
+    "destination": "Manzanillo, Mexico",
+    "carrier": "Ocean Network Demo",
+    "vessel": "PACIFIC DEMO 18",
+    "voyage": "PD18-W"
+  },
+  "executiveSummary": {
+    "totalContainers": 4,
+    "onTrack": 2,
+    "atRisk": 1,
+    "critical": 1,
+    "estimatedValueUsd": 486000,
+    "nextDecisionDue": "2026-08-31T16:00:00Z"
+  },
+  "containers": [
+    {
+      "number": "MSDU7000810",
+      "status": "CUSTOMS_HOLD",
+      "severity": "critical",
+      "eta": "2026-09-08T18:00:00Z",
+      "slipDays": 4,
+      "cargo": "Dining-room furniture",
+      "issue": "Document weight discrepancy requires review"
+    },
+    {
+      "number": "MSDU7000820",
+      "status": "CUSTOMS_REVIEW",
+      "severity": "warning",
+      "eta": "2026-09-06T18:00:00Z",
+      "slipDays": 1,
+      "cargo": "Upholstered seating",
+      "issue": "Random inspection selected"
+    },
+    {
+      "number": "MSDU7000830",
+      "status": "IN_TRANSIT",
+      "severity": "normal",
+      "eta": "2026-09-05T18:00:00Z",
+      "slipDays": 0,
+      "cargo": "Bedroom furniture",
+      "issue": null
+    },
+    {
+      "number": "MSDU7000840",
+      "status": "IN_TRANSIT",
+      "severity": "normal",
+      "eta": "2026-09-05T18:00:00Z",
+      "slipDays": 0,
+      "cargo": "Office furniture",
+      "issue": null
+    }
+  ],
+  "routeMilestones": [
+    {
+      "label": "Departed origin",
+      "location": "Ho Chi Minh City",
+      "at": "2026-08-17T04:00:00Z",
+      "status": "completed"
+    },
+    {
+      "label": "Transshipment",
+      "location": "Busan",
+      "at": "2026-08-23T13:30:00Z",
+      "status": "completed"
+    },
+    {
+      "label": "Pacific crossing",
+      "location": "At sea",
+      "at": "2026-08-30T14:00:00Z",
+      "status": "current"
+    },
+    {
+      "label": "Port arrival",
+      "location": "Manzanillo",
+      "at": "2026-09-05T18:00:00Z",
+      "status": "forecast"
+    }
+  ],
+  "risks": [
+    {
+      "id": "RISK-101",
+      "severity": "critical",
+      "title": "Weight mismatch",
+      "detail": "Bill of Lading lists 18,050 kg; Packing List lists 18,200 kg.",
+      "container": "MSDU7000810",
+      "owner": "Documentation desk"
+    },
+    {
+      "id": "RISK-102",
+      "severity": "warning",
+      "title": "Inspection buffer",
+      "detail": "One-day clearance buffer is recommended for the selected inspection.",
+      "container": "MSDU7000820",
+      "owner": "Customs operations"
+    }
+  ],
+  "pendingDecision": {
+    "title": "Resolve declared weight",
+    "question": "Which document should be amended before arrival?",
+    "options": [
+      "Request corrected Packing List",
+      "Request carrier BL amendment",
+      "Escalate for manual reconciliation"
+    ]
+  }
+}

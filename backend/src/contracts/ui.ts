@@ -19,6 +19,7 @@ import {
   shipmentMilestoneTimelinePropsSchema,
 } from './logistics-ui.js';
 import { reconciliationFindingsPropsSchema } from './reconciliation.js';
+import type { WorkTrace } from './work-trace.js';
 
 export const containerStatuses = [
   'Booking Confirmed',
@@ -297,7 +298,7 @@ export interface UIReplacePayload {
   uiVersion: number;
   reason: string;
   spec: TracerSpec;
-  traceSteps?: unknown[];
+  workTrace: WorkTrace;
   targetMessageId?: string;
 }
 
@@ -315,6 +316,7 @@ export interface RunSnapshot {
   sequence: number;
   facts: Record<string, unknown>;
   ui: TracerSpec | null;
+  workTrace: WorkTrace | null;
   error?: string;
   targetMessageId?: string;
 }

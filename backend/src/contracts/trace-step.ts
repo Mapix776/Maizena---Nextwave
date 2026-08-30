@@ -1,46 +1,12 @@
-import { z } from 'zod';
+import type { ExecutionTraceStep } from './work-trace.js';
 
-export const executionStepKindSchema = z.enum([
-  'thinking',
-  'reading_document',
-  'drawing_chart',
-  'locating_map',
-  'finding_container',
-  'calculating_eta',
-  'comparing_data',
-  'querying_database',
-  'requesting_decision',
-  'generating_ui',
-]);
-
-export const thinkingAnimationTypeSchema = z.enum([
-  'thinking',
-  'reading',
-  'drawing',
-  'mapping',
-  'finding',
-  'findingBoat',
-  'eta',
-  'comparing',
-]);
-
-export type ThinkingAnimationType = z.infer<typeof thinkingAnimationTypeSchema>;
-
-export const executionTraceStepSchema = z.object({
-  id: z.string(),
-  stepNumber: z.number(),
-  kind: executionStepKindSchema,
-  animationType: thinkingAnimationTypeSchema.default('thinking'),
-  title: z.string(),
-  detail: z.string(),
-  toolName: z.string().optional(),
-  input: z.record(z.string(), z.unknown()).optional(),
-  outputSummary: z.string().optional(),
-  durationMs: z.number().default(0),
-  timestamp: z.string(),
-});
-
-export type ExecutionTraceStep = z.infer<typeof executionTraceStepSchema>;
+export {
+  executionStepKindSchema,
+  executionTraceStepSchema,
+  thinkingAnimationTypeSchema,
+  type ExecutionTraceStep,
+  type ThinkingAnimationType,
+} from './work-trace.js';
 
 /**
  * Helper to safely extract string properties from unknown result objects
@@ -64,22 +30,34 @@ export function mapToolToTraceStep(
   result: unknown = null,
   stepNumber: number = 1,
 ): ExecutionTraceStep {
+  return {
+    ...createMappedTraceStep(toolName, args, result, stepNumber),
+    input: args,
+  };
+}
+
+function createMappedTraceStep(
+  toolName: string,
+  args: Record<string, unknown> = {},
+  result: unknown = null,
+  stepNumber: number = 1,
+): ExecutionTraceStep {
   const id = `step-${stepNumber}-${toolName}`;
   const timestamp = new Date().toISOString();
 
   switch (toolName) {
     case 'read-shipment-document':
     case 'readDocumentTool': {
-      const docType = String(args.documentType || args.documentIdOrRef || 'shipment document');
+      const docType = String(args.documentType || args.documentIdOrRef || 'documento de embarque');
       return {
         id,
         stepNumber,
         kind: 'reading_document',
         animationType: 'reading',
-        title: `Document Extraction & Reading (${docType})`,
-        detail: `Parsed the official "${docType}" issued by the freight forwarder: extracted origin, destination, certified gross weights, HS tariff codes, and Incoterms to ensure data integrity against the digital file.`,
+        title: 'Leyendo documento',
+        detail: `Leí el ${docType} para verificar las cantidades, el peso declarado y validar que no falte información clave para la aduana.`,
         toolName,
-        outputSummary: 'Source: Original PDF shipment dossier.',
+        outputSummary: 'Datos del documento extraídos y comprobados con éxito.',
         timestamp,
         durationMs: 45,
       };
@@ -87,16 +65,16 @@ export function mapToolToTraceStep(
 
     case 'draw-logistics-chart':
     case 'drawChartTool': {
-      const chartTitle = getProp(result, ['title']) || 'Cargo value comparison';
       return {
         id,
         stepNumber,
         kind: 'drawing_chart',
         animationType: 'drawing',
-        title: 'Auditable Interactive Chart Generation',
-        detail: `Consolidated operational metrics from confirmed orders and shipment manifests for "${chartTitle}": processed certified cargo volumes to render an interactive, fully auditable visual chart.`,
+        title: 'Dibujando gráficas',
+        detail:
+          'Estructuré las métricas disponibles para presentártelas en una gráfica interactiva clara y fácil de interpretar.',
         toolName,
-        outputSummary: 'Source: Consolidated operations & inventory database.',
+        outputSummary: 'Gráfica comparativa generada.',
         timestamp,
         durationMs: 30,
       };
@@ -104,25 +82,17 @@ export function mapToolToTraceStep(
 
     case 'locate-shipment-on-map':
     case 'locateMapTool': {
-      const ref = String(args.referenceOrContainer || 'your shipment');
-      const vessel = getProp(result, ['route', 'currentVessel']);
-      const origin = getProp(result, ['route', 'originPort']);
-      const dest = getProp(result, ['route', 'destinationPort']);
-
-      let routeText = `for shipment ${ref}`;
-      if (origin && dest && origin !== 'To be confirmed') {
-        routeText = `on the official maritime corridor ${origin} → ${dest}`;
-      }
+      const ref = String(args.referenceOrContainer || 'tu embarque');
 
       return {
         id,
         stepNumber,
         kind: 'locating_map',
         animationType: 'mapping',
-        title: 'Satellite AIS Geolocation & Route Tracking',
-        detail: `Retrieved live satellite coordinates from the AIS maritime tracking network ${vessel ? `for vessel "${vessel}"` : ''} ${routeText}: computed oceanic corridor transit and plotted verified GPS coordinates on the interactive route map.`,
+        title: 'Ubicando en el mapa',
+        detail: `Consulté las coordenadas marítimas, la ruta y la posición disponible para ${ref}.`,
         toolName,
-        outputSummary: vessel ? `Source: Satellite AIS telemetry for vessel ${vessel}.` : 'Source: Official maritime transit registry.',
+        outputSummary: 'Ruta y coordenadas localizadas.',
         timestamp,
         durationMs: 50,
       };
@@ -132,15 +102,15 @@ export function mapToolToTraceStep(
     case 'findContainerTool':
     case 'get-container-status':
     case 'getContainerStatusTool': {
-      const containerNo = String(args.containerNumber || args.containerQuery || 'your container');
+      const containerNo = String(args.containerNumber || args.containerQuery || 'tu contenedor');
       const vessel = getProp(result, ['container', 'current_vessel']);
       const location = getProp(result, ['container', 'current_location']);
       const status = getProp(result, ['container', 'status']);
       const dest = getProp(result, ['container', 'destination_port']);
 
-      let detail = `Queried the terminal yard inventory and carrier booking records for container unit ${containerNo}.`;
+      let detail = `Rastreé el contenedor ${containerNo} en el registro de embarques.`;
       if (vessel || location) {
-        detail = `Located container ${containerNo} according to carrier booking records: positioned aboard vessel "${vessel || 'cargo vessel'}", currently ${location ? `at ${location}` : 'in oceanic transit'} according to the carrier vessel schedule${dest ? ` bound for ${dest}` : ''}.`;
+        detail = `Localicé el contenedor ${containerNo}: confirmé el transporte asignado y su ubicación actual${dest ? ', además del destino registrado' : ''}.`;
       }
 
       return {
@@ -148,10 +118,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'finding_container',
         animationType: 'findingBoat',
-        title: 'Carrier & Port Container Traceability',
+        title: 'Container por barco',
         detail,
         toolName,
-        outputSummary: status ? `Source: Carrier manifest. Status: ${status}` : 'Source: Carrier booking & yard inventory records.',
+        outputSummary: status ? `Estatus: ${status}` : 'Contenedor localizado en el sistema.',
         timestamp,
         durationMs: 40,
       };
@@ -159,17 +129,17 @@ export function mapToolToTraceStep(
 
     case 'search-cargo-items':
     case 'searchCargoTool': {
-      const query = String(args.query || 'your cargo');
+      const query = String(args.query || 'tu mercancía');
       const count = getProp(result, ['matchedCount']) || '1';
       return {
         id,
         stepNumber,
         kind: 'finding_container',
         animationType: 'finding',
-        title: 'Packing List & Cargo Manifest Audit',
-        detail: `Audited declared cargo line items across the official Packing List (PL.pdf) and import manifests for "${query}": matched ${count} certified cargo batch(es) with verified tariff descriptions and piece counts.`,
+        title: 'Encontrando container',
+        detail: `Revisé el catálogo y los manifiestos de carga buscando "${query}". Encontré ${count} embarque(s) coincidentes con las piezas declaradas.`,
         toolName,
-        outputSummary: `Source: Official Packing List & import manifest.`,
+        outputSummary: `Encontradas coincidencias para "${query}".`,
         timestamp,
         durationMs: 55,
       };
@@ -177,15 +147,15 @@ export function mapToolToTraceStep(
 
     case 'calculate-shipment-eta':
     case 'calculateEtaTool': {
-      const ref = String(args.referenceOrContainer || 'your shipment');
+      const ref = String(args.referenceOrContainer || 'tu envío');
       const delayDays = getProp(result, ['etaAnalysis', 'delayDays']);
       const hasDelay = getProp(result, ['etaAnalysis', 'hasDelay']) === 'true';
 
-      let detail = `Cross-referenced the ocean carrier transit timetable with the Port Authority (ASIPONA) berth allocation bulletin for ${ref}: analyzed vessel sailing knots and harbor congestion.`;
+      let detail = `Calculé los tiempos de navegación en altamar y tiempos de descarga en puerto para ${ref}.`;
       if (hasDelay && delayDays) {
-        detail += ` Based on meteorological and dock congestion reports, a variation of +${delayDays} days is projected against the original Bill of Lading schedule.`;
+        detail += ` Se detectó un desvío estimado de ${delayDays} días respecto a la fecha original.`;
       } else {
-        detail += ' Arrival date aligns with the confirmed carrier booking schedule.';
+        detail += ' El embarque avanza de acuerdo con el itinerario previsto.';
       }
 
       return {
@@ -193,10 +163,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'calculating_eta',
         animationType: 'eta',
-        title: 'ETA Computation via Berth Schedules & Carrier Data',
+        title: 'Calculando ETA',
         detail,
         toolName,
-        outputSummary: hasDelay ? `Source: Port Authority bulletin. Alert: +${delayDays} days` : 'Source: Confirmed carrier sailing schedule.',
+        outputSummary: hasDelay ? `Alerta: +${delayDays} días de retraso` : 'Itinerario en tiempo normal.',
         timestamp,
         durationMs: 35,
       };
@@ -213,12 +183,12 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'comparing_data',
         animationType: 'comparing',
-        title: 'Multi-Document Cross-Audit (BL vs Invoice vs Packing List)',
+        title: 'Comparando datos',
         detail: isClean
-          ? 'Cross-referenced every line item across the Bill of Lading (BL), Commercial Invoice, and Packing List (PL.pdf): certified 100% concordance in gross weights, piece counts, and container seals with zero discrepancies.'
-          : `Performed cross-document audit between the Bill of Lading and Packing List: identified ${discrepanciesCount || 'discrepancies'} in declared weights against the physical manifest, raising a proactive alert to prevent customs penalties.`,
+          ? 'Crucé los datos de la Factura Comercial, el Packing List y el Bill of Lading: los pesos, bultos y números de serie coinciden perfectamente.'
+          : `Crucé los documentos de embarque y detecté ${discrepanciesCount || 'algunas'} diferencias en pesos o cantidades que requieren revisión preventiva.`,
         toolName,
-        outputSummary: isClean ? 'Source: B/L, Commercial Invoice & Packing List matched 100%.' : 'Source: Official shipment documents with detected variance.',
+        outputSummary: isClean ? 'Documentación 100% concordante.' : 'Diferencias detectadas para tu atención.',
         timestamp,
         durationMs: 60,
       };
@@ -231,10 +201,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Customs Clearance & Tax Pedimento Inspection',
-        detail: 'Inspected the official Import Pedimento filing and Customs Authority register: verified the fiscal clearance light (green clearance vs red physical inspection) and validated the electronic customs seal to confirm release readiness.',
+        title: 'Revisando estatus de aduana',
+        detail: 'Verifiqué el semáforo fiscal y el estado de pedimentos ante la autoridad aduanera para confirmar si la carga está liberada o requiere inspección previa.',
         toolName,
-        outputSummary: 'Source: Official Customs Pedimento & SAT clearance registry.',
+        outputSummary: 'Semáforo fiscal consultado.',
         timestamp,
         durationMs: 35,
       };
@@ -248,10 +218,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Live Port Incidents & Carrier Advisories Monitor',
-        detail: `Checked the marine terminal incident bulletin and carrier network advisories: assessed dock congestion, weather alerts, and official transit notices (${count} active event(s)).`,
+        title: 'Comprobando alertas operativas',
+        detail: `Revisé el monitor de incidentes en tiempo real para verificar posibles congestiones portuarias, demoras climáticas o avisos de transportistas. (${count} alertas activas).`,
         toolName,
-        outputSummary: 'Source: Marine terminal & port traffic advisories.',
+        outputSummary: 'Monitor de riesgos revisado.',
         timestamp,
         durationMs: 30,
       };
@@ -259,18 +229,17 @@ export function mapToolToTraceStep(
 
     case 'get-operation-details':
     case 'getOperationDetailsTool': {
-      const ref = String(args.operationIdOrRef || args.referenceCode || 'your operation');
-      const client = getProp(result, ['details', 'operation', 'client_name']);
+      const ref = String(args.operationIdOrRef || args.referenceCode || 'tu operación');
       const status = getProp(result, ['details', 'operation', 'status']);
       return {
         id,
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: `Unified Operation Master Record (${ref})`,
-        detail: `Loaded the unified master record for operation "${ref}"${client ? ` (${client})` : ''}: includes the Purchase Order (PO), carrier Booking confirmation, and all milestone timestamps certified by the logistics operator.`,
+        title: 'Consultando registro en vivo',
+        detail: `Cargué el expediente completo de ${ref} desde Supabase: verifiqué contenedores asignados, historial de eventos y documentos asociados.`,
         toolName,
-        outputSummary: status ? `Source: PO/Booking master dossier. Status: ${status}` : 'Source: Unified logistics operation dossier.',
+        outputSummary: status ? `Operación: ${status}` : 'Expediente cargado con éxito.',
         timestamp,
         durationMs: 40,
       };
@@ -285,10 +254,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Consolidated Fleet & Operations Balance',
-        detail: 'Consolidated trade records across all active import and export lanes: computed active international container fleet metrics, scheduled customs entries, and port clearance statuses.',
+        title: 'Consultando balance general',
+        detail: 'Consulté las estadísticas globales de todas tus importaciones activas, contenedores en navegación y trámites en aduana.',
         toolName,
-        outputSummary: 'Source: Centralized logistics operations & fleet registry.',
+        outputSummary: 'Métricas operativas actualizadas.',
         timestamp,
         durationMs: 40,
       };
@@ -298,16 +267,16 @@ export function mapToolToTraceStep(
     case 'getPendingDecisionsTool':
     case 'request-human-decision':
     case 'requestHumanDecisionTool': {
-      const title = String(args.title || 'Approval Required');
+      const title = String(args.title || 'Aprobación requerida');
       return {
         id,
         stepNumber,
         kind: 'requesting_decision',
         animationType: 'thinking',
-        title: 'Human-in-the-Loop Control Point (HITL)',
-        detail: `Structured the required decision action for "${title}" based on the operation dossier: formulated resolution options with operational impact assessments for 1-click human executive authorization.`,
+        title: 'Pidiendo tu visto bueno',
+        detail: `Preparé la tarjeta de decisión "${title}" con opciones claras para que elijas la acción adecuada con un solo clic.`,
         toolName,
-        outputSummary: 'Source: Operational exceptions & control protocol.',
+        outputSummary: 'Opciones de aprobación listas para ti.',
         timestamp,
         durationMs: 25,
       };
@@ -315,16 +284,16 @@ export function mapToolToTraceStep(
 
     case 'render-json-demo':
     case 'renderDemoTool': {
-      const deliveryId = String(args.deliveryId || 'your shipment');
+      const deliveryId = String(args.deliveryId || 'tu embarque');
       return {
         id,
         stepNumber,
         kind: 'generating_ui',
         animationType: 'thinking',
-        title: 'Real-Time Generative UI Composition',
-        detail: `Composed the interactive visual card for ${deliveryId}: synchronized certified container records, live GPS route map, verified ETA, and milestone progress bar directly in the client stream.`,
+        title: 'Generando tarjeta de seguimiento',
+        detail: `Construí la vista interactiva con el resumen de ${deliveryId}, ruta en tiempo real, fecha de llegada (ETA) y barra de progreso.`,
         toolName,
-        outputSummary: 'Source: Certified logistics dossier.',
+        outputSummary: 'Vista visual interactiva generada.',
         timestamp,
         durationMs: 25,
       };
@@ -332,16 +301,16 @@ export function mapToolToTraceStep(
 
     case 'ingest-uploaded-document':
     case 'ingestDocumentTool': {
-      const fileName = String(args.fileName || 'uploaded file');
+      const fileName = String(args.fileName || 'archivo subido');
       return {
         id,
         stepNumber,
         kind: 'reading_document',
         animationType: 'reading',
-        title: `Digital Document Ingestion & Verification ("${fileName}")`,
-        detail: `Processed uploaded digital document "${fileName}": extracted structured data via vision document AI, verified stamps and signatures against official registries, and attached records to the operation dossier.`,
+        title: 'Leyendo documento',
+        detail: `Analicé el archivo "${fileName}", extraje sus datos estructurados y los ingresé a la base de datos para seguimiento inmediato.`,
         toolName,
-        outputSummary: `Source: User-uploaded digital document "${fileName}".`,
+        outputSummary: 'Documento procesado e ingresado al sistema.',
         timestamp,
         durationMs: 65,
       };
@@ -353,10 +322,9 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'thinking',
         animationType: 'thinking',
-        title: 'Reasoning & Orchestration',
-        detail: 'Synthesized verified operational facts across dossiers to structure the optimal executive response and interactive visual components.',
+        title: 'Pensando',
+        detail: 'Organizando la respuesta y preparando los siguientes pasos.',
         toolName,
-        outputSummary: 'Source: Nauta logistics intelligence engine.',
         timestamp,
         durationMs: 20,
       };

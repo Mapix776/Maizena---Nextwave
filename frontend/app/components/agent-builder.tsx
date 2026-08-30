@@ -8,18 +8,20 @@ import {
   BarChart3,
   Bookmark,
   BookmarkCheck,
-  ChevronRight,
+  CheckCircle2,
   Copy,
   Download,
   FileText,
   Landmark,
-  ListTree,
+  MessageSquare,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
+  Rocket,
   RotateCcw,
   Save,
+  Settings,
   Share2,
   Ship,
   Sparkles,
@@ -62,10 +64,8 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { Button } from '@/components/ui/button'
-import {
-  ThinkingAnimation,
-  type ThinkingAnimationType,
-} from '@/components/chat/thinking-animation'
+import { Spinner } from '@/components/ui/spinner'
+import { WorkTraceDisclosure } from '@/components/chat/work-trace'
 import { DocumentSheetView } from '@/components/logistics/document-sheet-view'
 import { JsonRenderClient } from '@/app/json-render/render-client'
 import { getTranslations, type Locale } from '@/lib/i18n'
@@ -74,22 +74,13 @@ import {
   type ChatAttachment,
   type ChatMessage,
   type ConnectionStatus,
-  type TraceStep,
   useAriChat,
 } from '@/lib/use-ari-chat'
 
 type ContextItem = {
   id: string
   title: string
-  kind:
-    | 'Document'
-    | 'Documents'
-    | 'Report'
-    | 'Detail'
-    | 'Sheet'
-    | 'Customs Sheet'
-    | 'Operational Alerts'
-    | 'Tracking'
+  kind: 'Documento' | 'Informe' | 'Detalle'
   description: string
   sourceId: string
   elementType: string
@@ -108,32 +99,19 @@ function contextItemsFromSpec(
   spec: JsonRenderSpec,
   sourceId: string,
 ): ContextItem[] {
-  return Object.entries(spec.elements)
-    .filter(([, element]) => {
-      // Only include elements with a real sheet viewer or attached file,
-      // to avoid blank tabs (e.g. "Sheet 1", "Sheet 5").
-      const props = element.props as Record<string, unknown> | undefined
-      const isDocSheet = DOCUMENT_SHEET_TYPES.has(element.type)
-      const hasFileUrl = Boolean(props?.url || props?.fileUrl)
-      return isDocSheet || hasFileUrl
-    })
-    .map(([id, element], index) => {
+  return Object.entries(spec.elements).map(([id, element], index) => {
     const props = element.props as Record<string, unknown>
-    const type = element.type.toLowerCase()
-    const isCustoms = type.includes('customs') || type.includes('aduan')
-    const kind = isCustoms ? 'Customs Sheet' : 'Documents'
+    const kind = element.type.toLowerCase().includes('issue')
+      ? 'Informe'
+      : element.type.toLowerCase().includes('document')
+        ? 'Documento'
+        : 'Detalle'
     const title =
-      typeof props.title === 'string' && props.title.trim()
+      typeof props.title === 'string'
         ? props.title
-        : typeof props.containerNumber === 'string'
-          ? `Customs · ${props.containerNumber}`
-          : typeof props.reference === 'string'
-            ? props.reference
-            : typeof props.name === 'string'
-              ? props.name
-              : isCustoms
-                ? `Customs Sheet ${index + 1}`
-                : `Document ${index + 1}`
+        : typeof props.reference === 'string'
+          ? props.reference
+          : `${kind} ${index + 1}`
     const url =
       typeof props.url === 'string'
         ? props.url
@@ -148,7 +126,7 @@ function contextItemsFromSpec(
       description:
         typeof props.description === 'string'
           ? props.description
-          : 'Certified document record.',
+          : `Información contextual de ${title.toLowerCase()}.`,
       sourceId,
       elementType: element.type,
       props,
@@ -159,51 +137,14 @@ function contextItemsFromSpec(
   })
 }
 
-const THINKING_COPY: Record<ThinkingAnimationType, string> = {
-  thinking: 'Ari is processing your request...',
-  reading: 'Ari is extracting data from the document...',
-  drawing: 'Ari is building the visualization...',
-  mapping: 'Ari is plotting the route on the map...',
-  finding: 'Ari is looking up the container...',
-  findingBoat: 'Ari is locating the container by vessel...',
-  eta: 'Ari is calculating the ETA...',
-  comparing: 'Ari is comparing the documents...',
-}
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
 
-function inferThinkingType(message?: ChatMessage): ThinkingAnimationType {
-  if (!message) return 'thinking'
+const fixedInstructions = `You are Ari, the lead logistics agent.
 
-  const hasPdf = (message.attachments ?? []).some(
-    (attachment) =>
-      attachment.type.toLowerCase().includes('pdf') ||
-      /\.(pdf|docx?|xlsx?|csv)$/i.test(attachment.name),
-  )
-  if (hasPdf) return 'reading'
+Ground operational answers in the live Supabase query tools. Delegate Bill of Lading, Commercial Invoice, and Packing List reconciliation to Recon.
 
-  const text = message.text.toLowerCase()
-  const has = (...words: string[]) => words.some((word) => text.includes(word))
-
-  if (
-    has('reconcile', 'reconcil', 'discrepan', 'compare', 'comparison', 'cross-check', 'match', 'bill of lading', 'packing list', 'invoice')
-  ) {
-    return 'comparing'
-  }
-  if (has('boat', 'ship', 'vessel', 'carrier')) return 'findingBoat'
-  if (has('container')) return 'finding'
-  if (has('route', 'map', 'track', 'locate', 'location', 'position', 'where')) {
-    return 'mapping'
-  }
-  if (has('eta', 'arrive', 'arrival', 'when', 'time', 'delay', 'estimate')) {
-    return 'eta'
-  }
-  if (has('chart', 'graph', 'metric', 'analytic', 'statistic', 'dashboard')) {
-    return 'drawing'
-  }
-  if (has('document', 'pdf', 'file', 'read', 'extract', 'report')) {
-    return 'reading'
-  }
-  return 'thinking'
-}
+Return client-friendly explanations and preserve validated structured tool results so the backend can compose evidence-backed json-render components.`
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -224,117 +165,37 @@ function savedTitle(spec: JsonRenderSpec, fallback: string): string {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
-const ELEMENT_STEP_LABELS: Record<string, string> = {
-  AssistantMessage: 'assistant message',
-  OperationSummaryCard: 'operation summary',
-  OperationsMetricsCard: 'operations metrics',
-  ContainerProgress: 'container progress',
-  DeliveryCard: 'delivery status',
-  DeliveryIssueCard: 'delivery issue',
-  OperationalAlertList: 'operational alerts',
-  EtaRiskCard: 'ETA risk',
-  ShipmentMilestoneTimeline: 'shipment milestones',
-  ShipmentDocumentsTimeline: 'documents timeline',
-  CustomsClearancePanel: 'customs clearance',
-  DocumentDetailsCard: 'document details',
-  ReconciliationFindings: 'reconciliation findings',
-  HumanDecisionCard: 'human decision required',
-  AgentRunTimeline: 'agent timeline',
-  BarChart: 'bar chart',
-  InteractiveChart: 'interactive chart',
-  CatalogChart: 'catalog chart',
-}
-
-const DOCUMENT_ELEMENT_TYPES = new Set([
-  'DocumentDetailsCard',
-  'ReconciliationFindings',
-  'ShipmentDocumentsTimeline',
-  'CustomsClearancePanel',
-])
-
-function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
-  const types = Object.values(spec.elements).map((element) => element.type)
-  const hasDocuments = types.some((type) => DOCUMENT_ELEMENT_TYPES.has(type))
-  const hasCustoms = types.some((type) => type.toLowerCase().includes('customs'))
-  const hasRoute = types.some(
-    (type) => type.toLowerCase().includes('route') || type.toLowerCase().includes('map'),
-  )
-  const componentNames = types
-    .map((type) => ELEMENT_STEP_LABELS[type] ?? type)
-    .filter((name, index, all) => all.indexOf(name) === index)
-
-  const dataSource = hasCustoms
-    ? 'Source: Import customs declaration and customs inspection status'
-    : hasRoute
-      ? 'Source: AIS satellite telemetry from the vessel'
-      : 'Source: 360° operations detail (Supabase)'
-
-  const steps: TraceStep[] = [
-    {
-      title: 'Interpret the request',
-      detail:
-        'Ari analyzes your message and decides which data tools and agents it needs.',
-    },
-    {
-      title: 'Query operational data',
-      detail:
-        'Runs the Supabase tools to pull operations, containers and verified statuses in real time.',
-      outputSummary: dataSource,
-    },
-  ]
-
-  if (hasDocuments) {
-    steps.push({
-      title: 'Reconcile documents',
-      detail:
-        'Delegates to Recon the cross-check of Bill of Lading, Commercial Invoice and Packing List to detect discrepancies.',
-      outputSummary: 'Source: Certified Bill of Lading, Commercial Invoice and Packing List',
-    })
-  }
-
-  steps.push({
-    title: 'Compose the evidence',
-    detail: `Structures ${componentNames.length} component${componentNames.length === 1 ? '' : 's'}: ${componentNames.join(', ')}.`,
-  })
-  steps.push({
-    title: 'Validate and render',
-    detail:
-      'The result goes through the validated json-render catalog before being shown in the chat.',
-  })
-  return steps
-}
-
 const quickPrompts = [
   {
     icon: Ship,
-    label: 'Shipments',
-    prompt: 'Show me the status of my active shipments.',
+    label: 'Embarques',
+    prompt: 'Muéstrame el estado de mis embarques activos.',
   },
   {
     icon: Package,
-    label: 'Containers',
-    prompt: 'Check the status of my containers in transit.',
+    label: 'Contenedores',
+    prompt: 'Revisa el estado de mis contenedores en tránsito.',
   },
   {
     icon: FileText,
-    label: 'Documents',
+    label: 'Documentos',
     prompt:
-      'Reconcile the Bill of Lading, the Commercial Invoice and the Packing List.',
+      'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.',
   },
   {
     icon: Landmark,
-    label: 'Customs',
-    prompt: 'Check the status of my customs procedures.',
+    label: 'Aduanas',
+    prompt: 'Consulta el estado de mis trámites de aduana.',
   },
   {
     icon: AlertTriangle,
-    label: 'Incidents',
-    prompt: 'Show me the open incidents in my operations.',
+    label: 'Incidencias',
+    prompt: 'Muéstrame las incidencias abiertas en mis operaciones.',
   },
   {
     icon: BarChart3,
-    label: 'Analytics',
-    prompt: 'Show me the analytics and metrics of my operations.',
+    label: 'Analíticas',
+    prompt: 'Muéstrame las analíticas y métricas de mis operaciones.',
   },
 ]
 
@@ -546,21 +407,6 @@ function ChatMessageRow({
 }) {
   const assistant = message.role === 'assistant'
   const saved = isSaved?.(message.id) ?? false
-  const [traceOpen, setTraceOpen] = useState(false)
-  const traceSteps =
-    message.traceSteps && message.traceSteps.length > 0
-      ? message.traceSteps
-      : message.spec
-        ? deriveTraceSteps(message.spec as JsonRenderSpec)
-        : []
-  const hasDocSheet = Boolean(
-    message.spec &&
-      Object.values(message.spec.elements).some(
-        (element) =>
-          DOCUMENT_SHEET_TYPES.has(element.type) ||
-          Boolean((element.props as Record<string, unknown> | undefined)?.url),
-      ),
-  )
 
   return (
     <Message
@@ -574,18 +420,16 @@ function ChatMessageRow({
             <span className="text-xs font-medium text-muted-foreground">Ari</span>
             {message.spec && (
               <>
-                {hasDocSheet && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-full"
-                    onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
-                  >
-                    <FileText className="size-3.5" />
-                    {t.openInfo}
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full"
+                  onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
+                >
+                  <FileText className="size-3.5" />
+                  {t.openInfo}
+                </Button>
                 {onToggleSave && (
                   <Button
                     type="button"
@@ -610,61 +454,11 @@ function ChatMessageRow({
             )}
           </div>
         )}
-        {assistant && message.spec && traceSteps.length > 0 && (
-          <div className="mb-3 w-full overflow-hidden rounded-xl border border-border bg-card">
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              aria-expanded={traceOpen}
-              onClick={() => setTraceOpen((current) => !current)}
-            >
-              <ListTree className="size-4 text-primary" />
-              <span>{t.stepByStepTab}</span>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {traceSteps.length}
-              </span>
-              <ChevronRight
-                className={`ml-auto size-4 text-muted-foreground transition-transform ${
-                  traceOpen ? 'rotate-90' : ''
-                }`}
-                aria-hidden="true"
-              />
-            </button>
-            {traceOpen && (
-              <div className="space-y-4 border-t border-border px-3 py-4">
-                <p className="text-sm leading-6 text-muted-foreground">
-                  {t.stepByStepIntro}
-                </p>
-                <ol className="space-y-4">
-                  {traceSteps.map((step, index) => (
-                    <li key={step.title} className="relative flex gap-3">
-                      {index < traceSteps.length - 1 && (
-                        <span
-                          className="absolute bottom-[-1rem] left-3 top-6 w-px bg-border"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span className="relative z-10 grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                        {index + 1}
-                      </span>
-                      <div className="min-w-0 pt-0.5">
-                        <b className="text-sm font-medium">{step.title}</b>
-                        <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                          {step.detail}
-                        </p>
-                        {step.outputSummary && (
-                          <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-primary">
-                            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
-                            <span>{step.outputSummary}</span>
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-          </div>
+        {assistant && message.workTrace && (
+          <WorkTraceDisclosure
+            trace={message.workTrace}
+            workedForLabel={t.workedFor}
+          />
         )}
         <MessageContent
           className={
@@ -695,7 +489,7 @@ function ChatMessageRow({
               aria-label={t.copy}
               onClick={() => {
                 void navigator.clipboard?.writeText(message.text)
-                onNotify(t.responseCopied)
+                onNotify('Respuesta copiada')
               }}
             >
               <Copy className="size-3.5" />
@@ -703,14 +497,14 @@ function ChatMessageRow({
             <MessageAction
               label={t.responseRated}
               aria-label={t.responseRated}
-              onClick={() => onNotify(t.responseRated)}
+              onClick={() => onNotify('Respuesta valorada')}
             >
               <ThumbsUp className="size-3.5" />
             </MessageAction>
             <MessageAction
-              label="Mark as not helpful"
-              aria-label="Mark as not helpful"
-              onClick={() => onNotify('Thanks for your feedback')}
+              label="Marcar como poco útil"
+              aria-label="Marcar como poco útil"
+              onClick={() => onNotify('Gracias por tu opinión')}
             >
               <ThumbsDown className="size-3.5" />
             </MessageAction>
@@ -721,11 +515,13 @@ function ChatMessageRow({
   )
 }
 
+const fieldClass =
+  'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-ring/20'
 const kickerClass = 'text-xs font-medium uppercase tracking-wider text-muted-foreground'
 
 export default function AgentBuilderView({
   onNotify,
-  locale = 'en',
+  locale = 'es',
   sidebarOpen = true,
   onToggleSidebar,
   isSaved,
@@ -747,9 +543,15 @@ export default function AgentBuilderView({
     locale,
     onNotify,
   })
+  const [tab, setTab] = useState('Test Agent')
   const [input, setInput] = useState('')
   const [composerRevision, setComposerRevision] = useState(0)
-  const [agentName] = useState('Ari')
+  const [agentName, setAgentName] = useState('Ari')
+  const [language, setLanguage] = useState('Español')
+  const [purpose, setPurpose] = useState('Asistente general')
+  const [company, setCompany] = useState('Muebles del Sur')
+  const [companyDesc, setCompanyDesc] = useState('Empresa de distribución y logística')
+  const [saved, setSaved] = useState(false)
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set())
@@ -757,10 +559,10 @@ export default function AgentBuilderView({
 
   const shareConversation = async () => {
     const transcript = messages
-      .map((message) => `${message.role === 'assistant' ? 'Ari' : t.you}: ${message.text}`)
+      .map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`)
       .join('\n\n')
     if (navigator.share) {
-      await navigator.share({ title: 'Conversation with Ari', text: transcript })
+      await navigator.share({ title: 'Conversación con Ari', text: transcript })
     } else {
       await navigator.clipboard?.writeText(transcript)
       onNotify(t.responseShare)
@@ -773,6 +575,12 @@ export default function AgentBuilderView({
       setInput('')
       setComposerRevision((current) => current + 1)
     }
+  }
+
+  function save() {
+    setSaved(true)
+    window.setTimeout(() => setSaved(false), 2000)
+    onNotify('Configuración del tracer guardada')
   }
 
   function handleClearChat() {
@@ -796,8 +604,8 @@ export default function AgentBuilderView({
     const item: ContextItem = {
       id: `${sourceId}-${attachment.id}`,
       title: attachment.name,
-      kind: 'Document',
-      description: `Preview of ${attachment.name}.`,
+      kind: 'Documento',
+      description: `Vista previa de ${attachment.name}.`,
       sourceId,
       elementType: 'Attachment',
       props: {},
@@ -869,14 +677,6 @@ export default function AgentBuilderView({
     error: t.offline,
   }[connectionStatus]
   const empty = messages.length === 0 && connectionStatus !== 'running'
-  const lastUserMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === 'user')
-  const thinkingType = inferThinkingType(lastUserMessage)
-  const activeAssistantMessage = [...messages]
-    .reverse()
-    .find((message) => message.role === 'assistant')
-  const latestTraceStep = activeAssistantMessage?.traceSteps?.at(-1)
 
   return (
     <div
@@ -894,7 +694,7 @@ export default function AgentBuilderView({
               variant="ghost"
               size="icon"
               onClick={onToggleSidebar}
-              aria-label={sidebarOpen ? t.hidePanel : t.showPanel}
+              aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}
             >
               {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </Button>
@@ -903,7 +703,7 @@ export default function AgentBuilderView({
             <AriAvatar className="size-8" />
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight">{agentName}</h1>
-              <p className="truncate text-xs text-muted-foreground">Nauta logistics assistant</p>
+              <p className="truncate text-xs text-muted-foreground">Asistente de logística de Nauta</p>
             </div>
           </div>
           <StatusPill connectionStatus={connectionStatus} label={statusLabel} />
@@ -943,13 +743,13 @@ export default function AgentBuilderView({
                   <Sparkles className="size-6" />
                 </span>
                 <div className="space-y-2">
-                  <h2 className="text-xl font-semibold tracking-tight">Hi, I&apos;m {agentName}</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Hola, soy {agentName}</h2>
                   <p className="mx-auto max-w-lg text-sm leading-6 text-muted-foreground">
-                    Nauta logistics assistant. I can help you check operations,
-                    review foreign trade documents and reconcile BL, Invoice and Packing List.
+                    Asistente de logística de Nauta. Puedo ayudarte a consultar operaciones,
+                    revisar documentos de comercio exterior y reconciliar BL, Invoice y Packing List.
                   </p>
                 </div>
-                <p className="text-sm font-medium">What do you need to check?</p>
+                <p className="text-sm font-medium">¿Qué necesitas consultar?</p>
                 <Suggestions className="mx-auto mt-2 grid w-full max-w-2xl grid-cols-1 gap-3 whitespace-normal sm:grid-cols-2 lg:grid-cols-3">
                   {quickPrompts.map(({ icon: Icon, label, prompt }) => (
                     <Suggestion
@@ -982,23 +782,11 @@ export default function AgentBuilderView({
                   />
                 ))}
                 {connectionStatus === 'running' && (
-                  <Message from="assistant" className="mx-auto w-full max-w-3xl flex-row items-start gap-3">
+                  <Message from="assistant" className="mx-auto w-full max-w-3xl flex-row items-center gap-3">
                     <AriAvatar />
-                    <MessageContent className="w-full flex-row items-center gap-4 rounded-xl border border-border bg-card p-4 animate-in fade-in">
-                      <ThinkingAnimation type={thinkingType} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold uppercase tracking-wider text-primary" role="status">
-                          {latestTraceStep?.title ?? THINKING_COPY[thinkingType]}
-                        </p>
-                        {latestTraceStep?.detail && (
-                          <p className="mt-1 truncate text-sm leading-5 text-muted-foreground">
-                            {latestTraceStep.detail}
-                          </p>
-                        )}
-                        <div className="thinking-progress mt-2">
-                          <span />
-                        </div>
-                      </div>
+                    <MessageContent className="flex-row items-center gap-2 text-muted-foreground">
+                      <Spinner className="size-4 text-primary" />
+                      <span className="text-sm" role="status">{t.thinking}</span>
                     </MessageContent>
                   </Message>
                 )}
@@ -1084,7 +872,6 @@ export default function AgentBuilderView({
                   }`}
                   onClick={() => setSelectedContextId(item.id)}
                 >
-                  
                   <small className={kickerClass}>{item.kind}</small>
                   <span className="mt-1 block truncate text-sm font-medium">{item.title}</span>
                 </button>
@@ -1160,27 +947,134 @@ export default function AgentBuilderView({
                     />
                   </div>
                 ) : null}
-                <div className="mt-4 space-y-2 rounded-xl border border-border/60 bg-muted/40 p-3.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                    <Sparkles className="size-3.5 text-primary" />
-                    <span>Document Traceability &amp; Origin</span>
-                  </div>
-                  <p className="leading-relaxed text-muted-foreground">
-                    This record was generated and audited automatically by <b>Ari</b> through the
-                    direct reading of the official documents in Nauta&apos;s secure repository (certified
-                    database and storage).
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/40 pt-1 text-[11px] text-muted-foreground">
-                    <span>
-                      <b>Validation:</b> Automated foreign trade cross-check
-                    </span>
-                    <span>
-                      <b>Integrity:</b> 100% Verified against official sources
-                    </span>
-                  </div>
-                </div>
+                <small className="block text-xs text-muted-foreground">Origen: {selectedContext.sourceId}</small>
               </div>
             )}
+
+            <section className="space-y-4 border-t border-border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold tracking-tight">{agentName}</h3>
+                  <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                    <span className="size-1.5 rounded-full bg-emerald-500" />
+                    Tracer activo
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={save}>
+                    {saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />}
+                    {saved ? 'Guardado' : 'Guardar'}
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => onNotify('El tracer ya está activo')}>
+                    <Rocket className="size-4" /> Activo
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+                {['Test Agent', 'Settings', 'Instructions'].map((item) => (
+                  <button
+                    type="button"
+                    key={item}
+                    className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
+                      tab === item
+                        ? 'bg-card text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => setTab(item)}
+                  >
+                    {item === 'Test Agent' && <MessageSquare className="size-3.5 shrink-0" />}
+                    {item === 'Settings' && <Settings className="size-3.5 shrink-0" />}
+                    {item === 'Instructions' && <FileText className="size-3.5 shrink-0" />}
+                    <span className="truncate">{item}</span>
+                  </button>
+                ))}
+              </div>
+
+              {tab === 'Test Agent' && (
+                <div className="space-y-3">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Conversa con Ari. Cada turno cruza Mastra, RunCoordinator, Socket.IO y el renderer validado por catálogo.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                      ['Modelo activo', 'GPT-5 mini'],
+                      ['Idioma', language],
+                      ['Salida', 'Recon → json-render'],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl border border-border bg-card p-3">
+                        <span className={kickerClass}>{label}</span>
+                        <b className="mt-1 block text-sm font-medium">{value}</b>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tab === 'Settings' && (
+                <div className="space-y-3">
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Language</span>
+                    <select className={fieldClass} value={language} onChange={(event) => setLanguage(event.target.value)}>
+                      <option>Español</option>
+                      <option>Inglés</option>
+                      <option>Francés</option>
+                      <option>Portugués</option>
+                    </select>
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Agent Name</span>
+                    <input className={fieldClass} value={agentName} onChange={(event) => setAgentName(event.target.value)} />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Agent Purpose</span>
+                    <select className={fieldClass} value={purpose} onChange={(event) => setPurpose(event.target.value)}>
+                      <option>Asistente general</option>
+                      <option>Atención al cliente</option>
+                      <option>Soporte técnico</option>
+                    </select>
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Company Name</span>
+                    <input className={fieldClass} value={company} onChange={(event) => setCompany(event.target.value)} />
+                  </label>
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Company Description</span>
+                    <textarea
+                      className={`${fieldClass} min-h-24 resize-y`}
+                      value={companyDesc}
+                      onChange={(event) => setCompanyDesc(event.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+
+              {tab === 'Instructions' && (
+                <div className="space-y-3">
+                  <label className="block space-y-1.5">
+                    <span className={kickerClass}>Fixed system instructions</span>
+                    <textarea className={`${fieldClass} min-h-44 resize-y`} value={fixedInstructions} readOnly />
+                  </label>
+                  <div className="rounded-xl border border-border bg-card p-3">
+                    <label className="block space-y-1.5">
+                      <span className={kickerClass}>Model</span>
+                      <input className={fieldClass} value="GPT-5.6 Luna · main: medium · Recon: none" readOnly />
+                    </label>
+                    <small className="mt-2 block text-xs leading-5 text-muted-foreground">
+                      Ari supplies the answer. The render tool supplies the fixed, catalog-valid component tree.
+                    </small>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-border bg-card p-4">
+                <h4 className="text-base font-semibold tracking-tight">Tracer contract</h4>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Ari → Recon → reconcileShipmentDocumentsTool → renderDemoTool. Recon alone owns the reconciliation
+                  capability; rendered component names and props remain catalog-validated.
+                </p>
+              </div>
+            </section>
           </div>
         </aside>
       )}

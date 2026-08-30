@@ -102,6 +102,23 @@
       "evidence": [
         ".wall-i/runs/realtime-order-incident-demo/intake/resolved.md"
       ]
+    },
+    {
+      "id": "T011",
+      "term": "Work trace",
+      "definition": "A run-scoped, user-visible account of Ari's observable work: elapsed wall-clock time plus concise, concrete summaries of orchestration and tool activity.",
+      "aliases": ["thinking trace", "reasoning trace", "activity trace"],
+      "antiDefinitions": [
+        "Not raw hidden chain-of-thought.",
+        "Not a timeline inferred from the rendered component tree.",
+        "Not infrastructure logs or tool payload dumps."
+      ],
+      "source": "user",
+      "status": "accepted",
+      "introducedByTask": "interactive-thinking-trace",
+      "evidence": [
+        ".wall-i/runs/interactive-thinking-trace/intake/resolved.md"
+      ]
     }
   ]
 }

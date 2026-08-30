@@ -6,6 +6,7 @@ import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import { SpeculativeEngine } from './speculative-engine.js';
 import type { UIEnvelope } from '../contracts/ui.js';
 import type { StepResult } from '../contracts/step-result.js';
+import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
 
 test('ElementLocationTracker associates element IDs with their host message and retrieves them', () => {
   const tracker = new ElementLocationTracker();
@@ -48,6 +49,7 @@ test('RunCoordinator emits ui:replace with targetMessageId when updating existin
         summary: isTransition ? 'Status updated' : 'Initial booking',
         factPatch: {
           assistantResponse: isTransition ? 'Shipment in transit' : 'Booking confirmed',
+          executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
           status: isTransition ? 'In Transit' : 'Booking Confirmed',
           deliveryId: 'MDS-DEMO-GREEN-082',
           from: 'Ho Chi Minh City, Vietnam',

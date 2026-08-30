@@ -5,6 +5,7 @@ import { io, type Socket } from 'socket.io-client'
 
 import { getTranslations, type Locale } from '@/lib/i18n'
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
+import { parseWorkTrace, type WorkTrace } from '@/lib/work-trace'
 
 export type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 export type MessageRole = 'user' | 'assistant'
@@ -17,20 +18,13 @@ export interface ChatAttachment {
   url: string
 }
 
-export interface TraceStep {
-  title: string
-  detail?: string
-  outputSummary?: string
-  status?: 'completed' | 'in_progress' | 'failed'
-}
-
 export interface ChatMessage {
   id: string
   role: MessageRole
   text: string
   attachments?: ChatAttachment[]
   spec?: JsonRenderSpec
-  traceSteps?: TraceStep[]
+  workTrace?: WorkTrace
 }
 
 export interface RunSnapshot {
@@ -39,16 +33,16 @@ export interface RunSnapshot {
   sequence: number
   facts?: Record<string, unknown>
   ui: JsonRenderSpec | null
+  workTrace: WorkTrace | null
   error?: string
   targetMessageId?: string
-  traceSteps?: TraceStep[]
 }
 
 export interface UIReplacePayload {
   uiVersion: number
   reason: string
   spec: JsonRenderSpec
-  traceSteps?: TraceStep[]
+  workTrace: WorkTrace
   targetMessageId?: string
 }
 
@@ -59,7 +53,8 @@ export interface RunEnvelope {
   payload: Record<string, unknown>
 }
 
-import { getBackendUrl } from './backend-url'
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
 const CHAT_STORAGE_KEY = 'nauta_chat_messages_v1'
 
 function loadStoredMessages(): ChatMessage[] | null {
@@ -68,7 +63,24 @@ function loadStoredMessages(): ChatMessage[] | null {
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed as ChatMessage[]
+      return parsed.map((storedMessage: unknown) => {
+        if (
+          !storedMessage ||
+          typeof storedMessage !== 'object' ||
+          Array.isArray(storedMessage)
+        ) {
+          return storedMessage
+        }
+
+        const { workTrace, ...message } = storedMessage as Record<
+          string,
+          unknown
+        >
+        const validatedWorkTrace = parseWorkTrace(workTrace)
+        return validatedWorkTrace
+          ? { ...message, workTrace: validatedWorkTrace }
+          : message
+      }) as ChatMessage[]
     }
   } catch (error) {
     console.error('Error al leer historial local:', error)
@@ -81,7 +93,7 @@ function responseText(spec: JsonRenderSpec): string {
   const props = root?.props as Record<string, unknown> | undefined
   return typeof props?.text === 'string'
     ? props.text
-    : 'Rendered response.'
+    : 'Respuesta renderizada.'
 }
 
 function messagesForRun(messages: ChatMessage[]) {
@@ -156,16 +168,16 @@ export function useAriChat({
   }, [])
 
   useEffect(() => {
-    const url = getBackendUrl()
-    const socket = io(url, { transports: ['websocket'] })
+    const socket = io(backendUrl, { transports: ['websocket'] })
     socketRef.current = socket
 
     function applyRenderedResponse(
       runId: string,
       spec: JsonRenderSpec,
+      workTrace: unknown,
       targetMessageId?: string,
-      traceSteps?: TraceStep[],
     ) {
+      const validatedWorkTrace = parseWorkTrace(workTrace)
       setMessages((current) => {
         const id = `assistant-${runId}`
         const explicitTargetIndex = targetMessageId
@@ -200,10 +212,7 @@ export function useAriChat({
                   ...message,
                   text: responseText(nextSpec),
                   spec: nextSpec,
-                  traceSteps:
-                    traceSteps && traceSteps.length > 0
-                      ? traceSteps
-                      : message.traceSteps,
+                  workTrace: validatedWorkTrace,
                 }
               : message,
           )
@@ -215,7 +224,7 @@ export function useAriChat({
               role: 'assistant',
               text: responseText(spec),
               spec,
-              traceSteps,
+              workTrace: validatedWorkTrace,
             },
           ]
         }
@@ -250,8 +259,8 @@ export function useAriChat({
         applyRenderedResponse(
           snapshot.runId,
           snapshot.ui,
+          snapshot.workTrace,
           snapshot.targetMessageId,
-          snapshot.traceSteps,
         )
       }
 
@@ -310,8 +319,8 @@ export function useAriChat({
         applyRenderedResponse(
           envelope.runId,
           payload.spec,
+          payload.workTrace,
           payload.targetMessageId,
-          payload.traceSteps,
         )
       }
 

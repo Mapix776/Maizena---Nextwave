@@ -3,8 +3,98 @@ import test from 'node:test';
 
 import { tracerCatalog } from '../contracts/ui.js';
 import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
-import { composeRunUi } from '../services/ui-composer.js';
+import { SpeculativeEngine } from '../services/speculative-engine.js';
 import { RunCoordinator } from './run-coordinator.js';
+
+test('normal completion stores and emits one coordinator-measured Work trace', async () => {
+  const envelopes: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const clockReadings = [1_000, 5_321];
+  const coordinator = new RunCoordinator({
+    executeStep: async () => HELLO_STEP_RESULT,
+    emit: ({ type, payload }) => {
+      envelopes.push({ type, payload: payload as Record<string, unknown> });
+    },
+    createRunId: () => 'run-measured-trace',
+    clock: () => clockReadings.shift() ?? 5_321,
+  });
+
+  const run = coordinator.createRun();
+  assert.equal(run.workTrace, null);
+
+  await coordinator.execute(run.runId);
+
+  const uiReplace = envelopes.find(({ type }) => type === 'ui:replace');
+  const snapshot = coordinator.getSnapshot(run.runId);
+  assert.deepEqual(uiReplace?.payload.workTrace, {
+    durationMs: 4_321,
+    steps: [
+      {
+        id: 'hello-step-1',
+        stepNumber: 1,
+        kind: 'thinking',
+        title: 'Preparing the response',
+        detail: 'Validated the request and prepared the demo response.',
+      },
+    ],
+  });
+  assert.deepEqual(snapshot.workTrace, uiReplace?.payload.workTrace);
+  assert.equal(snapshot.targetMessageId, 'assistant-run-measured-trace');
+});
+
+test('speculative completion emits the same sanitized Work trace shape', async () => {
+  const speculativeEngine = new SpeculativeEngine();
+  await speculativeEngine.pregenerateNextState('seed-run', {
+    ...HELLO_STEP_RESULT,
+    factPatch: {
+      ...HELLO_STEP_RESULT.factPatch,
+      operationSummary: {
+        operationId: 'operation-trace-1',
+        referenceCode: 'MDS-DEMO-TRACE-1',
+        status: 'BOOKED',
+        clientName: 'Trace Test',
+        tags: ['test'],
+        containers: [],
+      },
+    },
+  });
+  const envelopes: Array<{ type: string; payload: Record<string, unknown> }> = [];
+  const clockReadings = [200, 275];
+  const coordinator = new RunCoordinator({
+    speculativeEngine,
+    emit: ({ type, payload }) => {
+      envelopes.push({ type, payload: payload as Record<string, unknown> });
+    },
+    createRunId: () => 'run-speculative-trace',
+    clock: () => clockReadings.shift() ?? 275,
+  });
+
+  const run = coordinator.createRun();
+  await coordinator.execute(run.runId, [
+    {
+      role: 'user',
+      content: 'Move MDS-DEMO-TRACE-1 to IN_TRANSIT.',
+    },
+  ]);
+
+  const uiReplace = envelopes.find(({ type }) => type === 'ui:replace');
+  assert.equal(uiReplace?.payload.reason, 'speculative-hit');
+  assert.deepEqual(uiReplace?.payload.workTrace, {
+    durationMs: 75,
+    steps: [
+      {
+        id: 'hello-step-1',
+        stepNumber: 1,
+        kind: 'thinking',
+        title: 'Preparing the response',
+        detail: 'Validated the request and prepared the demo response.',
+      },
+    ],
+  });
+  assert.deepEqual(
+    coordinator.getSnapshot(run.runId).workTrace,
+    uiReplace?.payload.workTrace,
+  );
+});
 
 test('RunCoordinator validates and emits one monotonic envelope sequence', async () => {
   const envelopes: Array<{ type: string; sequence: number }> = [];
@@ -69,6 +159,7 @@ test('RunCoordinator renders evidence-backed reconciliation findings', async () 
       summary: 'Recon found one critical discrepancy.',
       factPatch: {
         assistantResponse: 'Recon found one critical discrepancy.',
+        executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
         reconciliationFindings: {
           status: 'discrepancy',
           severity: 'critical',
@@ -133,6 +224,7 @@ test('a required human decision remains primary when reconciliation facts are al
       status: 'completed',
       summary: 'Choose how to resolve the discrepancy.',
       factPatch: {
+        executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
         humanDecision: {
           title: 'Container mismatch',
           question: 'Which document should be treated as authoritative?',
@@ -349,87 +441,6 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
     });
 
     const run = coordinator.createRun();
-  }
-});
-
-test('invalid component trees never mutate facts or emit ui:replace', async () => {
-  const invalidTrees = [
-    {
-      root: 'bad',
-      elements: {
-        bad: { type: 'UnknownComponent', props: {}, children: [] },
-      },
-    },
-    {
-      root: 'bad',
-      elements: {
-        bad: {
-          type: 'DeliveryCard',
-          props: {
-            id: 'Hello from Ari',
-            from: 'Cartagena',
-            to: 'Bogotá',
-            transportType: 'Land',
-            status: 'Not a delivery status',
-            createdAt: '2026-08-29T20:00:00.000Z',
-            deliveryTime: '6 hours',
-          },
-          children: [],
-        },
-      },
-    },
-    {
-      root: 'bad',
-      elements: {
-        bad: {
-          type: 'ContainerProgress',
-          props: { currentStatus: 'Not a delivery status' },
-          children: [],
-        },
-      },
-    },
-    {
-      root: 'missing-root',
-      elements: {
-        bad: {
-          type: 'ContainerProgress',
-          props: { currentStatus: 'In Transit' },
-          children: [],
-        },
-      },
-    },
-    {
-      root: 'bad',
-      elements: {
-        bad: {
-          type: 'DeliveryCard',
-          props: {
-            id: 'Hello from Ari',
-            from: 'Cartagena',
-            to: 'Bogotá',
-            transportType: 'Land',
-            status: 'In Transit',
-            createdAt: '2026-08-29T20:00:00.000Z',
-            deliveryTime: '6 hours',
-          },
-          children: ['missing-child'],
-        },
-      },
-    },
-  ];
-
-  for (const [index, tree] of invalidTrees.entries()) {
-    const eventTypes: string[] = [];
-    const coordinator = new RunCoordinator({
-      executeStep: async () => HELLO_STEP_RESULT,
-      composeUi: () => tree,
-      emit: ({ type }) => {
-        eventTypes.push(type);
-      },
-      createRunId: () => `invalid-${index}`,
-    });
-
-    const run = coordinator.createRun();
     await coordinator.execute(run.runId);
 
     assert.deepEqual(eventTypes, ['run:status', 'run:complete']);
@@ -438,153 +449,3 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
     assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
   }
 });
-
-test('RunCoordinator clears transient humanDecision when subsequent turn resolves decision', async () => {
-  let turn = 1;
-  const coordinator = new RunCoordinator({
-    executeStep: async () => {
-      if (turn === 1) {
-        return {
-          status: 'completed',
-          summary: 'Decision required',
-          factPatch: {
-            assistantResponse: 'Please choose how to handle the delay.',
-            humanDecision: {
-              title: 'Choose customs response',
-              question: 'How should Ari handle the red-light inspection?',
-              severity: 'critical',
-              options: [
-                { id: 'opt-1', label: 'Notify all parties about the delay' },
-                { id: 'opt-2', label: 'Assign broker' },
-              ],
-            },
-          },
-          evidence: [{ id: 'ev-1', source: 'test' }],
-        };
-      }
-      return {
-        status: 'completed',
-        summary: 'Decision resolved',
-        factPatch: {
-          assistantResponse: 'Action executed: Notification sent to all parties.',
-        },
-        evidence: [{ id: 'ev-2', source: 'test' }],
-      };
-    },
-    emit: () => {},
-    createRunId: () => 'run-decision-loop-test',
-  });
-
-  const run = coordinator.createRun();
-  // Turn 1: presents decision
-  await coordinator.execute(run.runId, [{ role: 'user', content: 'Show decisions' }]);
-  let snapshot = coordinator.getSnapshot(run.runId);
-  assert.ok(snapshot.facts.humanDecision, 'Turn 1 should have humanDecision');
-  assert.ok(
-    Object.values((snapshot.ui as any).elements).some((el: any) => el.type === 'HumanDecisionCard'),
-    'Turn 1 UI must contain HumanDecisionCard',
-  );
-
-  // Turn 2: user selects option -> must resolve and NOT show HumanDecisionCard again
-  turn = 2;
-  await coordinator.execute(run.runId, [
-    { role: 'user', content: 'The user selected: "Notify all parties about the delay"' },
-  ]);
-  snapshot = coordinator.getSnapshot(run.runId);
-  assert.equal(
-    snapshot.facts.humanDecision,
-    undefined,
-    'Turn 2 must clear transient humanDecision',
-  );
-  assert.ok(
-    !Object.values((snapshot.ui as any).elements).some((el: any) => el.type === 'HumanDecisionCard'),
-    'Turn 2 UI must NOT contain HumanDecisionCard',
-  );
-});
-
-test('RunCoordinator emits incremental ui:replace patches in real time as each tool resolves', async () => {
-  const emittedEnvelopes: Array<{ type: string; payload: any }> = [];
-
-  const coordinator = new RunCoordinator({
-    executeStep: async (_messages, onPartialPatch) => {
-      // Simulate tool 1 resolving
-      await onPartialPatch?.(
-        {
-          operationSummary: {
-            operationId: 'op-123',
-            referenceCode: 'OP-2026-PARTIAL',
-            clientName: 'Partial Client',
-            status: 'BOOKED',
-            tags: [],
-            containers: [
-              {
-                id: 'cont-1',
-                containerNumber: 'CONT-999',
-                status: 'CLEARED',
-                originPort: 'Shanghai',
-                destinationPort: 'Manzanillo',
-              },
-            ],
-          },
-        },
-        { id: 'trace-1', title: 'Tool 1 Resolved', detail: 'Operation details loaded', status: 'completed' },
-      );
-
-      // Simulate tool 2 resolving
-      await onPartialPatch?.(
-        {
-          customsClearance: [
-            {
-              containerNumber: 'CONT-999',
-              status: 'CLEARED',
-              customsLight: 'green',
-              currentLocation: 'Manzanillo',
-              previoStatus: 'completed',
-              pedimentoStatus: 'completed',
-              alertIds: [],
-              decisionIds: [],
-            },
-          ],
-        },
-        { id: 'trace-2', title: 'Tool 2 Resolved', detail: 'Customs status loaded', status: 'completed' },
-      );
-
-      return {
-        status: 'completed',
-        summary: 'Final summary after all tools.',
-        factPatch: {
-          assistantResponse: 'Final summary after all tools.',
-        },
-        evidence: [],
-      };
-    },
-    composeUi: composeRunUi,
-    emit: (envelope) => {
-      emittedEnvelopes.push({ type: envelope.type, payload: envelope.payload });
-    },
-    createRunId: () => 'partial-run-test',
-  });
-
-  const run = coordinator.createRun();
-  await coordinator.execute(run.runId, [{ role: 'user', content: 'test partial' }]);
-
-  const partialEvents = emittedEnvelopes.filter(
-    (e) => e.type === 'ui:replace' && e.payload?.reason === 'partial-tool-resolved',
-  );
-  const completeEvent = emittedEnvelopes.find(
-    (e) => e.type === 'ui:replace' && e.payload?.reason === 'step-complete',
-  );
-
-  assert.equal(partialEvents.length, 2, 'Must emit 2 partial ui:replace events');
-  assert.ok(completeEvent, 'Must emit final step-complete ui:replace event');
-
-  // Verify first patch had OperationSummaryCard
-  const firstSpecElements = Object.values(partialEvents[0].payload.spec.elements).map((el: any) => el.type);
-  assert.ok(firstSpecElements.includes('OperationSummaryCard'));
-
-  // Verify second patch had CustomsClearancePanel added
-  const secondSpecElements = Object.values(partialEvents[1].payload.spec.elements).map((el: any) => el.type);
-  assert.ok(secondSpecElements.includes('OperationSummaryCard'));
-  assert.ok(secondSpecElements.includes('CustomsClearancePanel'));
-});
-

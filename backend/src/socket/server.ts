@@ -435,7 +435,7 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
           snapshot,
         });
 
-        if (snapshot.ui) {
+        if (snapshot.ui && snapshot.workTrace) {
           socket.emit('run:event', {
             runId: snapshot.runId,
             sequence: snapshot.sequence,
@@ -445,7 +445,8 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
               uiVersion: 1,
               reason: 'rejoin-replay',
               spec: snapshot.ui,
-              traceSteps: (snapshot.facts.executionSteps as unknown[]) || [],
+              workTrace: snapshot.workTrace,
+              targetMessageId: snapshot.targetMessageId,
             },
           });
         }

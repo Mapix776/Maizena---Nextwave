@@ -17,3 +17,4 @@ build/
 evals/results/
 **/results/*.json
 **/results/*.md
+backend/.tracer-output/

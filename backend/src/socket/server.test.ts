@@ -117,7 +117,10 @@ test('run:start carries conversation history through the json-render tracer', as
       return {
         status: 'completed',
         summary: 'I can help with that.',
-        factPatch: { assistantResponse: 'I can help with that.' },
+        factPatch: {
+          assistantResponse: 'I can help with that.',
+          executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
+        },
         evidence: [
           {
             id: 'json-render-ui',
@@ -227,6 +230,7 @@ test('run:join joins a second client and acknowledges with the current snapshot'
   assert.equal(joinAck.snapshot.status, 'running');
   assert.equal(joinAck.snapshot.sequence, 1);
   assert.equal(joinAck.snapshot.ui, null);
+  assert.equal(joinAck.snapshot.workTrace, null);
 
   step.resolve(HELLO_STEP_RESULT);
 });
@@ -269,10 +273,28 @@ test('run:join on completed run immediately replays ui:replace event to reconnec
   assert.equal(joinAck.ok, true);
   assert.equal(joinAck.snapshot.status, 'completed');
   assert.ok(joinAck.snapshot.ui);
+  assert.equal(joinAck.snapshot.targetMessageId, `assistant-${startAck.runId}`);
+  assert.deepEqual(joinAck.snapshot.workTrace, {
+    durationMs: joinAck.snapshot.workTrace.durationMs,
+    steps: [
+      {
+        id: 'hello-step-1',
+        stepNumber: 1,
+        kind: 'thinking',
+        title: 'Preparing the response',
+        detail: 'Validated the request and prepared the demo response.',
+      },
+    ],
+  });
 
-  const envelope = (await within(replayedEvent, 500)) as { type: string; payload: { reason: string } };
+  const envelope = (await within(replayedEvent, 500)) as {
+    type: string;
+    payload: { reason: string; workTrace: unknown; targetMessageId?: string };
+  };
   assert.equal(envelope.type, 'ui:replace');
   assert.equal(envelope.payload.reason, 'rejoin-replay');
+  assert.deepEqual(envelope.payload.workTrace, joinAck.snapshot.workTrace);
+  assert.equal(envelope.payload.targetMessageId, joinAck.snapshot.targetMessageId);
 });
 
 test('concurrent runs maintain strict room isolation with no event bleed', async (context) => {
@@ -280,7 +302,10 @@ test('concurrent runs maintain strict room isolation with no event bleed', async
     executeStep: async (messages) => ({
       status: 'completed',
       summary: `Result for ${messages[0]?.content}`,
-      factPatch: { assistantResponse: `Echo: ${messages[0]?.content}` },
+      factPatch: {
+        assistantResponse: `Echo: ${messages[0]?.content}`,
+        executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
+      },
       evidence: [{ id: 'test-evidence', source: 'unit-test' }],
     }),
   });

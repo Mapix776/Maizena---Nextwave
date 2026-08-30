@@ -4,6 +4,7 @@ import test from 'node:test';
 import { SpeculativeEngine, TRANSITION_MAP } from './speculative-engine.js';
 import { RunCoordinator } from '../coordinator/run-coordinator.js';
 import type { StepResult } from '../contracts/step-result.js';
+import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
 
 test('TRANSITION_MAP defines canonical forward transitions and milestones', () => {
   // 1. Initial booking
@@ -140,6 +141,7 @@ test('RunCoordinator integrates SpeculativeEngine for sub-5ms transition respons
       summary: 'Initial query',
       factPatch: {
         assistantResponse: 'Status of MDS-DEMO-GREEN-082',
+        executionSteps: HELLO_STEP_RESULT.factPatch.executionSteps,
         status: 'BOOKED',
         operationSummary: {
           operationId: 'op-green',

@@ -141,6 +141,29 @@
         ".wall-i/runs/realtime-order-incident-demo/intake/resolved.md"
       ],
       "promoteToAdr": false
+    },
+    {
+      "id": "D010",
+      "title": "Expose a user-safe work trace instead of hidden chain-of-thought",
+      "status": "accepted",
+      "context": "The current chat shows a generic busy state and fabricates a post-hoc step list from rendered component types even though the backend already produces run trace steps. The user wants the work to be inspectable as a beautiful, minimal product surface.",
+      "decision": "Treat backend-owned observable work summaries and tool activity as the Work trace. Show real elapsed wall-clock time and these summaries through an accessible collapsed disclosure. Never label inferred component steps, raw provider reasoning, tool payload dumps, or infrastructure logs as the model's complete internal reasoning.",
+      "consequences": [
+        "The frontend must preserve trace metadata per assistant message instead of deriving it from json-render output",
+        "The backend remains authoritative for trace steps and total run duration",
+        "Existing human-readable tool mappings can power the tracer without a provider migration",
+        "Future provider reasoning summaries or live streaming extend the same trace contract rather than changing the UI interface"
+      ],
+      "alternatives": [
+        "Continue inferring a generic timeline from rendered components",
+        "Expose raw tool names, arguments, results, and model reasoning",
+        "Migrate models/providers before shipping any trace UI"
+      ],
+      "introducedByTask": "interactive-thinking-trace",
+      "evidence": [
+        ".wall-i/runs/interactive-thinking-trace/intake/resolved.md"
+      ],
+      "promoteToAdr": false
     }
   ]
 }

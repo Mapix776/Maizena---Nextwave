@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { ChatMessage } from '../contracts/chat.js';
 import { stepResultSchema, type StepResult } from '../contracts/step-result.js';
+import { createWorkTrace } from '../contracts/work-trace.js';
 import {
   type RunSnapshot,
   type UIEnvelope,
@@ -19,28 +20,24 @@ import {
 } from '../services/element-location-tracker.js';
 
 interface RunCoordinatorOptions {
-  executeStep?: (
-    messages: ChatMessage[],
-    onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
-  ) => Promise<unknown>;
+  executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
   composeUi?: (result: StepResult) => unknown;
   emit?: (envelope: UIEnvelope) => void | Promise<void>;
   createRunId?: () => string;
   now?: () => Date;
+  clock?: () => number;
   speculativeEngine?: SpeculativeEngine;
   locationTracker?: ElementLocationTracker;
 }
 
 export class RunCoordinator {
   readonly #runs = new Map<string, RunSnapshot>();
-  readonly #executeStep: (
-    messages: ChatMessage[],
-    onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
-  ) => Promise<unknown>;
+  readonly #executeStep: (messages: ChatMessage[]) => Promise<unknown>;
   readonly #composeUi: (result: StepResult) => unknown;
   readonly #emit: (envelope: UIEnvelope) => void | Promise<void>;
   readonly #createRunId: () => string;
   readonly #now: () => Date;
+  readonly #clock: () => number;
   readonly #speculativeEngine: SpeculativeEngine;
   readonly #locationTracker: ElementLocationTracker;
 
@@ -50,6 +47,7 @@ export class RunCoordinator {
     this.#emit = options.emit ?? (() => undefined);
     this.#createRunId = options.createRunId ?? randomUUID;
     this.#now = options.now ?? (() => new Date());
+    this.#clock = options.clock ?? (() => performance.now());
     this.#speculativeEngine = options.speculativeEngine ?? defaultSpeculativeEngine;
     this.#locationTracker = options.locationTracker ?? defaultElementLocationTracker;
   }
@@ -61,6 +59,7 @@ export class RunCoordinator {
       sequence: 0,
       facts: {},
       ui: null,
+      workTrace: null,
     };
     this.#runs.set(snapshot.runId, snapshot);
     return this.getSnapshot(snapshot.runId);
@@ -82,6 +81,7 @@ export class RunCoordinator {
       { role: 'user', content: 'Run the json-render demo.' },
     ],
   ): Promise<void> {
+    const startedAt = this.#clock();
     const t0 = performance.now();
     const logTiming = (evento: string) => {
       const ms = Math.round(performance.now() - t0);
@@ -109,108 +109,64 @@ export class RunCoordinator {
       );
 
       if (speculative.hit && speculative.spec) {
-        logTiming(`speculative_hit_saved_${speculative.savedMs}ms`);
-        run.facts = { ...run.facts, ...speculative.factPatch };
-        run.ui = validateTracerSpec(speculative.spec);
-
-        const elementKeys = Object.keys((run.ui as { elements: Record<string, unknown> }).elements);
-        const targetMessageId = this.#locationTracker.findTargetMessageForElements(elementKeys);
-        if (targetMessageId) {
-          console.log(`[in-place-update] runId=${runId} targetMessageId=${targetMessageId} updating components in existing bubble`);
-        }
-
-        const traceSteps = [
-          {
-            title: 'Pre-generación especulativa aplicada',
-            description: `Estado ${targetState} servido instantáneamente desde caché anticipado (${speculative.savedMs}ms ahorrados).`,
-            status: 'completed',
-          },
-        ];
-
-        await this.#emitNext(run, 'ui:replace', {
-          uiVersion: 1,
-          reason: 'speculative-hit',
-          spec: run.ui,
-          traceSteps,
-          targetMessageId,
-        });
-        logTiming('ws_ui_replace_emitted');
-
-        run.status = 'completed';
-        await this.#emitNext(run, 'run:complete', {
-          status: run.status,
-          traceSteps,
-        });
-        logTiming('stream_closed');
-        return;
-      }
-    }
-
-    try {
-      logTiming('step_execution_started');
-      const liveTraceSteps: unknown[] = [];
-      let currentAccumulatedFacts = { ...run.facts };
-
-      const onPartialPatch = async (
-        partialFacts: Record<string, unknown>,
-        traceStep?: unknown,
-      ) => {
-        currentAccumulatedFacts = {
-          ...currentAccumulatedFacts,
-          ...partialFacts,
-        };
-
-        const partialAssistantText =
-          typeof currentAccumulatedFacts.assistantResponse === 'string'
-            ? currentAccumulatedFacts.assistantResponse
-            : 'Structuring operational view...';
-
-        const partialResult: StepResult = {
-          status: 'completed',
-          summary: 'Building operations overview...',
-          factPatch: {
-            ...currentAccumulatedFacts,
-            assistantResponse: partialAssistantText,
-          },
-          evidence: [],
-        };
-
-        if (traceStep) {
-          liveTraceSteps.push(traceStep);
-        }
-
         try {
-          const partialUi = validateTracerSpec(this.#composeUi(partialResult));
-          run.facts = currentAccumulatedFacts;
-          run.ui = partialUi;
-
-          const elementKeys = Object.keys(
-            (partialUi as { elements: Record<string, unknown> }).elements,
-          );
-          const targetMessageId =
+          logTiming(`speculative_hit_saved_${speculative.savedMs}ms`);
+          const ui = validateTracerSpec(speculative.spec);
+          const workTrace = createWorkTrace({
+            durationMs: this.#clock() - startedAt,
+            executionSteps: speculative.factPatch?.executionSteps,
+          });
+          const nextFacts = { ...run.facts, ...speculative.factPatch };
+          const elementKeys = Object.keys(ui.elements);
+          const existingTargetMessageId =
             this.#locationTracker.findTargetMessageForElements(elementKeys);
-          const messageId = targetMessageId || `assistant-${runId}`;
+          const targetMessageId =
+            existingTargetMessageId ?? `assistant-${runId}`;
+          if (existingTargetMessageId) {
+            console.log(`[in-place-update] runId=${runId} targetMessageId=${existingTargetMessageId} updating components in existing bubble`);
+          }
+
+          run.facts = nextFacts;
+          run.ui = ui;
+          run.workTrace = workTrace;
+          run.targetMessageId = targetMessageId;
           this.#locationTracker.registerMessageElements(
-            messageId,
+            targetMessageId,
             runId,
             elementKeys,
           );
 
           await this.#emitNext(run, 'ui:replace', {
             uiVersion: 1,
-            reason: 'partial-tool-resolved',
-            spec: partialUi,
-            traceSteps: [...liveTraceSteps],
+            reason: 'speculative-hit',
+            spec: ui,
+            workTrace,
             targetMessageId,
           });
-          logTiming(`partial_ui_replace_emitted_${Object.keys(partialFacts).join('_')}`);
-        } catch (err) {
-          console.warn('[timing] partial UI composition error:', err);
-        }
-      };
+          logTiming('ws_ui_replace_emitted');
 
+          run.status = 'completed';
+          await this.#emitNext(run, 'run:complete', {
+            status: run.status,
+          });
+          logTiming('stream_closed');
+        } catch (error) {
+          logTiming('run_failed');
+          run.status = 'failed';
+          run.error = error instanceof Error ? error.message : 'Run failed';
+          await this.#emitNext(run, 'run:complete', {
+            status: run.status,
+            error: run.error,
+          });
+        }
+        return;
+      }
+    }
+
+    try {
+      logTiming('step_execution_started');
       const parsedResult = stepResultSchema.safeParse(
-        await this.#executeStep(messages, onPartialPatch),
+        await this.#executeStep(messages),
       );
       logTiming('step_execution_completed');
 
@@ -219,46 +175,36 @@ export class RunCoordinator {
       }
 
       const result = parsedResult.data;
-      const accumulatedFacts = { ...run.facts, ...result.factPatch };
-
-      // Transient facts: humanDecision is only active when the current step explicitly emits it.
-      // Once the user responds, any previous humanDecision is resolved and must not repeat.
-      if (!result.factPatch?.humanDecision) {
-        delete accumulatedFacts.humanDecision;
-      }
-
-      const mergedResult: StepResult = {
-        ...result,
-        factPatch: accumulatedFacts,
-      };
-
       logTiming('ui_composition_started');
-      const ui = validateTracerSpec(this.#composeUi(mergedResult));
+      const ui = validateTracerSpec(this.#composeUi(result));
       logTiming('ui_composition_completed');
-      const finalTraceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
-      const combinedTraceSteps = [...liveTraceSteps, ...finalTraceSteps];
+      const workTrace = createWorkTrace({
+        durationMs: this.#clock() - startedAt,
+        executionSteps: result.factPatch?.executionSteps,
+      });
 
-      run.facts = accumulatedFacts;
+      run.facts = { ...run.facts, ...result.factPatch };
       run.ui = ui;
+      run.workTrace = workTrace;
 
       const elementKeys = Object.keys((ui as { elements: Record<string, unknown> }).elements);
       const targetMessageId = this.#locationTracker.findTargetMessageForElements(elementKeys);
-      const messageId = targetMessageId || `assistant-${runId}`;
+      const messageId = targetMessageId ?? `assistant-${runId}`;
+      run.targetMessageId = messageId;
       this.#locationTracker.registerMessageElements(messageId, runId, elementKeys);
 
       await this.#emitNext(run, 'ui:replace', {
         uiVersion: 1,
         reason: 'step-complete',
         spec: ui,
-        traceSteps: combinedTraceSteps,
-        targetMessageId,
+        workTrace,
+        targetMessageId: messageId,
       });
       logTiming('ws_ui_replace_emitted');
 
       run.status = 'completed';
       await this.#emitNext(run, 'run:complete', {
         status: run.status,
-        traceSteps: combinedTraceSteps,
         findings: result.findings,
       });
       logTiming('stream_closed');
