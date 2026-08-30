@@ -1,0 +1,12 @@
+{
+  "name": "nauta-logistics-os",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "evals": "npm run evals --prefix backend",
+    "test:backend": "npm test --prefix backend",
+    "build:backend": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend"
+  }
+}

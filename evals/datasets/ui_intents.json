@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Dataset de prueba para la evaluación de generación de UI (Render Agent) con json-render",
+  "intents": [
+    {
+      "id": "ui-intent-01-route-update",
+      "focus": "route_update",
+      "userMessage": "Muestra la ruta en tiempo real del buque COSCO HARMONY para la operación PO-2026-9101",
+      "expectedComponents": ["InteractiveRouteMap", "DeliveryCard"],
+      "facts": {
+        "deliveryId": "COSU9182734",
+        "from": "Shenzhen Port, China",
+        "to": "Puerto de Manzanillo, Colima, Mexico",
+        "status": "In Transit",
+        "transportType": "Sea",
+        "routeMap": {
+          "title": "Ruta de COSCO HARMONY",
+          "originPort": { "name": "Shenzhen Port, China", "lat": 22.5431, "lng": 114.0579 },
+          "destinationPort": { "name": "Puerto de Manzanillo, Colima, Mexico", "lat": 19.0545, "lng": -104.3161 },
+          "currentPosition": { "name": "Océano Pacífico", "lat": 20.1234, "lng": 160.5432, "vessel": "COSCO HARMONY" },
+          "status": "In Transit",
+          "transportType": "Sea"
+        }
+      }
+    },
+    {
+      "id": "ui-intent-02-decision-required",
+      "focus": "decision_required",
+      "userMessage": "El contenedor MSCU3391024 de PO-2026-9505 no tiene puerto de destino asignado. ¿Qué opciones tengo?",
+      "expectedComponents": ["HumanDecisionCard"],
+      "facts": {
+        "humanDecision": {
+          "decisionId": "dec-9505-dest-port",
+          "operationId": "PO-2026-9505",
+          "title": "Asignación de Puerto de Destino",
+          "question": "¿Deseas direccionar el embarque a Manzanillo o Veracruz?",
+          "severity": "critical",
+          "executionMode": "requires_approval",
+          "options": [
+            { "id": "opt-manzanillo", "label": "Puerto de Manzanillo (Pacífico)" },
+            { "id": "opt-veracruz", "label": "Puerto de Veracruz (Golfo)" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ui-intent-03-document-alert",
+      "focus": "document_alert",
+      "userMessage": "Revisa los documentos de PO-2026-9303 y avísame si hay problemas con el peso",
+      "expectedComponents": ["OperationalAlertList", "ShipmentDocumentsTimeline"],
+      "facts": {
+        "operationalAlerts": {
+          "title": "Alertas Documentales",
+          "operationReference": "PO-2026-9303",
+          "alerts": [
+            {
+              "id": "alt-weight-01",
+              "severity": "critical",
+              "category": "DISCREPANCY",
+              "title": "Discrepancia de Peso Bruto",
+              "message": "B/L declara 26,500 kg mientras Packing List declara 24,100 kg (diferencia de 2,400 kg).",
+              "acknowledged": false,
+              "createdAt": "2026-08-30T00:00:00Z"
+            }
+          ]
+        },
+        "documentsTimeline": {
+          "title": "Documentos de PO-2026-9303",
+          "subtitle": "Expediente con discrepancia de peso",
+          "documents": [
+            { "id": "doc-1", "title": "03_Bill_of_Lading_HDMUBL9303003.txt", "description": "26,500 KG", "status": "completed" },
+            { "id": "doc-2", "title": "04_Packing_List_PL-2026-9303_DISCREPANCY.txt", "description": "24,100 KG", "status": "completed" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ui-intent-04-status-change",
+      "focus": "status_change",
+      "userMessage": "El contenedor ONEU7738192 ha llegado a Veracruz. Muestra su nuevo estado",
+      "expectedComponents": ["DeliveryCard", "StepProgressBar"],
+      "facts": {
+        "deliveryId": "ONEU7738192",
+        "from": "Chittagong Port, Bangladesh",
+        "to": "Puerto de Veracruz, Mexico",
+        "status": "Arrived at Port",
+        "transportType": "Sea",
+        "stepProgressBar": {
+          "title": "Progreso del Envío",
+          "currentStepIndex": 2,
+          "totalSteps": 5,
+          "steps": [
+            { "id": "step-1", "label": "Booking Confirmed", "status": "completed" },
+            { "id": "step-2", "label": "In Transit", "status": "completed" },
+            { "id": "step-3", "label": "Arrived at Port", "status": "current" },
+            { "id": "step-4", "label": "Customs Clearance", "status": "pending" },
+            { "id": "step-5", "label": "Delivered", "status": "pending" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ui-intent-05-reconciliation-result",
+      "focus": "reconciliation_result",
+      "userMessage": "Cruza y compara los datos de B/L vs Factura vs Packing List para PO-2026-9404",
+      "expectedComponents": ["ReconciliationFindings", "ComparisonTable"],
+      "facts": {
+        "reconciliationFindings": {
+          "status": "discrepancy",
+          "severity": "critical",
+          "discrepancies": [
+            {
+              "field": "containerNumber",
+              "severity": "critical",
+              "values": {
+                "billOfLading": "HLCU8819203",
+                "commercialInvoice": "HLCU8819203",
+                "packingList": "HLCU8819208"
+              }
+            }
+          ],
+          "evidenceIds": ["b-l-hlcu9404", "pl-hlcu9404"]
+        },
+        "comparisonTable": {
+          "title": "Cruce de Datos de Embarque",
+          "documentAName": "Bill of Lading HLCUBL9404004",
+          "documentBName": "Packing List PL-2026-9404",
+          "severity": "critical",
+          "fields": [
+            {
+              "field": "containerNumber",
+              "label": "Número de Contenedor",
+              "valueA": "HLCU8819203",
+              "valueB": "HLCU8819208",
+              "status": "discrepancy",
+              "diff": "Dígito final erróneo (3 vs 8)"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ui-intent-06-customs-hold",
+      "focus": "customs_hold",
+      "userMessage": "Muestra el semáforo aduanal del contenedor CMAU5591028 en Veracruz",
+      "expectedComponents": ["CustomsClearancePanel"],
+      "facts": {
+        "customsClearance": [
+          {
+            "containerNumber": "CMAU5591028",
+            "status": "CUSTOMS_HOLD",
+            "customsLight": "red",
+            "currentLocation": "Recinto Fiscalizado Veracruz",
+            "previoStatus": "pending",
+            "pedimentoStatus": "pending",
+            "alertIds": ["alt-customs-01"],
+            "decisionIds": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "ui-intent-07-eta-slip",
+      "focus": "eta_slip",
+      "userMessage": "¿Cuánto tiempo de retraso tiene el contenedor HDMU4491028?",
+      "expectedComponents": ["EtaRiskCard"],
+      "facts": {
+        "etaRisks": [
+          {
+            "containerNumber": "HDMU4491028",
+            "originalEta": "2026-10-02T12:00:00Z",
+            "currentEta": "2026-10-06T18:00:00Z",
+            "slipDays": 4,
+            "severity": "warning",
+            "currentLocation": "Océano Pacífico Norte",
+            "currentVessel": "HYUNDAI BRAVE"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ui-intent-08-operations-overview",
+      "focus": "operations_overview",
+      "userMessage": "Dame el resumen de métricas clave y KPIs de todas las operaciones",
+      "expectedComponents": ["KpiGrid", "OperationsMetricsCard"],
+      "facts": {
+        "kpiGrid": {
+          "title": "Métricas Clave de Operaciones",
+          "metrics": [
+            { "id": "m-1", "label": "Operaciones Activas", "value": 6, "unit": "embarques", "severity": "normal" },
+            { "id": "m-2", "label": "Contenedores en Tránsito", "value": 8, "unit": "unidades", "severity": "normal" },
+            { "id": "m-3", "label": "Discrepancias Detectadas", "value": 2, "unit": "alertas", "severity": "warning" },
+            { "id": "m-4", "label": "Decisiones Pendientes", "value": 1, "unit": "aprobaciones", "severity": "critical" }
+          ]
+        },
+        "operationsMetrics": {
+          "totalOperations": 6,
+          "totalContainers": 8,
+          "containersInTransit": 5,
+          "containersInCustoms": 3,
+          "delayedContainersCount": 1,
+          "criticalAlertsCount": 2,
+          "pendingDecisionsCount": 1,
+          "byStatus": [
+            { "status": "IN_TRANSIT", "count": 5 },
+            { "status": "CUSTOMS_HOLD", "count": 1 },
+            { "status": "DELIVERED", "count": 2 }
+          ]
+        }
+      }
+    }
+  ]
+}

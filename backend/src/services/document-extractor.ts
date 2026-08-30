@@ -142,11 +142,75 @@ export class DocumentExtractorService {
       containerType: '40HC',
     }));
 
-    // 3. Extraer referencia
-    const refMatch = text.match(/(?:booking\s+ref|bl\s+no|invoice\s+no|po\s+no|reference|ref)[\s#:]*([A-Za-z0-9-_/]+)/i);
+    // 3. Extraer referencia del documento
+    const refMatch = text.match(/(?:booking\s+ref|bl\s+no|invoice\s+no|po\s+no|purchase\s+order|packing\s+list\s+no|packing\s+list\s+ref|bestellung|reference|ref)[\s#:]*([A-Za-z0-9-_/]+)/i);
     const documentReference = refMatch ? refMatch[1].trim() : fileName.replace(/\.[^/.]+$/, '');
-    const vesselMatch = text.match(/vessel\s*:\s*([^\r\n]+)/i);
-    const quantityMatch = text.match(/(?:cargo\s*:\s*)?(\d+)\s+(?:sets?|units?|pieces?|cartons?)/i);
+
+    // REEMPLAZO DE HEURÍSTICAS HARDCODEADAS POR EXTRACCIÓN ESTRUCTURADA GENERALIZADA (MULTI-IDIOMA)
+    // Se eliminaron las condiciones fijas de 'haiphong/vietnam', 'manzanillo/veracruz' y la regex rígida de vessel.
+    
+    // 4. Extraer Vessel y Voyage
+    let vessel: string | undefined;
+    let voyage: string | undefined;
+    const vesselMatch = text.match(/(?:vessel\s*\/\s*voyage|buque\s*\/\s*viaje|vessel\s*name|vessel|buque|ocean\s+vessel|schiff|navire)[\s#:]*([^\r\n]+)/i);
+    if (vesselMatch) {
+      const rawVessel = vesselMatch[1].trim();
+      if (rawVessel.includes('/')) {
+        const parts = rawVessel.split('/');
+        vessel = parts[0].trim();
+        voyage = parts[1].trim();
+      } else {
+        vessel = rawVessel.replace(/\s+voyage\s+[A-Za-z0-9]+/i, '').trim();
+      }
+    }
+
+    // 5. Extraer Puerto de Origen (Port of Loading / Port of Origin / Ladehafen)
+    let originPort = '';
+    const originMatch = text.match(
+      /(?:port\s+of\s+loading|loading\s+port|port\s+of\s+origin|origin\s+port|puerto\s+de\s+carga|puerto\s+de\s+origen|ladehafen|pol)[\s#:]*([^\r\n]+)/i,
+    );
+    if (originMatch) {
+      const candidate = originMatch[1].trim().replace(/\s*\([^)]*\)/g, ''); // limpia sufijos como (Yantian Terminal)
+      if (!candidate.includes('[') && !candidate.toUpperCase().includes('NOT SPECIFIED') && !candidate.toUpperCase().includes('PENDING')) {
+        originPort = candidate;
+      }
+    } else {
+      const fobMatch = text.match(/(?:incoterm|lieferbedingung)[\s\/A-Za-z:]*fob\s+([^\r\n]+)/i);
+      if (fobMatch) {
+        originPort = fobMatch[1].trim();
+      }
+    }
+
+    // 6. Extraer Puerto de Destino (Port of Discharge / Port of Destination / Bestimmungsort)
+    let destinationPort = '';
+    const destMatch = text.match(
+      /(?:port\s+of\s+discharge|discharge\s+port|port\s+of\s+destination|destination\s+port|puerto\s+de\s+descarga|puerto\s+de\s+destino|bestimmungsort(?:\s*\/\s*destination)?|l[oö]schhafen|pod|destination)[\s#:]*([^\r\n]+)/i,
+    );
+    if (destMatch) {
+      const candidate = destMatch[1].trim();
+      if (!candidate.includes('[') && !candidate.toUpperCase().includes('NOT SPECIFIED') && !candidate.toUpperCase().includes('PENDING')) {
+        destinationPort = candidate;
+      }
+    } else {
+      const cifMatch = text.match(/(?:incoterm|lieferbedingung)[\s\/A-Za-z:]*cif\s+([^\r\n]+)/i);
+      if (cifMatch) {
+        destinationPort = cifMatch[1].trim();
+      }
+    }
+
+    // 7. Extraer Cliente / Comprador / Consignee
+    let clientName = '';
+    const buyerMatch = text.match(/(?:buyer\s*\/\s*consignee|buyer|consignee|empf[aä]nger\s*\/\s*buyer|empf[aä]nger|comprador|cliente)[\s#:\/]*([^\r\n]+)/i);
+    if (buyerMatch) {
+      clientName = buyerMatch[1]
+        .split(',')[0]
+        .replace(/\s+(?:S\.?A\.?\s*(?:de\s*C\.?V\.?)?|S\.?C\.?|LLC|GmbH|NV|Corp\.?|Co\.?,?\s*Ltd\.?|Inc\.?|Ltd\.?)\b/gi, '')
+        .replace(/[.\s]+$/g, '')
+        .trim();
+    }
+
+    // 8. Extraer Cantidades y Descripción de Carga
+    const quantityMatch = text.match(/(?:cargo\s*:\s*)?(\d+)\s+(?:sets?|units?|pieces?|cartons?|packages?|cases?|crates?|bags?|st)/i);
     const cargoDescription = text.match(/cargo\s*:\s*[^\r\n]+/i)?.[0]?.replace(/^cargo\s*:\s*/i, '').trim();
     const detectedItem = quantityMatch
       ? [{ description: cargoDescription || 'Cargo item described in uploaded document', quantity: Number(quantityMatch[1]) }]
@@ -156,10 +220,10 @@ export class DocumentExtractorService {
       documentType: docType,
       documentReference,
       operationReference: `OP-${new Date().getFullYear()}-${documentReference.slice(-4).toUpperCase() || 'AUTO'}`,
-      clientName: lower.includes('muebles') ? 'Muebles del Sur' : '',
-      originPort: lower.includes('haiphong') || lower.includes('vietnam') ? 'Haiphong, Vietnam' : '',
-      destinationPort: lower.includes('veracruz') ? 'Veracruz, Mexico' : lower.includes('manzanillo') ? 'Manzanillo, Mexico' : '',
-      vessel: vesselMatch?.[1]?.trim(),
+      clientName,
+      originPort,
+      destinationPort,
+      vessel,
       containers: uniqueContainers,
       items: detectedItem,
       parties: [],

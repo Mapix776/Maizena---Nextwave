@@ -2,3 +2,18 @@
 !.wall-i/vocabulary/
 !.wall-i/decisions/
 !.wall-i/maps/
+
+node_modules/
+dist/
+.next/
+out/
+build/
+.env
+.env.local
+.env.*.local
+*.log
+
+# Evals results
+evals/results/
+**/results/*.json
+**/results/*.md

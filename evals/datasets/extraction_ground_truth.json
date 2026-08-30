@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Ground truth congelado para el Held-Out Set de evaluación de extracción y clasificación",
+  "operations": [
+    {
+      "operationReference": "PO-2026-9101",
+      "clientName": "Electrónica Global de México S.A. de C.V.",
+      "category": "clean",
+      "expectedStatus": "clean",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9101.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9101",
+          "originPort": "Shenzhen Port, China",
+          "destinationPort": "Puerto de Manzanillo, Colima, Mexico",
+          "totalUsd": 142500,
+          "incoterm": "FOB Shenzhen",
+          "parties": {
+            "buyer": "Electrónica Global de México S.A. de C.V.",
+            "supplier": "Shenzhen Apex Electronics Co., Ltd."
+          },
+          "items": [
+            { "description": "4K Industrial Display Panels", "quantity": 200, "unitPrice": 500, "totalUsd": 100000 },
+            { "description": "High-Speed Microcontrollers", "quantity": 850, "unitPrice": 50, "totalUsd": 42500 }
+          ]
+        },
+        {
+          "fileName": "02_Booking_Confirmation_COSU9101001.txt",
+          "documentType": "BOOKING_CONFIRMATION",
+          "documentReference": "COSU9101001",
+          "carrier": "COSCO Shipping Lines",
+          "vessel": "COSCO HARMONY",
+          "voyage": "118W",
+          "etd": "2026-09-05",
+          "eta": "2026-09-24",
+          "originPort": "Shenzhen Port, China",
+          "destinationPort": "Puerto de Manzanillo, Colima, Mexico",
+          "containerCount": 1,
+          "containerType": "40HC"
+        },
+        {
+          "fileName": "03_Bill_of_Lading_COSCOBL9101001.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "COSCOBL9101001",
+          "carrier": "COSCO Shipping Lines",
+          "vessel": "COSCO HARMONY",
+          "containerNumber": "COSU9182734",
+          "sealNumber": "COS991827",
+          "grossWeightKg": 14800,
+          "packageCount": 350,
+          "originPort": "Shenzhen Port, China",
+          "destinationPort": "Puerto de Manzanillo, Colima, Mexico"
+        },
+        {
+          "fileName": "04_Packing_List_PL-2026-9101.txt",
+          "documentType": "PACKING_LIST",
+          "documentReference": "PL-2026-9101",
+          "containerNumber": "COSU9182734",
+          "grossWeightKg": 14800,
+          "netWeightKg": 13650,
+          "packageCount": 350,
+          "totalUsd": 142500
+        }
+      ]
+    },
+    {
+      "operationReference": "PO-2026-9202",
+      "clientName": "Uniformes y Calzado Industrial de México",
+      "category": "clean",
+      "expectedStatus": "clean",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9202.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9202",
+          "originPort": "Chittagong Port, Bangladesh",
+          "destinationPort": "Puerto de Veracruz, Mexico",
+          "totalUsd": 88900,
+          "incoterm": "FOB Chittagong",
+          "parties": {
+            "buyer": "Uniformes y Calzado Industrial de México",
+            "supplier": "Bengal Garments & Apparel Ltd."
+          },
+          "items": [
+            { "description": "Cotton Work Uniform Sets", "quantity": 1200, "unitPrice": 45, "totalUsd": 54000 },
+            { "description": "Safety Steel-Toe Boots", "quantity": 700, "unitPrice": 49.857, "totalUsd": 34900 }
+          ]
+        },
+        {
+          "fileName": "02_Booking_Confirmation_ONEBK9202.txt",
+          "documentType": "BOOKING_CONFIRMATION",
+          "documentReference": "ONEBK9202",
+          "carrier": "Ocean Network Express (ONE)",
+          "vessel": "ONE APUS",
+          "voyage": "007E",
+          "etd": "2026-09-12",
+          "eta": "2026-10-08",
+          "originPort": "Chittagong Port, Bangladesh",
+          "destinationPort": "Puerto de Veracruz, Mexico",
+          "containerCount": 1,
+          "containerType": "40HC"
+        },
+        {
+          "fileName": "03_Bill_of_Lading_ONEBL9202002.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "ONEBL9202002",
+          "carrier": "Ocean Network Express (ONE)",
+          "vessel": "ONE APUS",
+          "containerNumber": "ONEU7738192",
+          "sealNumber": "ONE008219",
+          "grossWeightKg": 21400,
+          "packageCount": 720,
+          "originPort": "Chittagong Port, Bangladesh",
+          "destinationPort": "Puerto de Veracruz, Mexico"
+        },
+        {
+          "fileName": "04_Packing_List_PL-2026-9202.txt",
+          "documentType": "PACKING_LIST",
+          "documentReference": "PL-2026-9202",
+          "containerNumber": "ONEU7738192",
+          "grossWeightKg": 21400,
+          "netWeightKg": 19800,
+          "packageCount": 720,
+          "totalUsd": 88900
+        }
+      ]
+    },
+    {
+      "operationReference": "PO-2026-9303",
+      "clientName": "Maquinados y Troqueles del Bajío",
+      "category": "discrepancy_weight",
+      "expectedStatus": "discrepancy",
+      "discrepancyField": "weightKg",
+      "discrepancyDetails": "B/L y Factura declaran 26,500 kg mientras Packing List declara 24,100 kg (diferencia de 2,400 kg)",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9303.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9303",
+          "originPort": "Busan Port, South Korea",
+          "destinationPort": "Puerto de Lázaro Cárdenas, Michoacán, Mexico",
+          "totalUsd": 195000,
+          "incoterm": "FOB Busan",
+          "parties": {
+            "buyer": "Maquinados y Troqueles del Bajío",
+            "supplier": "Busan Heavy Machinery Corp."
+          },
+          "items": [
+            { "description": "Hydraulic CNC Milling Centers", "quantity": 3, "unitPrice": 65000, "totalUsd": 195000 }
+          ]
+        },
+        {
+          "fileName": "02_Booking_Confirmation_HDMUBK9303.txt",
+          "documentType": "BOOKING_CONFIRMATION",
+          "documentReference": "HDMUBK9303",
+          "carrier": "HMM Co., Ltd.",
+          "vessel": "HYUNDAI BRAVE",
+          "voyage": "088E",
+          "etd": "2026-09-18",
+          "eta": "2026-10-06",
+          "originPort": "Busan Port, South Korea",
+          "destinationPort": "Puerto de Lázaro Cárdenas, Michoacán, Mexico",
+          "containerCount": 1,
+          "containerType": "40HC"
+        },
+        {
+          "fileName": "03_Bill_of_Lading_HDMUBL9303003.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "HDMUBL9303003",
+          "carrier": "HMM Co., Ltd.",
+          "vessel": "HYUNDAI BRAVE",
+          "containerNumber": "HDMU4491028",
+          "sealNumber": "HDM993012",
+          "grossWeightKg": 26500,
+          "packageCount": 12,
+          "originPort": "Busan Port, South Korea",
+          "destinationPort": "Puerto de Lázaro Cárdenas, Michoacán, Mexico"
+        },
+        {
+          "fileName": "04_Packing_List_PL-2026-9303_DISCREPANCY.txt",
+          "documentType": "PACKING_LIST",
+          "documentReference": "PL-2026-9303",
+          "containerNumber": "HDMU4491028",
+          "grossWeightKg": 24100,
+          "netWeightKg": 22500,
+          "packageCount": 12,
+          "totalUsd": 195000
+        }
+      ]
+    },
+    {
+      "operationReference": "PO-2026-9404",
+      "clientName": "Polímeros Industriales del Norte S.A.",
+      "category": "discrepancy_container",
+      "expectedStatus": "discrepancy",
+      "discrepancyField": "containerNumber",
+      "discrepancyDetails": "B/L declara HLCU8819203 mientras Packing List declara HLCU8819208 (dígito final erróneo)",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9404.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9404",
+          "originPort": "Port of Antwerp, Belgium",
+          "destinationPort": "Puerto de Altamira, Tamaulipas, Mexico",
+          "totalUsd": 115000,
+          "incoterm": "CIF Altamira",
+          "parties": {
+            "buyer": "Polímeros Industriales del Norte S.A.",
+            "supplier": "Antwerp Chemical Synthetics NV"
+          },
+          "items": [
+            { "description": "High-Density Polyethylene Pellets", "quantity": 500, "unitPrice": 230, "totalUsd": 115000 }
+          ]
+        },
+        {
+          "fileName": "02_Booking_Confirmation_HLCUBK9404.txt",
+          "documentType": "BOOKING_CONFIRMATION",
+          "documentReference": "HLCUBK9404",
+          "carrier": "Hapag-Lloyd",
+          "vessel": "ROTTERDAM EXPRESS",
+          "voyage": "314W",
+          "etd": "2026-09-08",
+          "eta": "2026-09-28",
+          "originPort": "Port of Antwerp, Belgium",
+          "destinationPort": "Puerto de Altamira, Tamaulipas, Mexico",
+          "containerCount": 1,
+          "containerType": "40HC"
+        },
+        {
+          "fileName": "03_Bill_of_Lading_HLCUBL9404004.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "HLCUBL9404004",
+          "carrier": "Hapag-Lloyd",
+          "vessel": "ROTTERDAM EXPRESS",
+          "containerNumber": "HLCU8819203",
+          "sealNumber": "HLP009182",
+          "grossWeightKg": 22000,
+          "packageCount": 500,
+          "originPort": "Port of Antwerp, Belgium",
+          "destinationPort": "Puerto de Altamira, Tamaulipas, Mexico"
+        },
+        {
+          "fileName": "04_Packing_List_PL-2026-9404_DISCREPANCY.txt",
+          "documentType": "PACKING_LIST",
+          "documentReference": "PL-2026-9404",
+          "containerNumber": "HLCU8819208",
+          "grossWeightKg": 22000,
+          "netWeightKg": 21500,
+          "packageCount": 500,
+          "totalUsd": 115000
+        }
+      ]
+    },
+    {
+      "operationReference": "PO-2026-9505",
+      "clientName": "Cafés Finos de Mesoamérica",
+      "category": "missing_destination_port",
+      "expectedStatus": "requires_decision",
+      "missingField": "destinationPort",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9505_MISSING_PORT.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9505",
+          "originPort": "Port of Santos, Brazil",
+          "destinationPort": "",
+          "totalUsd": 76800,
+          "incoterm": "FOB Santos",
+          "parties": {
+            "buyer": "Cafés Finos de Mesoamérica",
+            "supplier": "Santos Specialty Coffee Exporters SA"
+          },
+          "items": [
+            { "description": "Arabica Green Coffee Bags", "quantity": 320, "unitPrice": 240, "totalUsd": 76800 }
+          ]
+        },
+        {
+          "fileName": "02_Booking_Confirmation_MSCUBK9505.txt",
+          "documentType": "BOOKING_CONFIRMATION",
+          "documentReference": "MSCUBK9505",
+          "carrier": "Mediterranean Shipping Company (MSC)",
+          "vessel": "MSC AGRIPPINO",
+          "voyage": "602N",
+          "etd": "2026-09-14",
+          "eta": "2026-10-02",
+          "originPort": "Port of Santos, Brazil",
+          "destinationPort": "",
+          "containerCount": 1,
+          "containerType": "40HC"
+        },
+        {
+          "fileName": "03_Bill_of_Lading_MSCUBL9505005.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "MSCUBL9505005",
+          "carrier": "Mediterranean Shipping Company (MSC)",
+          "vessel": "MSC AGRIPPINO",
+          "containerNumber": "MSCU3391024",
+          "sealNumber": "MSC881920",
+          "grossWeightKg": 19200,
+          "packageCount": 320,
+          "originPort": "Port of Santos, Brazil",
+          "destinationPort": ""
+        }
+      ]
+    },
+    {
+      "operationReference": "PO-2026-9606",
+      "clientName": "Autopartes Alemanas de Puebla",
+      "category": "alternative_layout_german",
+      "expectedStatus": "clean",
+      "documents": [
+        {
+          "fileName": "01_Purchase_Order_PO-2026-9606_DIN5008.txt",
+          "documentType": "PURCHASE_ORDER",
+          "documentReference": "PO-2026-9606",
+          "originPort": "Port of Hamburg, Germany",
+          "destinationPort": "Puerto de Veracruz, Mexico",
+          "totalUsd": 168000,
+          "incoterm": "FOB Hamburg",
+          "parties": {
+            "buyer": "Autopartes Alemanas de Puebla",
+            "supplier": "Bavaria Automotive Components GmbH"
+          },
+          "items": [
+            { "description": "High-Pressure Fuel Injection Pumps", "quantity": 400, "unitPrice": 420, "totalUsd": 168000 }
+          ]
+        },
+        {
+          "fileName": "03_Bill_of_Lading_CMAUBL9606006.txt",
+          "documentType": "BILL_OF_LADING",
+          "documentReference": "CMAUBL9606006",
+          "carrier": "CMA CGM",
+          "vessel": "CMA CGM MONTMARTRE",
+          "containerNumber": "CMAU5591028",
+          "sealNumber": "CMA771829",
+          "grossWeightKg": 16400,
+          "packageCount": 400,
+          "originPort": "Port of Hamburg, Germany",
+          "destinationPort": "Puerto de Veracruz, Mexico"
+        }
+      ]
+    }
+  ]
+}
