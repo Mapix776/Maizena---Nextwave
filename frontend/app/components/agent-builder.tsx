@@ -4,6 +4,7 @@ import type { Spec } from '@json-render/core'
 import {
   Activity,
   CheckCircle2,
+  Copy,
   FileText,
   MessageSquare,
   Paperclip,
@@ -12,6 +13,7 @@ import {
   Send,
   Settings,
   Share2,
+  ThumbsUp,
   Sparkles,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -413,10 +415,12 @@ export default function AgentBuilderView({
               <div className="chat-avatar">
                 {message.role === 'assistant' ? <Sparkles size={15} /> : 'AR'}
               </div>
-              <div
-                className={`chat-bubble ${message.spec ? 'json-render-bubble json-render-inline' : ''}`}
-                data-testid={message.spec ? 'json-render-response' : undefined}
-              >
+              <div className="chat-message-content">
+                <small className="chat-message-author">{message.role === 'assistant' ? 'Ari' : 'Tú'}</small>
+                <div
+                  className={`chat-bubble ${message.spec ? 'json-render-bubble json-render-inline' : ''}`}
+                  data-testid={message.spec ? 'json-render-response' : undefined}
+                >
                 {message.attachments && (
                   <div className="chat-attachments" aria-label="Archivos adjuntos">
                     {message.attachments.map((attachment) => (
@@ -439,6 +443,13 @@ export default function AgentBuilderView({
                   </>
                 ) : (
                   <p>{message.text}</p>
+                )}
+                </div>
+                {message.role === 'assistant' && (
+                  <div className="chat-actions">
+                    <button aria-label={t.responseRated} onClick={() => onNotify('Respuesta valorada')}><ThumbsUp size={13} /></button>
+                    <button aria-label={t.copy} onClick={() => { void navigator.clipboard?.writeText(message.text); onNotify('Respuesta copiada') }}><Copy size={13} /></button>
+                  </div>
                 )}
               </div>
             </div>
