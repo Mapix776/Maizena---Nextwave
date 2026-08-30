@@ -85,6 +85,20 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const savedTheme = window.localStorage.getItem('route-pilot-theme')
+    if (savedTheme === 'dark') setDark(true)
+    else if (savedTheme === 'light') setDark(false)
+  }, [])
+
+  function toggleTheme() {
+    setDark((prev) => {
+      const next = !prev
+      window.localStorage.setItem('route-pilot-theme', next ? 'dark' : 'light')
+      return next
+    })
+  }
+
+  useEffect(() => {
     const updateDate = () => setCurrentDate(new Intl.DateTimeFormat(t.dateLocale, {
       weekday: 'long',
       day: 'numeric',
@@ -113,7 +127,7 @@ function App() {
       <div className="dot-field" aria-hidden="true" />
       <button className="mobile-menu" aria-label="Abrir menú" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button>
       <aside className={mobileOpen ? 'sidebar open' : `sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
-        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span>route<span className="brand-dot">.</span>pilot</span><button className="brand-theme-toggle" aria-label="Cambiar tema" onClick={() => setDark(!dark)}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button></div>
+        <div className="brand"><span className="brand-mark"><Zap size={15} fill="currentColor" /></span><span>route<span className="brand-dot">.</span>pilot</span><button className="brand-theme-toggle" aria-label="Cambiar tema" onClick={toggleTheme}>{dark ? <Sun size={16} /> : <Moon size={16} />}</button></div>
         <div className="workspace"><div className="workspace-avatar">MS</div><div><b>Muebles del Sur</b><small>{t.principalWorkspace}</small></div><ChevronRight size={15} /></div>
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Navegación principal">
