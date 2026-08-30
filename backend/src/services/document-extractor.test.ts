@@ -27,3 +27,50 @@ test('DocumentExtractorService parses booking confirmation text and extracts fac
   assert.equal(parsed.containers[0].containerNumber, 'MSKU9911223');
   assert.equal(parsed.items[0].quantity, 50);
 });
+
+test('DocumentExtractorService does not invent missing cargo or container facts', () => {
+  const extractor = new DocumentExtractorService();
+  const parsed = extractor.parseContent('Booking.pdf', 'BOOKING CONFIRMATION\nBooking Ref: BK-001');
+
+  assert.deepEqual(parsed.containers, []);
+  assert.deepEqual(parsed.items, []);
+  assert.equal(parsed.originPort, '');
+  assert.equal(parsed.destinationPort, '');
+});
+
+test('DocumentExtractorService rejects unsupported uploads before any persistence', async () => {
+  const extractor = new DocumentExtractorService();
+
+  await assert.rejects(
+    () =>
+      extractor.ingestDocument({
+        fileName: 'Commercial_Invoice_INV-44.pdf',
+        fileContentText: 'COMMERCIAL INVOICE Invoice No: INV-44',
+      }),
+    /only a Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice/i,
+  );
+});
+
+test('DocumentExtractorService rejects attempts to relabel uploaded content', async () => {
+  const extractor = new DocumentExtractorService();
+
+  await assert.rejects(
+    () =>
+      extractor.ingestDocument({
+        fileName: 'Invoice_INV-44.pdf',
+        fileContentText: 'COMMERCIAL INVOICE Invoice No: INV-44',
+        overrideData: { documentType: 'BILL_OF_LADING' },
+      }),
+    /does not match the detected document content/i,
+  );
+});
+
+test('DocumentExtractorService identifies an arrival notice as an accepted upload type', () => {
+  const extractor = new DocumentExtractorService();
+  const parsed = extractor.parseContent(
+    'Arrival_Notice_MSCUBL7749201MX.pdf',
+    'ARRIVAL NOTICE BL No: MSCUBL7749201MX',
+  );
+
+  assert.equal(parsed.documentType, 'ARRIVAL_NOTICE');
+});

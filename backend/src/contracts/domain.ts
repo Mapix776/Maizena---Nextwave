@@ -23,6 +23,23 @@ export const DocumentTypeSchema = z.enum([
 ]);
 export type DocumentType = z.infer<typeof DocumentTypeSchema>;
 
+/**
+ * The only business documents Ari is permitted to ingest from a user upload.
+ * This is deliberately narrower than DocumentTypeSchema, which also models
+ * documents that may exist in Supabase through other operational workflows.
+ */
+export const AcceptedUploadedDocumentTypeSchema = z.enum([
+  'PURCHASE_ORDER',
+  'BOOKING_CONFIRMATION',
+  'BILL_OF_LADING',
+  'PACKING_LIST',
+  'ARRIVAL_NOTICE',
+]);
+export type AcceptedUploadedDocumentType = z.infer<typeof AcceptedUploadedDocumentTypeSchema>;
+
+export const ACCEPTED_UPLOADED_DOCUMENT_TYPES =
+  AcceptedUploadedDocumentTypeSchema.options;
+
 export const DocumentPartyRoleSchema = z.enum([
   'ISSUER',
   'BUYER',

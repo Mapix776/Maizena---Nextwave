@@ -1,5 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
+import { AcceptedUploadedDocumentTypeSchema } from '../../contracts/domain.js';
 import { DocumentExtractorService } from '../../services/document-extractor.js';
 
 export interface IngestDocumentToolOptions {
@@ -11,7 +12,7 @@ export function createIngestDocumentTool(options: IngestDocumentToolOptions = {}
   return createTool({
     id: 'ingest-uploaded-document',
     description:
-      'Process and ingest an uploaded document (PDF, Word, TXT, or scan) from user input. Extracts structured logistics facts (document type, reference numbers, containers, weights, line items, origin/destination ports) and stores them in Supabase.',
+      'The sole Ari data-mutation tool. Use only after the user has uploaded or pasted a Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. It validates the extracted/OCR text before adding structured logistics facts to Supabase. Reject every other document type and never use it for conversational edits.',
     inputSchema: z.object({
       fileName: z
         .string()
@@ -19,26 +20,15 @@ export function createIngestDocumentTool(options: IngestDocumentToolOptions = {}
         .describe('Name of the uploaded file (e.g. "Booking_Confirmation_VN2026.pdf", "Invoice_Muebles.docx").'),
       fileContentText: z
         .string()
-        .optional()
-        .describe('Extracted raw text or OCR content from the uploaded document.'),
+        .min(1)
+        .describe('Extracted raw text or OCR content from the uploaded document; required for validation.'),
       operationReference: z
         .string()
         .optional()
         .describe('Optional existing operation reference to attach this document to (e.g. "OP-2026-101").'),
-      documentType: z
-        .enum([
-          'BOOKING_CONFIRMATION',
-          'BILL_OF_LADING',
-          'COMMERCIAL_INVOICE',
-          'PACKING_LIST',
-          'PURCHASE_ORDER',
-          'PEDIMENTO',
-          'ARRIVAL_NOTICE',
-          'CUSTOMS_DECLARATION',
-          'OTHER',
-        ])
+      documentType: AcceptedUploadedDocumentTypeSchema
         .optional()
-        .describe('Optional explicitly identified document type.'),
+        .describe('Optional type only when it matches the document content. Allowed: Purchase Order, Booking Confirmation, Bill of Lading, Packing List, Arrival Notice.'),
     }),
     outputSchema: z.object({
       success: z.boolean(),

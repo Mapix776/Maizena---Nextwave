@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { DocumentType } from '../contracts/domain.js';
+import {
+  AcceptedUploadedDocumentTypeSchema,
+  type DocumentType,
+} from '../contracts/domain.js';
 import { SupabaseReader } from './supabase-reader.js';
 import { SupabaseOperationWriter } from './supabase-operations.js';
 
@@ -64,6 +67,17 @@ export interface IngestDocumentInput {
   overrideData?: Partial<ExtractedDocumentData>;
 }
 
+function assertAcceptedUploadedDocument(
+  documentType: ExtractedDocumentData['documentType'],
+  fileName: string,
+): asserts documentType is z.infer<typeof AcceptedUploadedDocumentTypeSchema> {
+  if (!AcceptedUploadedDocumentTypeSchema.safeParse(documentType).success) {
+    throw new Error(
+      `Upload rejected for ${fileName}: Ari can ingest only a Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. No data was changed.`,
+    );
+  }
+}
+
 export interface IngestDocumentResult {
   success: boolean;
   documentId: string;
@@ -117,6 +131,8 @@ export class DocumentExtractorService {
       docType = 'PEDIMENTO';
     } else if (lower.includes('purchase order') || lower.includes('orden de compra') || fileName.startsWith('PO')) {
       docType = 'PURCHASE_ORDER';
+    } else if (lower.includes('arrival notice') || lower.includes('aviso de llegada') || fileName.startsWith('AN')) {
+      docType = 'ARRIVAL_NOTICE';
     }
 
     // 2. Extraer contenedor (ej. MSKU1234567, CMAU9876543, HLXU1122334)
@@ -129,31 +145,24 @@ export class DocumentExtractorService {
     // 3. Extraer referencia
     const refMatch = text.match(/(?:booking\s+ref|bl\s+no|invoice\s+no|po\s+no|reference|ref)[\s#:]*([A-Za-z0-9-_/]+)/i);
     const documentReference = refMatch ? refMatch[1].trim() : fileName.replace(/\.[^/.]+$/, '');
+    const vesselMatch = text.match(/vessel\s*:\s*([^\r\n]+)/i);
+    const quantityMatch = text.match(/(?:cargo\s*:\s*)?(\d+)\s+(?:sets?|units?|pieces?|cartons?)/i);
+    const cargoDescription = text.match(/cargo\s*:\s*[^\r\n]+/i)?.[0]?.replace(/^cargo\s*:\s*/i, '').trim();
+    const detectedItem = quantityMatch
+      ? [{ description: cargoDescription || 'Cargo item described in uploaded document', quantity: Number(quantityMatch[1]) }]
+      : [];
 
     return {
       documentType: docType,
       documentReference,
       operationReference: `OP-${new Date().getFullYear()}-${documentReference.slice(-4).toUpperCase() || 'AUTO'}`,
-      clientName: lower.includes('muebles') ? 'Muebles del Sur' : 'Import Client',
-      originPort: lower.includes('haiphong') || lower.includes('vietnam') ? 'Haiphong, Vietnam' : 'Shanghai, China',
-      destinationPort: lower.includes('veracruz') ? 'Veracruz, Mexico' : 'Manzanillo, Mexico',
-      vessel: 'MAERSK MC-KINNEY',
-      etd: new Date().toISOString(),
-      eta: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString(),
-      containers: uniqueContainers.length > 0 ? uniqueContainers : [{ containerNumber: 'MSKU' + Math.floor(1000000 + Math.random() * 9000000), containerType: '40HC' }],
-      items: [
-        {
-          description: lower.includes('comedor') || lower.includes('dining') || lower.includes('mesa') ? 'Dining Table Sets (Solid Teak)' : 'General Cargo Merchandise',
-          quantity: 50,
-          unitPrice: 450,
-          totalUsd: 22500,
-        },
-      ],
-      parties: [
-        { role: 'BUYER', name: 'Muebles del Sur S.A. de C.V.' },
-        { role: 'SUPPLIER', name: 'Vietnam Teakwood Craft Co.' },
-        { role: 'CARRIER', name: 'Maersk Line' },
-      ],
+      clientName: lower.includes('muebles') ? 'Muebles del Sur' : '',
+      originPort: lower.includes('haiphong') || lower.includes('vietnam') ? 'Haiphong, Vietnam' : '',
+      destinationPort: lower.includes('veracruz') ? 'Veracruz, Mexico' : lower.includes('manzanillo') ? 'Manzanillo, Mexico' : '',
+      vessel: vesselMatch?.[1]?.trim(),
+      containers: uniqueContainers,
+      items: detectedItem,
+      parties: [],
       rawSummary: `Uploaded ${docType} (${fileName}): ${uniqueContainers.length} container(s) detected.`,
     };
   }
@@ -162,8 +171,25 @@ export class DocumentExtractorService {
    * Ingesta completa: parsea, crea o asocia operación y guarda documento en Supabase
    */
   async ingestDocument(input: IngestDocumentInput): Promise<IngestDocumentResult> {
+    if (!input.fileContentText?.trim()) {
+      throw new Error(
+        `Upload rejected for ${input.fileName}: Ari needs extracted text or OCR content to validate the document type. No data was changed.`,
+      );
+    }
+
+    const detected = this.parseContent(input.fileName, input.fileContentText);
+    if (
+      input.overrideData?.documentType &&
+      input.overrideData.documentType !== detected.documentType
+    ) {
+      throw new Error(
+        `Upload rejected for ${input.fileName}: the supplied document type does not match the detected document content. No data was changed.`,
+      );
+    }
+    assertAcceptedUploadedDocument(detected.documentType, input.fileName);
+
     const extracted = {
-      ...this.parseContent(input.fileName, input.fileContentText),
+      ...detected,
       ...input.overrideData,
     };
 

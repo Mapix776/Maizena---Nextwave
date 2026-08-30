@@ -16,6 +16,13 @@ interface HumanDecisionData {
   }>;
 }
 
+interface ChartData {
+  title: string;
+  chartType: 'bar' | 'line' | 'pie';
+  data: Array<{ label: string; value: number }>;
+  description?: string;
+}
+
 export function composeRunUi(result: StepResult): unknown {
   const assistantResponse = result.factPatch?.assistantResponse;
   const text =
@@ -23,17 +30,17 @@ export function composeRunUi(result: StepResult): unknown {
 
   const humanDecision = result.factPatch?.humanDecision as HumanDecisionData | undefined;
 
-  // Caso 1: Decisión interactiva Human-in-the-Loop
+  const chart = result.factPatch?.chart as ChartData | undefined;
+  const elements: Record<string, { type: string; props: Record<string, unknown>; children: string[] }> = {
+    'assistant-message': {
+      type: 'AssistantMessage',
+      props: { text },
+      children: [],
+    },
+  };
+
   if (humanDecision) {
-    return {
-      root: 'assistant-message',
-      elements: {
-        'assistant-message': {
-          type: 'AssistantMessage',
-          props: { text },
-          children: ['decision-card'],
-        },
-        'decision-card': {
+    elements['decision-card'] = {
           type: 'HumanDecisionCard',
           props: {
             title: humanDecision.title,
@@ -42,14 +49,21 @@ export function composeRunUi(result: StepResult): unknown {
             options: humanDecision.options,
           },
           children: [],
-        },
-      },
-    };
+        };
+    elements['assistant-message'].children.push('decision-card');
   }
 
-  // Caso 2: Visualización de seguimiento de embarque (solo si fue invocado renderDemoTool o fixture con deliveryId)
-  const hasDelivery = Boolean(result.factPatch?.deliveryId || result.factPatch?.fixtureId);
+  if (chart) {
+    elements['interactive-chart'] = {
+      type: 'InteractiveChart',
+      props: chart,
+      children: [],
+    };
+    elements['assistant-message'].children.push('interactive-chart');
+  }
 
+  // Case 2: shipment tracking, optionally composed with decisions and analytics.
+  const hasDelivery = Boolean(result.factPatch?.deliveryId || result.factPatch?.fixtureId);
   if (hasDelivery) {
     const deliveryId = (result.factPatch?.deliveryId as string) || 'OP-2026-101';
     const from = (result.factPatch?.from as string) || 'Shanghai';
@@ -58,50 +72,34 @@ export function composeRunUi(result: StepResult): unknown {
     const status = ((result.factPatch?.status as ContainerStatus) || 'In Transit');
     const deliveryTime = (result.factPatch?.deliveryTime as string) || '10 days';
     const issue = result.factPatch?.issue as string | undefined;
-
     const cardComponent = issue ? 'DeliveryIssueCard' : 'DeliveryCard';
-    const cardProps = {
-      id: deliveryId,
-      from,
-      to,
-      transportType,
-      status,
-      createdAt: new Date().toISOString(),
-      deliveryTime,
-      ...(issue ? { issue } : {}),
-    };
-
-    return {
-      root: 'assistant-message',
-      elements: {
-        'assistant-message': {
-          type: 'AssistantMessage',
-          props: { text },
-          children: ['delivery-card'],
-        },
-        'delivery-card': {
-          type: cardComponent,
-          props: cardProps,
-          children: ['container-progress'],
-        },
-        'container-progress': {
-          type: 'ContainerProgress',
-          props: { currentStatus: status },
-          children: [],
-        },
+    elements['delivery-card'] = {
+      type: cardComponent,
+      props: {
+        id: deliveryId,
+        from,
+        to,
+        transportType,
+        status,
+        createdAt: new Date().toISOString(),
+        deliveryTime,
+        ...(issue ? { issue } : {}),
       },
+      children: issue ? [] : ['container-progress'],
     };
+    if (!issue) {
+      elements['container-progress'] = {
+        type: 'ContainerProgress',
+        props: { currentStatus: status },
+        children: [],
+      };
+    }
+    elements['assistant-message'].children.push('delivery-card');
   }
 
-  // Caso 3: Respuesta de texto puro (ej. rechazo fuera de dominio, respuesta conversacional o aclaración)
+  // A valid response always emits one catalog-bound tree. Its children adapt to intent.
   return {
     root: 'assistant-message',
-    elements: {
-      'assistant-message': {
-        type: 'AssistantMessage',
-        props: { text },
-        children: [],
-      },
-    },
+    elements,
   };
 }

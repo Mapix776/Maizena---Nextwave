@@ -3,11 +3,8 @@ import type { LanguageModelV4 } from '@ai-sdk/provider';
 
 import type { ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
-import {
-  createMainModel,
-  createSmallModel,
-  MAIN_REASONING_EFFORT,
-} from './models.js';
+import { type ExecutionTraceStep, mapToolToTraceStep } from '../contracts/trace-step.js';
+import { createMainModel, createSmallModel, MAIN_REASONING_EFFORT } from './models.js';
 import {
   createSubagentRegistry,
   type SubagentRegistry,
@@ -51,11 +48,16 @@ Your tool execution workflow:
    - If multiple shipments match, call \`requestHumanDecisionTool\` to let the user choose which shipment to view.
    - If 1 shipment matches, call \`renderDemoTool\` with the clean assistantResponse and delivery parameters (deliveryId, from, to, status, deliveryTime, issue).
 3. 📄 Reading & Ingesting Documents:
-   - When the user uploads/pastes a document, call \`ingestDocumentTool\`.
+   - Ari is read-only by default. The sole data-mutation exception is \`ingestDocumentTool\`, and only after the user has uploaded or pasted a document with extracted/OCR text.
+   - Use \`ingestDocumentTool\` only for: Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. The tool validates the content; never try to bypass or relabel that validation.
+   - Reject Commercial Invoices, Pedimentos, Customs Declarations, emails, images without readable text, executables, and every other file type. Do not create, modify, delete, or status-change any record from normal conversation.
+   - Do not claim to upload, download, move, delete, or store a binary file. This tool only persists validated structured facts extracted from an already-provided document.
    - When asked to inspect an existing BL, Invoice, or Packing List, call \`readDocumentTool\`.
 4. 📍 Map & ETA:
    - Call \`locateMapTool\` for routes/ports and \`calculateEtaTool\` for transit time and delays.
-5. 🔀 Comparing Data & Discrepancies:
+5. 📊 Adaptive analytics UI:
+   - When the user asks to compare, trend, measure, or visualize data, call \`drawChartTool\`. The resulting chart is an interactive JSON-render component: the user can move it and change its presentation locally without changing operational data.
+6. 🔀 Comparing Data & Discrepancies:
    - Call \`compareDataTool\` or \`reconcileShipmentDocumentsTool\` for document discrepancies.`;
 
 const ARI_TOOL_KEYS = [
@@ -128,6 +130,39 @@ export async function executeAriStep(
       : { role: 'assistant' as const, content: message.content },
   );
   const response = await agent.generate(modelMessages, { maxSteps: 10 });
+  const chartResult = response.toolResults.find(
+    ({ payload }) => payload.toolName === 'drawChartTool',
+  );
+  const chart = chartResult?.payload.result as
+    | { title: string; chartType: 'bar' | 'line' | 'pie'; data: Array<{ label: string; value: number }> }
+    | undefined;
+
+  // 1. Recopilar detalladamente el paso a paso de cada acción realizada
+  const traceSteps: ExecutionTraceStep[] = [];
+  let stepIndex = 1;
+
+  // Paso inicial: Razonamiento e inferencia
+  traceSteps.push({
+    id: `step-${stepIndex}`,
+    stepNumber: stepIndex++,
+    kind: 'thinking',
+    title: 'Entendiendo tu solicitud',
+    detail: 'Analizando lo que necesitas sobre tus envíos para darte una respuesta clara y directa.',
+    timestamp: new Date().toISOString(),
+    durationMs: 25,
+  });
+
+  // Pasos de cada herramienta / consulta ejecutada
+  for (const toolResult of response.toolResults) {
+    const payload = toolResult.payload as {
+      toolName: string;
+      args?: Record<string, unknown>;
+      result?: unknown;
+    };
+    traceSteps.push(
+      mapToolToTraceStep(payload.toolName, payload.args || {}, payload.result, stepIndex++),
+    );
+  }
 
   // Priorizar tool de Human Decision o Render Demo
   const renderResult = response.toolResults.find(
@@ -137,7 +172,24 @@ export async function executeAriStep(
   );
 
   if (renderResult) {
-    return renderResult.payload.result as StepResult;
+    const baseResult = renderResult.payload.result as StepResult;
+    return {
+      ...baseResult,
+      factPatch: {
+        ...baseResult.factPatch,
+        ...(chart ? { chart } : {}),
+        executionSteps: traceSteps,
+      },
+      findings: traceSteps.map((step) => ({
+        id: step.id,
+        statement: `${step.title}: ${step.detail}`,
+        evidenceIds: [step.id],
+      })),
+      evidence: [
+        ...baseResult.evidence,
+        ...traceSteps.map((s) => ({ id: s.id, source: s.toolName || 'agent:thought' })),
+      ],
+    };
   }
 
   // Si ejecutó getPendingDecisionsTool pero no llamó a requestHumanDecisionTool, crear el StepResult interactivo automáticamente
@@ -171,6 +223,8 @@ export async function executeAriStep(
         summary: `There are ${decisions.length} operational decisions waiting for your review.`,
         factPatch: {
           assistantResponse: `There are ${decisions.length} operational decisions waiting for your review:`,
+          ...(chart ? { chart } : {}),
+          executionSteps: traceSteps,
           humanDecision: {
             title: 'Pending Operational Approvals',
             question: 'Please select which shipment or approval you would like to resolve:',
@@ -178,7 +232,15 @@ export async function executeAriStep(
             options,
           },
         },
-        evidence: [{ id: 'auto-hitl', source: 'json-render:HumanDecisionCard' }],
+        findings: traceSteps.map((step) => ({
+          id: step.id,
+          statement: `${step.title}: ${step.detail}`,
+          evidenceIds: [step.id],
+        })),
+        evidence: [
+          { id: 'auto-hitl', source: 'json-render:HumanDecisionCard' },
+          ...traceSteps.map((s) => ({ id: s.id, source: s.toolName || 'agent:thought' })),
+        ],
       };
     }
   }
@@ -188,7 +250,19 @@ export async function executeAriStep(
   return {
     status: 'completed',
     summary: textOutput,
-    factPatch: { assistantResponse: textOutput },
-    evidence: [{ id: 'agent-response', source: 'ari-text' }],
+    factPatch: {
+      assistantResponse: textOutput,
+      ...(chart ? { chart } : {}),
+      executionSteps: traceSteps,
+    },
+    findings: traceSteps.map((step) => ({
+      id: step.id,
+      statement: `${step.title}: ${step.detail}`,
+      evidenceIds: [step.id],
+    })),
+    evidence: [
+      { id: 'agent-response', source: 'ari-text' },
+      ...traceSteps.map((s) => ({ id: s.id, source: s.toolName || 'agent:thought' })),
+    ],
   };
 }

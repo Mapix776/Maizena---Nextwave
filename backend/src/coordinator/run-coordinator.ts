@@ -77,6 +77,7 @@ export class RunCoordinator {
 
       const result = parsedResult.data;
       const ui = validateTracerSpec(this.#composeUi(result));
+      const traceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
 
       run.facts = { ...run.facts, ...result.factPatch };
       run.ui = ui;
@@ -84,10 +85,15 @@ export class RunCoordinator {
         uiVersion: 1,
         reason: 'step-complete',
         spec: ui,
+        traceSteps,
       });
 
       run.status = 'completed';
-      await this.#emitNext(run, 'run:complete', { status: run.status });
+      await this.#emitNext(run, 'run:complete', {
+        status: run.status,
+        traceSteps,
+        findings: result.findings,
+      });
     } catch (error) {
       run.status = 'failed';
       run.error = error instanceof Error ? error.message : 'Run failed';
@@ -111,7 +117,7 @@ export class RunCoordinator {
   async #emitNext(
     run: RunSnapshot,
     type: UIEnvelope['type'],
-    payload: unknown,
+    payload: Record<string, unknown>,
   ): Promise<void> {
     run.sequence += 1;
     await this.#emit({

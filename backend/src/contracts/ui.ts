@@ -45,6 +45,15 @@ export const humanDecisionCardProps = z
   })
   .strict();
 
+const interactiveChartProps = z
+  .object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    chartType: z.enum(['bar', 'line', 'pie']),
+    data: z.array(z.object({ label: z.string(), value: z.number() }).strict()).min(1),
+  })
+  .strict();
+
 // Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
 // out of the backend while making component names and props catalog-bound.
 const reactSpecSchema = defineSchema((schema) => ({
@@ -83,6 +92,9 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
     },
     HumanDecisionCard: {
       props: humanDecisionCardProps,
+    },
+    InteractiveChart: {
+      props: interactiveChartProps,
     },
   },
 });
