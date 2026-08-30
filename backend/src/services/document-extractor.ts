@@ -127,7 +127,7 @@ export class DocumentExtractorService {
     }));
 
     // 3. Extraer referencia
-    const refMatch = text.match(/(?:ref|bl|invoice|po|booking|order)[\s#:]*([A-Za-z0-9-_/]+)/i);
+    const refMatch = text.match(/(?:booking\s+ref|bl\s+no|invoice\s+no|po\s+no|reference|ref)[\s#:]*([A-Za-z0-9-_/]+)/i);
     const documentReference = refMatch ? refMatch[1].trim() : fileName.replace(/\.[^/.]+$/, '');
 
     return {
