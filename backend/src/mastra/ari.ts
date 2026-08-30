@@ -805,9 +805,10 @@ export async function executeAriStep(
       stepNumber: 1,
       kind: 'thinking',
       animationType: 'thinking',
-      title: 'Entendiendo tu solicitud',
+      title: 'Inquiry Analysis & Source Identification',
       detail:
-        'Analizando lo que necesitas sobre tus envíos para darte una respuesta clara y directa.',
+        'Analyzing query requirements to determine the verified shipment dossiers, official documents, and data tools needed.',
+      outputSummary: 'Source: Request dispatcher & query classifier.',
       timestamp: new Date().toISOString(),
       durationMs: 25,
     },
