@@ -66,7 +66,10 @@ import {
 } from '@/components/ai-elements/prompt-input'
 import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { Button } from '@/components/ui/button'
-import { Spinner } from '@/components/ui/spinner'
+import {
+  ThinkingAnimation,
+  type ThinkingAnimationType,
+} from '@/components/chat/thinking-animation'
 import { DocumentSheetView } from '@/components/logistics/document-sheet-view'
 import { JsonRenderClient } from '@/app/json-render/render-client'
 import { getTranslations, type Locale } from '@/lib/i18n'
@@ -146,6 +149,52 @@ const fixedInstructions = `You are Ari, the lead logistics agent.
 Ground operational answers in the live Supabase query tools. Delegate Bill of Lading, Commercial Invoice, and Packing List reconciliation to Recon.
 
 Return client-friendly explanations and preserve validated structured tool results so the backend can compose evidence-backed json-render components.`
+
+const THINKING_COPY: Record<ThinkingAnimationType, string> = {
+  thinking: 'Ari está procesando tu solicitud...',
+  reading: 'Ari está extrayendo datos del documento...',
+  drawing: 'Ari está construyendo la visualización...',
+  mapping: 'Ari está trazando la ruta en el mapa...',
+  finding: 'Ari está buscando el contenedor...',
+  findingBoat: 'Ari está localizando el contenedor por barco...',
+  eta: 'Ari está calculando el ETA...',
+  comparing: 'Ari está comparando los documentos...',
+}
+
+function inferThinkingType(message?: ChatMessage): ThinkingAnimationType {
+  if (!message) return 'thinking'
+
+  const hasPdf = (message.attachments ?? []).some(
+    (attachment) =>
+      attachment.type.toLowerCase().includes('pdf') ||
+      /\.(pdf|docx?|xlsx?|csv)$/i.test(attachment.name),
+  )
+  if (hasPdf) return 'reading'
+
+  const text = message.text.toLowerCase()
+  const has = (...words: string[]) => words.some((word) => text.includes(word))
+
+  if (
+    has('reconcil', 'discrepan', 'compara', 'comparar', 'cruza', 'cotej', 'bill of lading', 'packing list', 'invoice')
+  ) {
+    return 'comparing'
+  }
+  if (has('barco', 'buque', 'vessel', 'naviera')) return 'findingBoat'
+  if (has('contenedor', 'container')) return 'finding'
+  if (has('ruta', 'mapa', 'rastrea', 'track', 'ubica', 'ubicaci', 'posici', 'dónde', 'donde')) {
+    return 'mapping'
+  }
+  if (has('eta', 'llega', 'cuándo', 'cuando', 'tiempo', 'demora', 'retras', 'estim')) {
+    return 'eta'
+  }
+  if (has('gráfic', 'grafic', 'métric', 'metric', 'analític', 'analitic', 'estadístic', 'chart', 'dashboard')) {
+    return 'drawing'
+  }
+  if (has('documento', 'pdf', 'archivo', 'lee', 'leer', 'extrae', 'reporte')) {
+    return 'reading'
+  }
+  return 'thinking'
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -796,6 +845,10 @@ export default function AgentBuilderView({
     error: t.offline,
   }[connectionStatus]
   const empty = messages.length === 0 && connectionStatus !== 'running'
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === 'user')
+  const thinkingType = inferThinkingType(lastUserMessage)
 
   return (
     <div
@@ -901,11 +954,18 @@ export default function AgentBuilderView({
                   />
                 ))}
                 {connectionStatus === 'running' && (
-                  <Message from="assistant" className="mx-auto w-full max-w-3xl flex-row items-center gap-3">
+                  <Message from="assistant" className="mx-auto w-full max-w-3xl flex-row items-start gap-3">
                     <AriAvatar />
-                    <MessageContent className="flex-row items-center gap-2 text-muted-foreground">
-                      <Spinner className="size-4 text-primary" />
-                      <span className="text-sm" role="status">{t.thinking}</span>
+                    <MessageContent className="w-full flex-row items-center gap-4 rounded-xl border border-border bg-card p-4 animate-in fade-in">
+                      <ThinkingAnimation type={thinkingType} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold uppercase tracking-wider text-primary" role="status">
+                          {THINKING_COPY[thinkingType]}
+                        </p>
+                        <div className="thinking-progress mt-2">
+                          <span />
+                        </div>
+                      </div>
                     </MessageContent>
                   </Message>
                 )}
