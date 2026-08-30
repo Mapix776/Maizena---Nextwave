@@ -81,8 +81,8 @@ test('run:start carries conversation history through the json-render tracer', as
         factPatch: { assistantResponse: 'I can help with that.' },
         evidence: [
           {
-            id: 'hardcoded-ui-demo',
-            source: 'json-render:hardcoded-components',
+            id: 'json-render-ui',
+            source: 'json-render:dynamic-components',
           },
         ],
       };
@@ -118,7 +118,7 @@ test('run:start carries conversation history through the json-render tracer', as
   assert.match(JSON.stringify(snapshot.ui), /I can help with that\./);
   assert.deepEqual(
     Object.values(snapshot.ui?.elements ?? {}).map(({ type }) => type),
-    ['AssistantMessage', 'DeliveryCard', 'ContainerProgress'],
+    ['AssistantMessage'],
   );
 });
 

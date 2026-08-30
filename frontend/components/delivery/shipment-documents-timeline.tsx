@@ -34,6 +34,7 @@ const documentIcons: Record<string, ComponentType<{ className?: string }>> = {
   'purchase-order': ClipboardList,
   'booking-confirmation': Ship,
   'bill-of-lading': FileCheck2,
+  'commercial-invoice': ReceiptText,
   invoice: ReceiptText,
   'packing-list': PackageCheck,
   'arrival-notice': FileText,
@@ -51,6 +52,13 @@ function statusStyles(status: DocumentStatus) {
   if (status === 'in_progress') return 'border-primary/25 bg-primary/10 text-primary'
   if (status === 'missing') return 'border-destructive/25 bg-destructive/10 text-destructive'
   return 'border-border bg-muted text-muted-foreground'
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeZone: 'UTC',
+  }).format(new Date(value))
 }
 
 export function ShipmentDocumentsTimeline({ title, subtitle, documents }: ShipmentDocumentsTimelineProps) {
@@ -97,7 +105,7 @@ export function ShipmentDocumentsTimeline({ title, subtitle, documents }: Shipme
                   <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(document.status)}`}>{statusLabels[document.status]}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
-                  {document.date && <time>{document.date}</time>}
+                  {document.date && <time dateTime={document.date}>{formatDate(document.date)}</time>}
                   {document.documentUrl && <a className="inline-flex items-center gap-1 font-medium text-primary hover:underline" href={document.documentUrl} target="_blank" rel="noreferrer">View document <ArrowUpRight className="size-3.5" aria-hidden="true" /></a>}
                 </div>
               </div>

@@ -38,7 +38,27 @@ test('tool and sub-agent registries keep child-only tools off Ari', async () => 
     subagentRegistry: defineSubagentRegistry({ childAgent }),
   });
 
-  assert.deepEqual(Object.keys(await ari.listTools()), ['renderDemoTool']);
+  assert.deepEqual(Object.keys(await ari.listTools()), [
+    'requestHumanDecisionTool',
+    'renderDemoTool',
+    'searchCargoTool',
+    'getOperationDetailsTool',
+    'getPendingDecisionsTool',
+    'listOperationsTool',
+    'getContainerStatusTool',
+    'getCustomsStatusTool',
+    'getOperationalAlertsTool',
+    'readDocumentTool',
+    'ingestDocumentTool',
+    'calculateEtaTool',
+    'compareDataTool',
+    'locateMapTool',
+    'findContainerTool',
+    'drawChartTool',
+    'reconcileShipmentDocumentsTool',
+    'getOperationsSummaryTool',
+    'universalSearchTool',
+  ]);
   assert.deepEqual(Object.keys(await childAgent.listTools()), ['privateTool']);
   assert.deepEqual(Object.keys(await ari.listAgents()), ['childAgent']);
 });
@@ -50,7 +70,27 @@ test('the default registry gives Ari a document-reconciliation specialist', asyn
   const ari = createAriAgent({ model, toolRegistry, subagentRegistry });
 
   assert.deepEqual(Object.keys(await ari.listAgents()), ['reconAgent']);
-  assert.deepEqual(Object.keys(await ari.listTools()), ['renderDemoTool']);
+  assert.deepEqual(Object.keys(await ari.listTools()), [
+    'requestHumanDecisionTool',
+    'renderDemoTool',
+    'searchCargoTool',
+    'getOperationDetailsTool',
+    'getPendingDecisionsTool',
+    'listOperationsTool',
+    'getContainerStatusTool',
+    'getCustomsStatusTool',
+    'getOperationalAlertsTool',
+    'readDocumentTool',
+    'ingestDocumentTool',
+    'calculateEtaTool',
+    'compareDataTool',
+    'locateMapTool',
+    'findContainerTool',
+    'drawChartTool',
+    'reconcileShipmentDocumentsTool',
+    'getOperationsSummaryTool',
+    'universalSearchTool',
+  ]);
 
   const reconAgent = (await ari.listAgents()).reconAgent;
   assert.ok(reconAgent instanceof Agent);

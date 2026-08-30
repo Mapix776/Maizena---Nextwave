@@ -1,27 +1,45 @@
+import { z } from 'zod';
+
+import {
+  agentRunTimelinePropsSchema,
+  customsClearancePanelPropsSchema,
+  documentDetailsCardPropsSchema,
+  etaRiskCardPropsSchema,
+  humanDecisionCardPropsSchema,
+  operationalAlertListPropsSchema,
+  operationsMetricsCardPropsSchema,
+  operationSummaryPropsSchema,
+  shipmentDocumentsTimelinePropsSchema,
+  shipmentMilestoneTimelinePropsSchema,
+} from '../contracts/logistics-ui.js';
+import { reconciliationFindingsPropsSchema } from '../contracts/reconciliation.js';
 import type { StepResult } from '../contracts/step-result.js';
-import type { containerStatuses } from '../contracts/ui.js';
+import {
+  containerStatuses,
+  interactiveChartPropsSchema,
+} from '../contracts/ui.js';
 
 type ContainerStatus = (typeof containerStatuses)[number];
 
-interface HumanDecisionData {
-  title: string;
-  question: string;
-  severity?: 'normal' | 'warning' | 'critical';
-  options: Array<{
-    id: string;
-    label: string;
-    description: string;
-    badge?: string;
-    actionPayload?: string;
-  }>;
+interface UiElement {
+  type: string;
+  props: unknown;
+  children: string[];
 }
 
-interface ChartData {
-  title: string;
-  chartType: 'bar' | 'line' | 'pie';
-  data: Array<{ label: string; value: number }>;
-  description?: string;
-  [key: string]: unknown;
+function parseFact<T>(
+  schema: z.ZodType<T>,
+  value: unknown,
+  label: string,
+): T | undefined {
+  if (value === undefined) return undefined;
+
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) {
+    throw new Error(`Invalid ${label} fact`, { cause: parsed.error });
+  }
+
+  return parsed.data;
 }
 
 export function composeRunUi(result: StepResult): unknown {
@@ -29,81 +47,180 @@ export function composeRunUi(result: StepResult): unknown {
   const text =
     typeof assistantResponse === 'string' ? assistantResponse : result.summary;
 
-  const humanDecision = result.factPatch?.humanDecision as HumanDecisionData | undefined;
+  const humanDecision = parseFact(
+    humanDecisionCardPropsSchema,
+    result.factPatch?.humanDecision,
+    'human decision',
+  );
+  const operationSummary = parseFact(
+    operationSummaryPropsSchema,
+    result.factPatch?.operationSummary,
+    'operation summary',
+  );
+  const operationalAlerts = parseFact(
+    operationalAlertListPropsSchema,
+    result.factPatch?.operationalAlerts,
+    'operational alerts',
+  );
+  const reconciliationFindings = parseFact(
+    reconciliationFindingsPropsSchema,
+    result.factPatch?.reconciliationFindings,
+    'reconciliation findings',
+  );
+  const customsClearance = parseFact(
+    z.array(customsClearancePanelPropsSchema),
+    result.factPatch?.customsClearance,
+    'customs clearance',
+  );
+  const etaRisks = parseFact(
+    z.array(etaRiskCardPropsSchema),
+    result.factPatch?.etaRisks,
+    'ETA risks',
+  );
+  const documentsTimeline = parseFact(
+    shipmentDocumentsTimelinePropsSchema,
+    result.factPatch?.documentsTimeline,
+    'documents timeline',
+  );
+  const documentDetails = parseFact(
+    z.array(documentDetailsCardPropsSchema),
+    result.factPatch?.documentDetails,
+    'document details',
+  );
+  const agentRuns = parseFact(
+    agentRunTimelinePropsSchema,
+    result.factPatch?.agentRuns,
+    'agent runs',
+  );
+  const shipmentMilestones = parseFact(
+    z.array(shipmentMilestoneTimelinePropsSchema),
+    result.factPatch?.shipmentMilestones,
+    'shipment milestones',
+  );
+  const operationsMetrics = parseFact(
+    operationsMetricsCardPropsSchema,
+    result.factPatch?.operationsMetrics,
+    'operations metrics',
+  );
+  const chart = parseFact(
+    interactiveChartPropsSchema,
+    result.factPatch?.chart,
+    'interactive chart',
+  );
 
-  const chart = result.factPatch?.chart as ChartData | undefined;
-  const elements: Record<string, { type: string; props: Record<string, unknown>; children: string[] }> = {
+  const elements: Record<string, UiElement> = {
     'assistant-message': {
       type: 'AssistantMessage',
       props: { text },
       children: [],
     },
   };
+  const addElement = (
+    id: string,
+    type: string,
+    props: unknown,
+    children: string[] = [],
+  ) => {
+    elements[id] = { type, props, children };
+    elements['assistant-message']?.children.push(id);
+  };
 
   if (humanDecision) {
-    elements['decision-card'] = {
-      type: 'HumanDecisionCard',
-      props: {
-        title: humanDecision.title,
-        question: humanDecision.question,
-        severity: humanDecision.severity ?? 'normal',
-        options: humanDecision.options,
-      },
-      children: [],
-    };
-    elements['assistant-message'].children.push('decision-card');
+    addElement('decision-card', 'HumanDecisionCard', humanDecision);
   }
-
+  if (operationSummary) {
+    addElement('operation-summary', 'OperationSummaryCard', operationSummary);
+  }
+  if (operationalAlerts) {
+    addElement('operational-alerts', 'OperationalAlertList', operationalAlerts);
+  }
+  if (reconciliationFindings) {
+    addElement(
+      'reconciliation-findings',
+      'ReconciliationFindings',
+      reconciliationFindings,
+    );
+  }
+  customsClearance?.forEach((props, index) =>
+    addElement(`customs-clearance-${index + 1}`, 'CustomsClearancePanel', props),
+  );
+  etaRisks?.forEach((props, index) =>
+    addElement(`eta-risk-${index + 1}`, 'EtaRiskCard', props),
+  );
+  if (documentsTimeline) {
+    addElement(
+      'shipment-documents',
+      'ShipmentDocumentsTimeline',
+      documentsTimeline,
+    );
+  }
+  documentDetails?.forEach((props, index) =>
+    addElement(`document-details-${index + 1}`, 'DocumentDetailsCard', props),
+  );
+  if (agentRuns) {
+    addElement('agent-runs', 'AgentRunTimeline', agentRuns);
+  }
+  shipmentMilestones?.forEach((props, index) =>
+    addElement(
+      `shipment-milestones-${index + 1}`,
+      'ShipmentMilestoneTimeline',
+      props,
+    ),
+  );
+  if (operationsMetrics) {
+    addElement('operations-metrics', 'OperationsMetricsCard', operationsMetrics);
+  }
   if (chart) {
-    elements['interactive-chart'] = {
-      type: 'InteractiveChart',
-      props: {
-        title: chart.title,
-        chartType: chart.chartType,
-        data: chart.data,
-        ...(chart.description ? { description: chart.description } : {}),
-      },
-      children: [],
-    };
-    elements['assistant-message'].children.push('interactive-chart');
+    addElement('interactive-chart', 'InteractiveChart', chart);
   }
 
-  // Case 2: shipment tracking, optionally composed with decisions and analytics.
-  const hasDelivery = Boolean(result.factPatch?.deliveryId || result.factPatch?.fixtureId);
+  // Render the legacy delivery cards only when the tool supplied a complete,
+  // valid delivery view. A text-only response must never invent shipment data.
+  const deliveryId = result.factPatch?.deliveryId;
+  const from = result.factPatch?.from;
+  const to = result.factPatch?.to;
+  const transportType = result.factPatch?.transportType;
+  const rawStatus = result.factPatch?.status;
+  const deliveryTime = result.factPatch?.deliveryTime;
+  const issue = result.factPatch?.issue;
+  const hasDelivery =
+    typeof deliveryId === 'string' &&
+    typeof from === 'string' &&
+    typeof to === 'string' &&
+    (transportType === 'Sea' || transportType === 'Land') &&
+    typeof rawStatus === 'string' &&
+    containerStatuses.includes(rawStatus as ContainerStatus) &&
+    typeof deliveryTime === 'string';
+
   if (hasDelivery) {
-    const deliveryId = (result.factPatch?.deliveryId as string) || 'OP-2026-101';
-    const from = (result.factPatch?.from as string) || 'Shanghai';
-    const to = (result.factPatch?.to as string) || 'Manzanillo';
-    const transportType = ((result.factPatch?.transportType as 'Sea' | 'Land') || 'Sea');
-    const status = ((result.factPatch?.status as ContainerStatus) || 'In Transit');
-    const deliveryTime = (result.factPatch?.deliveryTime as string) || '10 days';
-    const issue = result.factPatch?.issue as string | undefined;
-    const cardComponent = issue ? 'DeliveryIssueCard' : 'DeliveryCard';
-    elements['delivery-card'] = {
-      type: cardComponent,
-      props: {
-        id: deliveryId,
-        from,
-        to,
-        transportType,
-        status,
-        createdAt: new Date().toISOString(),
-        deliveryTime,
-        ...(issue ? { issue } : {}),
-      },
-      children: issue ? [] : ['container-progress'],
+    const status = rawStatus as ContainerStatus;
+    const hasIssue = typeof issue === 'string';
+    const cardProps = {
+      id: deliveryId,
+      from,
+      to,
+      transportType,
+      status,
+      createdAt: new Date().toISOString(),
+      deliveryTime,
+      ...(hasIssue ? { issue } : {}),
     };
-    if (!issue) {
+
+    if (!hasIssue) {
       elements['container-progress'] = {
         type: 'ContainerProgress',
         props: { currentStatus: status },
         children: [],
       };
     }
-    elements['assistant-message'].children.push('delivery-card');
+    addElement(
+      'delivery-card',
+      hasIssue ? 'DeliveryIssueCard' : 'DeliveryCard',
+      cardProps,
+      hasIssue ? [] : ['container-progress'],
+    );
   }
 
-  // A valid response always emits one catalog-bound tree. Its children adapt to intent.
   return {
     root: 'assistant-message',
     elements,

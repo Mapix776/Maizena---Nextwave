@@ -94,11 +94,11 @@ interface RunEnvelope {
 }
 
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
-const fixedInstructions = `You are a helpful assistant.
+const fixedInstructions = `You are Ari, the lead logistics agent.
 
-Delegate requests to reconcile a Bill of Lading, Commercial Invoice, and Packing List to reconAgent.
+Ground operational answers in the live Supabase query tools. Delegate Bill of Lading, Commercial Invoice, and Packing List reconciliation to Recon.
 
-For every user request, call renderDemoTool exactly once. Return the helpful answer through the fixed json-render demo components.`
+Return client-friendly explanations and preserve validated structured tool results so the backend can compose evidence-backed json-render components.`
 
 const initialConversation: ChatMessage[] = [
   {

@@ -62,3 +62,28 @@ test('Recon reports BL, invoice, and packing-list discrepancies by severity', as
     ],
   });
 });
+
+test('Recon reports a matched result when all compared fields agree', async () => {
+  const tool = createReconcileShipmentDocumentsTool();
+  assert.ok(tool.execute);
+
+  const document = {
+    containerNumber: 'MSCU1234567',
+    weightKg: 12_000,
+    amountUsd: 50_000,
+  };
+  const result = await tool.execute(
+    {
+      billOfLading: document,
+      commercialInvoice: document,
+      packingList: document,
+    },
+    {} as never,
+  );
+
+  assert.deepEqual(result, {
+    status: 'matched',
+    severity: 'normal',
+    discrepancies: [],
+  });
+});

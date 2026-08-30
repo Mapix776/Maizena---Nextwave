@@ -1,8 +1,22 @@
-import { defineCatalog, defineSchema } from '@json-render/core'
+import { defineCatalog, defineSchema, type Spec, validateSpec } from '@json-render/core'
 import { z } from 'zod'
 
 import { containerStatuses } from '@/components/delivery/types'
-import { documentStatuses } from '@/components/delivery/shipment-documents-timeline'
+import type { ReconciliationFindingsProps } from '@/components/delivery/reconciliation-findings'
+import type {
+  AgentRunTimelineProps,
+  CustomsClearancePanelProps,
+  DocumentDetailsCardProps,
+  EtaRiskCardProps,
+  HumanDecisionCardProps,
+  OperationalAlertListProps,
+  OperationsMetricsCardProps,
+  OperationSummaryProps,
+  ShipmentDocumentsTimelineProps,
+  ShipmentMilestoneTimelineProps,
+} from '../../../backend/src/contracts/logistics-ui'
+import logisticsUiJsonSchema from '../../../backend/src/contracts/logistics-ui.schema.json'
+import reconciliationFindingsJsonSchema from '../../../backend/src/contracts/reconciliation-findings.schema.json'
 
 const deliveryProps = z.object({
   id: z.string(),
@@ -14,20 +28,37 @@ const deliveryProps = z.object({
   deliveryTime: z.string(),
 })
 
-const decisionOptionSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  description: z.string(),
-  badge: z.string().optional(),
-  actionPayload: z.string().optional(),
-})
+type LogisticsUiDefinitions = {
+  $defs: Record<string, Record<string, unknown>>
+}
+
+const logisticsDefinitions = (logisticsUiJsonSchema as LogisticsUiDefinitions).$defs
+
+function logisticsSchema<T>(name: string): z.ZodType<T> {
+  return z.fromJSONSchema(logisticsDefinitions[name] as never) as z.ZodType<T>
+}
+
+const humanDecisionCardPropsSchema = logisticsSchema<HumanDecisionCardProps>('HumanDecisionCard')
+const operationSummaryPropsSchema = logisticsSchema<OperationSummaryProps>('OperationSummaryCard')
+const operationalAlertListPropsSchema = logisticsSchema<OperationalAlertListProps>('OperationalAlertList')
+const shipmentDocumentsTimelinePropsSchema = logisticsSchema<ShipmentDocumentsTimelineProps>('ShipmentDocumentsTimeline')
+const documentDetailsCardPropsSchema = logisticsSchema<DocumentDetailsCardProps>('DocumentDetailsCard')
+const customsClearancePanelPropsSchema = logisticsSchema<CustomsClearancePanelProps>('CustomsClearancePanel')
+const etaRiskCardPropsSchema = logisticsSchema<EtaRiskCardProps>('EtaRiskCard')
+const agentRunTimelinePropsSchema = logisticsSchema<AgentRunTimelineProps>('AgentRunTimeline')
+const shipmentMilestoneTimelinePropsSchema = logisticsSchema<ShipmentMilestoneTimelineProps>('ShipmentMilestoneTimeline')
+const operationsMetricsCardPropsSchema = logisticsSchema<OperationsMetricsCardProps>('OperationsMetricsCard')
+
+const reconciliationFindingsPropsSchema = z.fromJSONSchema(
+  reconciliationFindingsJsonSchema as never,
+) as z.ZodType<ReconciliationFindingsProps>
 
 export const jsonRenderSchema = defineSchema((s) => ({
   spec: s.object({
     root: s.string(),
     elements: s.record(s.object({
-      type: s.string(),
-      props: s.any(),
+      type: s.ref('catalog.components'),
+      props: s.propsOf('catalog.components'),
       children: s.array(s.string()),
     })),
   }),
@@ -53,12 +84,34 @@ export const catalog = defineCatalog(jsonRenderSchema, {
       props: deliveryProps.extend({ issue: z.string() }),
     },
     HumanDecisionCard: {
-      props: z.object({
-        title: z.string(),
-        question: z.string(),
-        severity: z.enum(['normal', 'warning', 'critical']).optional(),
-        options: z.array(decisionOptionSchema),
-      }),
+      props: humanDecisionCardPropsSchema,
+    },
+    OperationSummaryCard: {
+      props: operationSummaryPropsSchema,
+    },
+    OperationalAlertList: {
+      props: operationalAlertListPropsSchema,
+    },
+    DocumentDetailsCard: {
+      props: documentDetailsCardPropsSchema,
+    },
+    CustomsClearancePanel: {
+      props: customsClearancePanelPropsSchema,
+    },
+    EtaRiskCard: {
+      props: etaRiskCardPropsSchema,
+    },
+    AgentRunTimeline: {
+      props: agentRunTimelinePropsSchema,
+    },
+    ShipmentMilestoneTimeline: {
+      props: shipmentMilestoneTimelinePropsSchema,
+    },
+    OperationsMetricsCard: {
+      props: operationsMetricsCardPropsSchema,
+    },
+    ReconciliationFindings: {
+      props: reconciliationFindingsPropsSchema,
     },
     BarChart: {
       props: z.object({
@@ -82,20 +135,32 @@ export const catalog = defineCatalog(jsonRenderSchema, {
       }),
     },
     ShipmentDocumentsTimeline: {
-      props: z.object({
-        title: z.string(),
-        subtitle: z.string(),
-        documents: z.array(z.object({
-          id: z.string(),
-          title: z.string(),
-          description: z.string(),
-          status: z.enum(documentStatuses),
-          date: z.string().optional(),
-          documentUrl: z.string().optional(),
-        })),
-      }),
+      props: shipmentDocumentsTimelinePropsSchema,
     },
   },
 })
 
 export type JsonRenderSpec = typeof catalog._specType
+
+export function validateJsonRenderSpec(spec: unknown): JsonRenderSpec {
+  const validation = catalog.validate(spec)
+  if (!validation.success || !validation.data) {
+    throw new Error('Invalid json-render tree', { cause: validation.error })
+  }
+
+  const structure = validateSpec(validation.data as Spec)
+  if (!structure.valid) {
+    throw new Error(`Structurally invalid json-render tree: ${structure.issues.map(({ message }) => message).join(' ')}`)
+  }
+
+  for (const element of Object.values(validation.data.elements)) {
+    const componentName = element.type as keyof typeof catalog.data.components
+    const component = catalog.data.components[componentName]
+    const props = component.props.safeParse(element.props)
+    if (!props.success) {
+      throw new Error(`Invalid props for json-render component ${element.type}`, { cause: props.error })
+    }
+  }
+
+  return validation.data
+}

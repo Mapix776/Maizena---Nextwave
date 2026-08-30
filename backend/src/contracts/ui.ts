@@ -6,6 +6,20 @@ import {
 } from '@json-render/core';
 import { z } from 'zod';
 
+import {
+  agentRunTimelinePropsSchema,
+  customsClearancePanelPropsSchema,
+  documentDetailsCardPropsSchema,
+  etaRiskCardPropsSchema,
+  humanDecisionCardPropsSchema,
+  operationalAlertListPropsSchema,
+  operationsMetricsCardPropsSchema,
+  operationSummaryPropsSchema,
+  shipmentDocumentsTimelinePropsSchema,
+  shipmentMilestoneTimelinePropsSchema,
+} from './logistics-ui.js';
+import { reconciliationFindingsPropsSchema } from './reconciliation.js';
+
 export const containerStatuses = [
   'Booking Confirmed',
   'In Transit',
@@ -26,26 +40,9 @@ const deliveryProps = z
   })
   .strict();
 
-export const decisionOptionSchema = z
-  .object({
-    id: z.string(),
-    label: z.string(),
-    description: z.string(),
-    badge: z.string().optional(),
-    actionPayload: z.string().optional(),
-  })
-  .strict();
+export const humanDecisionCardProps = humanDecisionCardPropsSchema;
 
-export const humanDecisionCardProps = z
-  .object({
-    title: z.string(),
-    question: z.string(),
-    severity: z.enum(['normal', 'warning', 'critical']).optional(),
-    options: z.array(decisionOptionSchema),
-  })
-  .strict();
-
-const interactiveChartProps = z
+export const interactiveChartPropsSchema = z
   .object({
     title: z.string().min(1),
     description: z.string().optional(),
@@ -94,7 +91,37 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
       props: humanDecisionCardProps,
     },
     InteractiveChart: {
-      props: interactiveChartProps,
+      props: interactiveChartPropsSchema,
+    },
+    OperationSummaryCard: {
+      props: operationSummaryPropsSchema,
+    },
+    OperationalAlertList: {
+      props: operationalAlertListPropsSchema,
+    },
+    ShipmentDocumentsTimeline: {
+      props: shipmentDocumentsTimelinePropsSchema,
+    },
+    DocumentDetailsCard: {
+      props: documentDetailsCardPropsSchema,
+    },
+    CustomsClearancePanel: {
+      props: customsClearancePanelPropsSchema,
+    },
+    EtaRiskCard: {
+      props: etaRiskCardPropsSchema,
+    },
+    AgentRunTimeline: {
+      props: agentRunTimelinePropsSchema,
+    },
+    ShipmentMilestoneTimeline: {
+      props: shipmentMilestoneTimelinePropsSchema,
+    },
+    OperationsMetricsCard: {
+      props: operationsMetricsCardPropsSchema,
+    },
+    ReconciliationFindings: {
+      props: reconciliationFindingsPropsSchema,
     },
   },
 });

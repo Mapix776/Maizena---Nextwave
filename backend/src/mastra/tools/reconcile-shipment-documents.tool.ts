@@ -40,7 +40,7 @@ export const reconcileShipmentDocumentsOutputSchema = z
 type ReconciliationInput = z.infer<
   typeof reconcileShipmentDocumentsInputSchema
 >;
-type ReconciliationOutput = z.infer<
+export type ReconciliationOutput = z.infer<
   typeof reconcileShipmentDocumentsOutputSchema
 >;
 type ReconciliationField = 'containerNumber' | 'weightKg' | 'amountUsd';

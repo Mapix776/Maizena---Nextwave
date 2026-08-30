@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nauta.local/contracts/json-render/logistics-ui",
+  "$defs": {
+    "OperationSummaryCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "referenceCode", "clientName", "status", "tags", "containers"],
+      "properties": {
+        "operationId": { "type": "string", "minLength": 1 },
+        "referenceCode": { "type": "string", "minLength": 1 },
+        "clientName": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "notes": { "type": "string", "minLength": 1 },
+        "containers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "containerNumber", "status", "originPort", "destinationPort"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "containerNumber": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "minLength": 1 },
+              "originPort": { "type": "string", "minLength": 1 },
+              "destinationPort": { "type": "string", "minLength": 1 },
+              "eta": { "type": "string", "format": "date-time" },
+              "actualArrival": { "type": "string", "format": "date-time" },
+              "currentLocation": { "type": "string", "minLength": 1 },
+              "currentVessel": { "type": "string", "minLength": 1 },
+              "customsLight": { "type": "string", "enum": ["green", "red", "pending"] }
+            }
+          }
+        }
+      }
+    },
+    "OperationalAlertList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "operationReference", "alerts"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "operationReference": { "type": "string", "minLength": 1 },
+        "alerts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "severity", "category", "title", "message", "acknowledged", "createdAt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "severity": { "type": "string", "enum": ["normal", "warning", "critical"] },
+              "category": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "message": { "type": "string", "minLength": 1 },
+              "acknowledged": { "type": "boolean" },
+              "createdAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "HumanDecisionCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "question", "severity", "options"],
+      "properties": {
+        "decisionId": { "type": "string", "minLength": 1 },
+        "operationId": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "question": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["normal", "warning", "critical"] },
+        "executionMode": { "type": "string", "enum": ["auto", "requires_approval"] },
+        "autoExecuteAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "label": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "badge": { "type": "string", "minLength": 1 },
+              "actionPayload": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "ShipmentDocumentsTimeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "subtitle", "documents"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string", "minLength": 1 },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "description", "status"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["completed", "in_progress", "pending", "missing"] },
+              "date": { "type": "string", "format": "date-time" },
+              "documentUrl": { "type": "string", "format": "uri" }
+            }
+          }
+        }
+      }
+    },
+    "DocumentDetailsCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["documentId", "type", "fileName", "processingStatus", "stored", "createdAt", "parties"],
+      "properties": {
+        "documentId": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "fileName": { "type": "string", "minLength": 1 },
+        "reference": { "type": "string", "minLength": 1 },
+        "processingStatus": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "fileSizeBytes": { "type": "number", "minimum": 0 },
+        "mimeType": { "type": "string", "minLength": 1 },
+        "stored": { "type": "boolean" },
+        "errorMessage": { "type": "string", "minLength": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "parties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "name"],
+            "properties": {
+              "role": { "type": "string", "minLength": 1 },
+              "name": { "type": "string", "minLength": 1 },
+              "reference": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "CustomsClearancePanel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerNumber", "status", "customsLight", "previoStatus", "pedimentoStatus", "alertIds", "decisionIds"],
+      "properties": {
+        "containerNumber": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "customsLight": { "type": "string", "enum": ["green", "red", "pending", "unassigned"] },
+        "currentLocation": { "type": "string", "minLength": 1 },
+        "actualArrival": { "type": "string", "format": "date-time" },
+        "previoStatus": { "type": "string", "enum": ["completed", "pending"] },
+        "previoCompletedAt": { "type": "string", "format": "date-time" },
+        "pedimentoStatus": { "type": "string", "enum": ["completed", "pending"] },
+        "pedimentoNumber": { "type": "string", "minLength": 1 },
+        "alertIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "decisionIds": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "EtaRiskCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerNumber", "originalEta", "currentEta", "slipDays", "severity"],
+      "properties": {
+        "containerNumber": { "type": "string", "minLength": 1 },
+        "originalEta": { "type": "string", "format": "date-time" },
+        "currentEta": { "type": "string", "format": "date-time" },
+        "slipDays": { "type": "integer", "minimum": 1 },
+        "severity": { "type": "string", "enum": ["warning", "critical"] },
+        "currentLocation": { "type": "string", "minLength": 1 },
+        "currentVessel": { "type": "string", "minLength": 1 }
+      }
+    },
+    "AgentRunTimeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "operationReference", "runs"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "operationReference": { "type": "string", "minLength": 1 },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "agentName", "flowStep", "status", "createdAt", "updatedAt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "agentName": { "type": "string", "minLength": 1 },
+              "flowStep": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["active", "running", "waiting_input", "waiting_decision", "completed", "failed"] },
+              "triggerEvent": { "type": "string", "minLength": 1 },
+              "tokensUsed": { "type": "integer", "minimum": 0 },
+              "errorMessage": { "type": "string", "minLength": 1 },
+              "createdAt": { "type": "string", "format": "date-time" },
+              "updatedAt": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "ShipmentMilestoneTimeline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["containerNumber", "originPort", "destinationPort", "milestones"],
+      "properties": {
+        "containerNumber": { "type": "string", "minLength": 1 },
+        "originPort": { "type": "string", "minLength": 1 },
+        "destinationPort": { "type": "string", "minLength": 1 },
+        "milestones": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at", "status"],
+            "properties": {
+              "at": { "type": "string", "format": "date-time" },
+              "status": { "type": "string", "minLength": 1 },
+              "location": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "OperationsMetricsCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totalOperations", "totalContainers", "containersInTransit", "containersInCustoms", "delayedContainersCount", "criticalAlertsCount", "pendingDecisionsCount", "byStatus"],
+      "properties": {
+        "totalOperations": { "type": "integer", "minimum": 0 },
+        "totalContainers": { "type": "integer", "minimum": 0 },
+        "containersInTransit": { "type": "integer", "minimum": 0 },
+        "containersInCustoms": { "type": "integer", "minimum": 0 },
+        "delayedContainersCount": { "type": "integer", "minimum": 0 },
+        "criticalAlertsCount": { "type": "integer", "minimum": 0 },
+        "pendingDecisionsCount": { "type": "integer", "minimum": 0 },
+        "byStatus": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "count"],
+            "properties": {
+              "status": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

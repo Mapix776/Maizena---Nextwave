@@ -1,10 +1,77 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
+import {
+  cargoItemSearchResultSchema,
+  containerRowSchema,
+  decisionRowSchema,
+  eventRowSchema,
+  operationFullDetailsSchema,
+  operationRowSchema,
+  operationsMetricsSummarySchema,
+  universalSearchResultSchema,
+} from '../../contracts/database-rows.js';
 import { SupabaseReader } from '../../services/supabase-reader.js';
 
 export interface LogisticsToolsOptions {
   reader?: SupabaseReader;
 }
+
+export const searchCargoOutputSchema = z
+  .object({
+    matchedCount: z.number().int().nonnegative(),
+    results: z.array(cargoItemSearchResultSchema),
+  })
+  .strict();
+
+export const operationDetailsOutputSchema = z
+  .object({
+    found: z.boolean(),
+    details: operationFullDetailsSchema.nullable(),
+  })
+  .strict();
+
+export const operationsListOutputSchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    operations: z.array(operationRowSchema),
+  })
+  .strict();
+
+export const containerStatusOutputSchema = z
+  .object({
+    found: z.boolean(),
+    container: containerRowSchema.nullable(),
+  })
+  .strict();
+
+export const customsStatusOutputSchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    containers: z.array(containerRowSchema),
+  })
+  .strict();
+
+export const operationalAlertsOutputSchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    alerts: z.array(eventRowSchema),
+  })
+  .strict();
+
+export const pendingDecisionsOutputSchema = z
+  .object({
+    count: z.number().int().nonnegative(),
+    decisions: z.array(decisionRowSchema),
+  })
+  .strict();
+
+export const operationsSummaryOutputSchema = z
+  .object({ summary: operationsMetricsSummarySchema })
+  .strict();
+
+export const universalSearchOutputSchema = z
+  .object({ results: universalSearchResultSchema })
+  .strict();
 
 /**
  * 1. Deep search for specific cargo items or products
@@ -21,10 +88,7 @@ export function createSearchCargoTool(options: LogisticsToolsOptions = {}) {
         .min(1)
         .describe('Product name, merchandise description, or cargo keyword to search for (e.g. "dining tables", "furniture", "electronics").'),
     }),
-    outputSchema: z.object({
-      matchedCount: z.number(),
-      results: z.array(z.any()),
-    }),
+    outputSchema: searchCargoOutputSchema,
     execute: async ({ query }) => {
       const results = await reader.searchCargoItems(query);
       return {
@@ -50,10 +114,7 @@ export function createGetOperationDetailsTool(options: LogisticsToolsOptions = {
         .min(1)
         .describe('Operation reference code (e.g. "OP-2026-101", "OP-2026-102") or UUID.'),
     }),
-    outputSchema: z.object({
-      found: z.boolean(),
-      details: z.any().nullable(),
-    }),
+    outputSchema: operationDetailsOutputSchema,
     execute: async ({ referenceCodeOrId }) => {
       const details = await reader.getOperationFullDetails(referenceCodeOrId);
       return {
@@ -96,10 +157,7 @@ export function createListOperationsTool(options: LogisticsToolsOptions = {}) {
         .describe('Filter by tag (e.g. "VIP", "Perishables", "Automotive", "Electronics").'),
       limit: z.number().int().min(1).max(100).default(20).optional(),
     }),
-    outputSchema: z.object({
-      count: z.number(),
-      operations: z.array(z.any()),
-    }),
+    outputSchema: operationsListOutputSchema,
     execute: async (input) => {
       const operations = await reader.listOperations({
         status: input.status,
@@ -130,10 +188,7 @@ export function createGetContainerStatusTool(options: LogisticsToolsOptions = {}
         .min(1)
         .describe('Standard container identifier (e.g. "MSKU1234567").'),
     }),
-    outputSchema: z.object({
-      found: z.boolean(),
-      container: z.any().nullable(),
-    }),
+    outputSchema: containerStatusOutputSchema,
     execute: async ({ containerNumber }) => {
       const container = await reader.getContainerByNumber(containerNumber);
       return {
@@ -167,10 +222,7 @@ export function createGetCustomsStatusTool(options: LogisticsToolsOptions = {}) 
         .optional()
         .describe('Filter only containers where physical inspection ("previo") is completed.'),
     }),
-    outputSchema: z.object({
-      count: z.number(),
-      containers: z.array(z.any()),
-    }),
+    outputSchema: customsStatusOutputSchema,
     execute: async (input) => {
       let containers;
       if (input.customsLight) {
@@ -211,10 +263,7 @@ export function createGetOperationalAlertsTool(options: LogisticsToolsOptions = 
         .describe('Only return unacknowledged/unresolved alerts.'),
       limit: z.number().int().min(1).max(50).default(20).optional(),
     }),
-    outputSchema: z.object({
-      count: z.number(),
-      alerts: z.array(z.any()),
-    }),
+    outputSchema: operationalAlertsOutputSchema,
     execute: async (input) => {
       const alerts = await reader.getEvents({
         severity: input.severity,
@@ -244,12 +293,9 @@ export function createGetPendingDecisionsTool(options: LogisticsToolsOptions = {
         .optional()
         .describe('Optional operation UUID to filter pending decisions.'),
     }),
-    outputSchema: z.object({
-      count: z.number(),
-      decisions: z.array(z.any()),
-    }),
+    outputSchema: pendingDecisionsOutputSchema,
     execute: async (input) => {
-      const decisions = await reader.getEnrichedPendingDecisions(input.operationId);
+      const decisions = await reader.getPendingDecisions(input.operationId);
       return {
         count: decisions.length,
         decisions,
@@ -268,9 +314,7 @@ export function createGetOperationsSummaryTool(options: LogisticsToolsOptions = 
     description:
       'Get global real-time logistics metrics: total active shipments, breakdown by status, delayed containers count, critical alerts count, and pending human decisions.',
     inputSchema: z.object({}),
-    outputSchema: z.object({
-      summary: z.any(),
-    }),
+    outputSchema: operationsSummaryOutputSchema,
     execute: async () => {
       const summary = await reader.getOperationsMetricsSummary();
       return { summary };
@@ -293,9 +337,7 @@ export function createUniversalSearchTool(options: LogisticsToolsOptions = {}) {
         .min(1)
         .describe('Search query keyword (vessel name, port, client, document ID, container number).'),
     }),
-    outputSchema: z.object({
-      results: z.any(),
-    }),
+    outputSchema: universalSearchOutputSchema,
     execute: async ({ query }) => {
       const results = await reader.universalSearch(query);
       return { results };
