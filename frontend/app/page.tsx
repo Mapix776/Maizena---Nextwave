@@ -57,9 +57,10 @@ function DashboardsView({
   onGoToChat: () => void
   t: ReturnType<typeof getTranslations>
 }) {
-  const { items, deleteItem, resizeItem } = dashboard
+  const { items, deleteItem } = dashboard
   const [filter, setFilter] = useState<'all' | DashboardItemKind>('all')
   const [search, setSearch] = useState('')
+  const [expandedItem, setExpandedItem] = useState<DashboardItem | null>(null)
 
   const filters: Array<{ key: 'all' | DashboardItemKind; label: string; icon: typeof Layers }> = [
     { key: 'all', label: t.filterAll, icon: Layers },
@@ -81,6 +82,32 @@ function DashboardsView({
       const matchesSearch = !query || item.title.toLowerCase().includes(query)
       return matchesFilter && matchesSearch
     })
+
+  const getKindIcon = (kind: DashboardItemKind) => {
+    switch (kind) {
+      case 'chart': return BarChart3
+      case 'decision': return ListChecks
+      case 'table': return Table2
+      case 'metrics': return Gauge
+      case 'alert_list': return Bell
+      case 'route_map': return MapPinned
+      case 'full_spec': return LayoutDashboard
+      default: return MoreHorizontal
+    }
+  }
+
+  const getKindLabel = (kind: DashboardItemKind) => {
+    switch (kind) {
+      case 'chart': return 'Gráfico'
+      case 'decision': return 'Decisión'
+      case 'table': return 'Tabla'
+      case 'metrics': return 'Métricas'
+      case 'alert_list': return 'Alertas'
+      case 'route_map': return 'Mapa'
+      case 'full_spec': return 'Resultado Completo'
+      default: return 'Recurso'
+    }
+  }
 
   return (
     <div className="view-screen dashboards-screen">
@@ -140,68 +167,109 @@ function DashboardsView({
           </button>
         </div>
       ) : (
-        <div className="mt-4 grid auto-rows-min grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((item) => {
-            const colSpanClass =
-              item.size === 'small'
-                ? 'col-span-1'
-                : item.size === 'medium'
-                  ? 'md:col-span-2'
-                  : 'md:col-span-2 lg:col-span-3'
+            const Icon = getKindIcon(item.kind)
             return (
               <div
                 key={item.id}
-                className={`flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xs ${colSpanClass}`}
+                onClick={() => setExpandedItem(item)}
+                className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-md"
               >
-                <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <GripVertical size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold leading-tight text-foreground">{item.title}</p>
-                      {item.subtitle && <p className="truncate text-[11px] text-muted-foreground">{item.subtitle}</p>}
+                <div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400">
+                      <Icon size={20} />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {getKindLabel(item.kind)}
+                      </span>
+                      <button
+                        type="button"
+                        className="grid size-7 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                        title={t.removeWidget}
+                        aria-label={t.removeWidget}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteItem(item.id)
+                          onNotify(t.removeFromDashboardDone)
+                        }}
+                      >
+                        <Trash2 size={13} aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    {item.size === 'small' && (
-                      <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Expand to 2 columns" aria-label="Expand to 2 columns" onClick={() => resizeItem(item.id, 'medium')}>
-                        <Maximize2 size={13} aria-hidden="true" />
-                      </button>
+
+                  <div className="mt-3.5 space-y-1">
+                    <h3 className="text-sm font-bold text-foreground leading-snug group-hover:text-primary transition-colors">
+                      {item.title}
+                    </h3>
+                    {item.subtitle && (
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {item.subtitle}
+                      </p>
                     )}
-                    {item.size === 'medium' && (
-                      <>
-                        <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Shrink to 1 column" aria-label="Shrink to 1 column" onClick={() => resizeItem(item.id, 'small')}>
-                          <Minimize2 size={13} aria-hidden="true" />
-                        </button>
-                        <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Expand to full width" aria-label="Expand to full width" onClick={() => resizeItem(item.id, 'large')}>
-                          <Maximize2 size={13} aria-hidden="true" />
-                        </button>
-                      </>
-                    )}
-                    {item.size === 'large' && (
-                      <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Reduce to 2 columns" aria-label="Reduce to 2 columns" onClick={() => resizeItem(item.id, 'medium')}>
-                        <Minimize2 size={13} aria-hidden="true" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-[color-mix(in_srgb,#e5484d_14%,transparent)] hover:text-[#e5484d]"
-                      title={t.removeWidget}
-                      aria-label={t.removeWidget}
-                      onClick={() => {
-                        deleteItem(item.id)
-                        onNotify(t.removeFromDashboardDone)
-                      }}
-                    >
-                      <Trash2 size={13} aria-hidden="true" />
-                    </button>
                   </div>
                 </div>
-                <div className="flex-1 p-4">
-                  <JsonRenderClient spec={item.payload as Spec} />
+
+                <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3 text-[11px] text-muted-foreground">
+                  <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                  <span className="flex items-center gap-1 font-medium text-primary group-hover:underline">
+                    Ver componente <Maximize2 size={11} />
+                  </span>
                 </div>
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* MODAL EXPANDIDO CON EL COMPONENTE COMPLETO EN ALTA FIDELIDAD */}
+      {expandedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border bg-muted/40 px-5 py-3.5">
+              <div className="flex items-center gap-2.5">
+                <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <LayoutDashboard size={15} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground leading-none">{expandedItem.title}</h3>
+                  {expandedItem.subtitle && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{expandedItem.subtitle}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    deleteItem(expandedItem.id)
+                    setExpandedItem(null)
+                    onNotify(t.removeFromDashboardDone)
+                  }}
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  title="Eliminar de Dashboard"
+                >
+                  <Trash2 size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExpandedItem(null)}
+                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  title="Cerrar vista"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <JsonRenderClient spec={expandedItem.payload as Spec} />
+            </div>
+          </div>
         </div>
       )}
     </div>
