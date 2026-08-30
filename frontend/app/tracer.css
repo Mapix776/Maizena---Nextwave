@@ -759,6 +759,15 @@
   background: transparent;
 }
 
+.chat-mode .chat-message.assistant .chat-bubble > p {
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 18px 10px 20px;
+  border-radius: 4px 16px 16px 16px;
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
 /* User bubble in brand purple */
 .chat-mode .chat-message.user {
   justify-content: flex-end;
