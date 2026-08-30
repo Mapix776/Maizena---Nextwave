@@ -191,3 +191,101 @@ test('run:join joins a second client and acknowledges with the current snapshot'
 
   step.resolve(HELLO_STEP_RESULT);
 });
+
+test('run:join on completed run immediately replays ui:replace event to reconnected client', async (context) => {
+  const server = createNautaServer({
+    executeStep: async () => HELLO_STEP_RESULT,
+  });
+  const port = await server.start(0);
+  const initialClient = await connectClient(port);
+  const reconnectClient = await connectClient(port);
+
+  context.after(async () => {
+    initialClient.disconnect();
+    reconnectClient.disconnect();
+    await server.stop();
+  });
+
+  const completed = new Promise<void>((resolve) => {
+    initialClient.on('run:event', (envelope) => {
+      if (envelope.type === 'run:complete') resolve();
+    });
+  });
+
+  const startAck = await initialClient.emitWithAck('run:start', {
+    requestId: 'start-rejoin-test',
+  });
+  await within(completed, 500);
+
+  const replayedEvent = new Promise<unknown>((resolve) => {
+    reconnectClient.on('run:event', (envelope) => {
+      if (envelope.type === 'ui:replace') resolve(envelope);
+    });
+  });
+
+  const joinAck = await reconnectClient.emitWithAck('run:join', {
+    runId: startAck.runId,
+  });
+
+  assert.equal(joinAck.ok, true);
+  assert.equal(joinAck.snapshot.status, 'completed');
+  assert.ok(joinAck.snapshot.ui);
+
+  const envelope = (await within(replayedEvent, 500)) as { type: string; payload: { reason: string } };
+  assert.equal(envelope.type, 'ui:replace');
+  assert.equal(envelope.payload.reason, 'rejoin-replay');
+});
+
+test('concurrent runs maintain strict room isolation with no event bleed', async (context) => {
+  const server = createNautaServer({
+    executeStep: async (messages) => ({
+      status: 'completed',
+      summary: `Result for ${messages[0]?.content}`,
+      factPatch: { assistantResponse: `Echo: ${messages[0]?.content}` },
+      evidence: [{ id: 'test-evidence', source: 'unit-test' }],
+    }),
+  });
+  const port = await server.start(0);
+  const clientA = await connectClient(port);
+  const clientB = await connectClient(port);
+
+  context.after(async () => {
+    clientA.disconnect();
+    clientB.disconnect();
+    await server.stop();
+  });
+
+  const clientAEvents: unknown[] = [];
+  const clientBEvents: unknown[] = [];
+
+  clientA.on('run:event', (env) => clientAEvents.push(env));
+  clientB.on('run:event', (env) => clientBEvents.push(env));
+
+  const [ackA, ackB] = await Promise.all([
+    clientA.emitWithAck('run:start', {
+      requestId: 'concurrent-run-A',
+      messages: [{ role: 'user', content: 'Query A' }],
+    }),
+    clientB.emitWithAck('run:start', {
+      requestId: 'concurrent-run-B',
+      messages: [{ role: 'user', content: 'Query B' }],
+    }),
+  ]);
+
+  assert.notEqual(ackA.runId, ackB.runId);
+
+  // Wait for both executions to finish
+  await new Promise((r) => setTimeout(r, 200));
+
+  // Client A should only see events with runId === ackA.runId
+  assert.ok(clientAEvents.length > 0);
+  for (const env of clientAEvents as Array<{ runId: string }>) {
+    assert.equal(env.runId, ackA.runId, 'Client A received bleed event from another run');
+  }
+
+  // Client B should only see events with runId === ackB.runId
+  assert.ok(clientBEvents.length > 0);
+  for (const env of clientBEvents as Array<{ runId: string }>) {
+    assert.equal(env.runId, ackB.runId, 'Client B received bleed event from another run');
+  }
+});

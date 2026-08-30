@@ -171,9 +171,25 @@ export class DocumentExtractorService {
    * Ingesta completa: parsea, crea o asocia operación y guarda documento en Supabase
    */
   async ingestDocument(input: IngestDocumentInput): Promise<IngestDocumentResult> {
+    if (/\.(exe|bat|cmd|sh|bin|dll|scr|js|vbs)$/i.test(input.fileName)) {
+      throw new Error(
+        `Upload rejected for ${input.fileName}: Ari can ingest only a Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. Executable files are not permitted. No data was changed.`,
+      );
+    }
+
+    if (/\.\.[\/\\]|[\/\\]\.\./.test(input.fileName)) {
+      throw new Error(`Path traversal or invalid file name detected in ${input.fileName}`);
+    }
+
     if (!input.fileContentText?.trim()) {
       throw new Error(
         `Upload rejected for ${input.fileName}: Ari needs extracted text or OCR content to validate the document type. No data was changed.`,
+      );
+    }
+
+    if (input.fileContentText.length > 500_000) {
+      throw new Error(
+        `Upload rejected for ${input.fileName}: File content exceeds maximum permitted size of 500KB of extracted text. No data was changed.`,
       );
     }
 

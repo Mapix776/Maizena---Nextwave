@@ -120,10 +120,26 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
 
       try {
         void socket.join(roomName(parsed.data.runId));
+        const snapshot = coordinator.getSnapshot(parsed.data.runId);
         acknowledge({
           ok: true,
-          snapshot: coordinator.getSnapshot(parsed.data.runId),
+          snapshot,
         });
+
+        if (snapshot.ui) {
+          socket.emit('run:event', {
+            runId: snapshot.runId,
+            sequence: snapshot.sequence,
+            type: 'ui:replace',
+            timestamp: new Date().toISOString(),
+            payload: {
+              uiVersion: 1,
+              reason: 'rejoin-replay',
+              spec: snapshot.ui,
+              traceSteps: (snapshot.facts.executionSteps as unknown[]) || [],
+            },
+          });
+        }
       } catch (error) {
         acknowledge({
           ok: false,
