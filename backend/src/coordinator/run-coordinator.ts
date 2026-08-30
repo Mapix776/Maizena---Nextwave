@@ -152,12 +152,19 @@ export class RunCoordinator {
       }
 
       const result = parsedResult.data;
+      const accumulatedFacts = { ...run.facts, ...result.factPatch };
+
+      const mergedResult: StepResult = {
+        ...result,
+        factPatch: accumulatedFacts,
+      };
+
       logTiming('ui_composition_started');
-      const ui = validateTracerSpec(this.#composeUi(result));
+      const ui = validateTracerSpec(this.#composeUi(mergedResult));
       logTiming('ui_composition_completed');
       const traceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
 
-      run.facts = { ...run.facts, ...result.factPatch };
+      run.facts = accumulatedFacts;
       run.ui = ui;
 
       const elementKeys = Object.keys((ui as { elements: Record<string, unknown> }).elements);

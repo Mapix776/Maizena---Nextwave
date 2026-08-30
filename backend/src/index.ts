@@ -1,11 +1,19 @@
 import { loadEnvFile } from 'node:process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import { createNautaServer } from './socket/server.js';
 
-try {
-  loadEnvFile();
-} catch (error) {
-  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+for (const envPath of ['.env', 'backend/.env', '../backend/.env']) {
+  const fullPath = resolve(process.cwd(), envPath);
+  if (existsSync(fullPath)) {
+    try {
+      loadEnvFile(fullPath);
+      break;
+    } catch {
+      // ignore
+    }
+  }
 }
 
 const server = createNautaServer();
