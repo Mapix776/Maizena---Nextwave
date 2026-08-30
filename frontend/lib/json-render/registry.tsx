@@ -10,6 +10,7 @@ import { ReconciliationFindings } from '@/components/delivery/reconciliation-fin
 import { ShipmentDocumentsTimeline } from '@/components/delivery/shipment-documents-timeline'
 import { BarChart } from '@/components/analytics/bar-chart'
 import { CatalogChart } from '@/components/analytics/catalog-chart'
+import { InteractiveChart } from '@/components/analytics/interactive-chart'
 import { AgentRunTimeline } from '@/components/logistics/agent-run-timeline'
 import { CustomsClearancePanel } from '@/components/logistics/customs-clearance-panel'
 import { DocumentDetailsCard } from '@/components/logistics/document-details-card'
@@ -39,5 +40,6 @@ export const { registry } = defineRegistry(catalog, {
     ShipmentDocumentsTimeline: ({ props }) => <ShipmentDocumentsTimeline {...props} />,
     BarChart: ({ props }) => <BarChart {...props} />,
     CatalogChart: ({ props }) => <CatalogChart {...props} />,
+    InteractiveChart: ({ props }) => <InteractiveChart {...props} />,
   },
 })
