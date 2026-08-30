@@ -7,5 +7,11 @@ import { validateJsonRenderSpec } from '@/lib/json-render/catalog'
 
 export function JsonRenderClient({ spec }: { spec: Spec }) {
   const validatedSpec = validateJsonRenderSpec(spec)
-  return <JSONUIProvider registry={registry}><Renderer spec={validatedSpec} registry={registry} /></JSONUIProvider>
+  return (
+    <JSONUIProvider registry={registry}>
+      <div className="w-full min-w-0 wrap-anywhere">
+        <Renderer spec={validatedSpec} registry={registry} />
+      </div>
+    </JSONUIProvider>
+  )
 }
