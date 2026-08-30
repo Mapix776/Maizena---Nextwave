@@ -43,6 +43,9 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:5173',
+    'https://maizena-nextwave-frontend.onrender.com',
+    'https://maizena-nextwave.onrender.com',
+    /^https:\/\/.*\.onrender\.com$/,
     'https://maizena-nextwave.vercel.app',
     'https://maizena-nextwave-git-main-joshuapzzs-projects.vercel.app',
     /^https:\/\/maizena-nextwave-.*\.vercel\.app$/,
