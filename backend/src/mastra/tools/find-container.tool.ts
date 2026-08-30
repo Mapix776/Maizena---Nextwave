@@ -23,7 +23,7 @@ export function createFindContainerTool(options: FindContainerToolOptions = {}) 
       container: z.any().nullable(),
     }),
     execute: async ({ containerQuery }) => {
-      const container = await reader.getContainerByNumber(containerQuery);
+      const container = await reader.getEnrichedContainerByNumber(containerQuery);
       if (container) {
         return { found: true, container };
       }

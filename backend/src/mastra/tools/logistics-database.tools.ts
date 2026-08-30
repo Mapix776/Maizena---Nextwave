@@ -190,7 +190,7 @@ export function createGetContainerStatusTool(options: LogisticsToolsOptions = {}
     }),
     outputSchema: containerStatusOutputSchema,
     execute: async ({ containerNumber }) => {
-      const container = await reader.getContainerByNumber(containerNumber);
+      const container = await reader.getEnrichedContainerByNumber(containerNumber);
       return {
         found: container !== null,
         container,

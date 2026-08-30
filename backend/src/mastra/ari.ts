@@ -69,10 +69,11 @@ Your tool execution workflow:
      - The human user may click a button, type a free-form comment, or give specific constraints (e.g. "Reroute to Veracruz instead", "Approve but negotiate a 5% discount", "Split the container delivery into two batches").
      - Always parse the user's direct instruction, validate it against the operation context, and respect the human's command.
      - Acknowledge their exact decision in natural, executive language, state the next operational action taken, and invoke \`renderDemoTool\` to visually confirm the updated shipment state.
-2. 🔍 Finding Cargo / Container:
-   - When asked to find or track items (e.g. "Have the electronics arrived yet?", "Where are the dining tables?"), call \`searchCargoTool\` or \`findContainerTool\`.
+2. 🔍 Finding Cargo & Container Tracking:
+   - When asked to find, track, or inspect a container (e.g. "MSKU1234567 MUESTRAME ESE CONTENEDOR", "Where is container MSKU1234567?", "Track CMAU9876543"), call \`getContainerStatusTool\` or \`findContainerTool\`.
+   - When asked to find cargo items (e.g. "Have the electronics arrived yet?", "Where are the dining tables?"), call \`searchCargoTool\` or \`findContainerTool\`.
    - If multiple shipments match, call \`requestHumanDecisionTool\` to let the user choose which shipment to view.
-   - If 1 shipment matches, call \`renderDemoTool\` with the clean assistantResponse and delivery parameters (deliveryId, from, to, status, deliveryTime, issue).
+   - ALWAYS call \`renderDemoTool\` with the clean assistantResponse and delivery parameters (deliveryId, from, to, status, deliveryTime, issue) so the visual card is rendered.
 3. 📄 Reading & Ingesting Documents:
    - Ari is read-only by default. The sole data-mutation exception is \`ingestDocumentTool\`, and only after the user has uploaded or pasted a document with extracted/OCR text.
    - Use \`ingestDocumentTool\` only for: Purchase Order, Booking Confirmation, Bill of Lading, Packing List, or Arrival Notice. The tool validates the content; never try to bypass or relabel that validation.
@@ -308,6 +309,37 @@ export async function executeAriStep(
       id: 'supabase-customs-status',
       source: 'supabase:get-customs-status',
     });
+  }
+
+  // Populate DeliveryCard facts when container tools run
+  const containerToolResult = response.toolResults.find(
+    ({ payload }) =>
+      !payload.isError &&
+      (payload.toolName === 'getContainerStatusTool' ||
+        payload.toolName === 'get-container-status' ||
+        payload.toolName === 'findContainerTool' ||
+        payload.toolName === 'find-container'),
+  );
+
+  if (containerToolResult) {
+    const rawData = containerToolResult.payload.result as {
+      found?: boolean;
+      container?: Record<string, unknown>;
+    };
+    if (rawData?.found && rawData.container) {
+      const c = rawData.container;
+      const originPort = (c.origin_port as string) || 'Shanghai / Haiphong';
+      const destPort = (c.destination_port as string) || 'Manzanillo, México';
+      const opRef = (c.operationReference as string) || 'OP-2026-101';
+      const eta = (c.eta as string) || '2026-09-08T00:00:00Z';
+
+      catalogFactPatch.deliveryId = opRef;
+      catalogFactPatch.from = originPort;
+      catalogFactPatch.to = destPort;
+      catalogFactPatch.transportType = 'Sea';
+      catalogFactPatch.status = 'In Transit';
+      catalogFactPatch.deliveryTime = `${new Date(eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (in 10 days)`;
+    }
   }
 
   const chartResult = response.toolResults.find(

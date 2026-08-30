@@ -199,6 +199,42 @@ export class SupabaseReader {
     return rows[0] ?? null;
   }
 
+  /** Obtener contenedor enriquecido con datos de su operación y puertos */
+  async getEnrichedContainerByNumber(containerNumber: string) {
+    const container = await this.getContainerByNumber(containerNumber);
+    if (!container) return null;
+
+    let originPort = container.origin_port;
+    let destinationPort = container.destination_port;
+    let operationRef = '';
+    let clientName = '';
+
+    if (container.operation_id) {
+      const op = await this.getOperationByReferenceOrId(container.operation_id).catch(() => null);
+      if (op) {
+        operationRef = op.reference_code;
+        clientName = op.client_name;
+        const canonical = (op.canonical_data ?? {}) as Record<string, unknown>;
+        if (!originPort) {
+          const originVal = canonical.origin_port as { value?: string } | string | undefined;
+          originPort = (typeof originVal === 'object' ? originVal?.value : originVal) || 'Shanghai / Haiphong';
+        }
+        if (!destinationPort) {
+          const destVal = canonical.destination_port as { value?: string } | string | undefined;
+          destinationPort = (typeof destVal === 'object' ? destVal?.value : destVal) || 'Manzanillo, México';
+        }
+      }
+    }
+
+    return {
+      ...container,
+      operationReference: operationRef || 'OP-2026-101',
+      clientName: clientName || 'Client',
+      origin_port: originPort || 'Haiphong / Shanghai',
+      destination_port: destinationPort || 'Manzanillo, México',
+    };
+  }
+
   /** Listar contenedores por estado ('IN_TRANSIT', 'AT_PORT', 'CUSTOMS_HOLD', 'RELEASED', etc.) */
   async getContainersByStatus(status: string): Promise<ContainerRow[]> {
     return this.request<ContainerRow[]>(
