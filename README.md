@@ -4,6 +4,12 @@ Nauta is an AI-assisted workspace for international logistics operations. Its ag
 
 The project is split into a Next.js frontend and a Node.js/Mastra backend connected through Socket.io.
 
+## Live environments
+
+- **Frontend:** [maizena-nextwave.vercel.app](https://maizena-nextwave.vercel.app)
+- **Backend API:** [maizena-nextwave.onrender.com](https://maizena-nextwave.onrender.com)
+- **Backend health check:** [maizena-nextwave.onrender.com/healthz](https://maizena-nextwave.onrender.com/healthz)
+
 ## What it does
 
 - Tracks operations, containers, customs status, ETA risk, alerts, decisions, and parties.
