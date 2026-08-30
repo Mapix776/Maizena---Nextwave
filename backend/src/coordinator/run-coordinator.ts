@@ -9,6 +9,10 @@ import {
 } from '../contracts/ui.js';
 import { executeAriStep } from '../mastra/ari.js';
 import { composeRunUi } from '../services/ui-composer.js';
+import {
+  defaultSpeculativeEngine,
+  SpeculativeEngine,
+} from '../services/speculative-engine.js';
 
 interface RunCoordinatorOptions {
   executeStep?: (messages: ChatMessage[]) => Promise<unknown>;
@@ -16,6 +20,7 @@ interface RunCoordinatorOptions {
   emit?: (envelope: UIEnvelope) => void | Promise<void>;
   createRunId?: () => string;
   now?: () => Date;
+  speculativeEngine?: SpeculativeEngine;
 }
 
 export class RunCoordinator {
@@ -25,6 +30,7 @@ export class RunCoordinator {
   readonly #emit: (envelope: UIEnvelope) => void | Promise<void>;
   readonly #createRunId: () => string;
   readonly #now: () => Date;
+  readonly #speculativeEngine: SpeculativeEngine;
 
   constructor(options: RunCoordinatorOptions = {}) {
     this.#executeStep = options.executeStep ?? executeAriStep;
@@ -32,6 +38,7 @@ export class RunCoordinator {
     this.#emit = options.emit ?? (() => undefined);
     this.#createRunId = options.createRunId ?? randomUUID;
     this.#now = options.now ?? (() => new Date());
+    this.#speculativeEngine = options.speculativeEngine ?? defaultSpeculativeEngine;
   }
 
   createRun(): RunSnapshot {
@@ -74,6 +81,50 @@ export class RunCoordinator {
     await this.#emitNext(run, 'run:status', { status: run.status });
     logTiming('ws_status_running_emitted');
 
+    // 1. Check speculative cache for instant transition HIT
+    const promptText = messages.map((m) => m.content).join(' ');
+    const refMatch = promptText.match(/MDS-DEMO-[A-Z]+-\d+|OP-\d+-[A-Z0-9]+|PO-\d+-\d+/i);
+    const targetStateMatch = promptText.match(/\b(in_transit|arrived_at_port|customs|delivered)\b/i);
+
+    if (refMatch && targetStateMatch) {
+      const opRef = refMatch[0].toUpperCase();
+      const targetState = targetStateMatch[0].toUpperCase();
+      const speculative = this.#speculativeEngine.consumeSpeculativeSpec(
+        opRef,
+        targetState,
+        run.facts,
+      );
+
+      if (speculative.hit && speculative.spec) {
+        logTiming(`speculative_hit_saved_${speculative.savedMs}ms`);
+        run.facts = { ...run.facts, ...speculative.factPatch };
+        run.ui = validateTracerSpec(speculative.spec);
+        const traceSteps = [
+          {
+            title: 'Pre-generación especulativa aplicada',
+            description: `Estado ${targetState} servido instantáneamente desde caché anticipado (${speculative.savedMs}ms ahorrados).`,
+            status: 'completed',
+          },
+        ];
+
+        await this.#emitNext(run, 'ui:replace', {
+          uiVersion: 1,
+          reason: 'speculative-hit',
+          spec: run.ui,
+          traceSteps,
+        });
+        logTiming('ws_ui_replace_emitted');
+
+        run.status = 'completed';
+        await this.#emitNext(run, 'run:complete', {
+          status: run.status,
+          traceSteps,
+        });
+        logTiming('stream_closed');
+        return;
+      }
+    }
+
     try {
       logTiming('step_execution_started');
       const parsedResult = stepResultSchema.safeParse(
@@ -108,6 +159,11 @@ export class RunCoordinator {
         findings: result.findings,
       });
       logTiming('stream_closed');
+
+      // 2. Trigger background speculative pre-generation for next probable state
+      setImmediate(() => {
+        void this.#speculativeEngine.pregenerateNextState(runId, result);
+      });
     } catch (error) {
       logTiming('run_failed');
       run.status = 'failed';
