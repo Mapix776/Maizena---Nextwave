@@ -8,22 +8,18 @@ import {
   BarChart3,
   Bookmark,
   BookmarkCheck,
-  CheckCircle2,
   ChevronRight,
   Copy,
   Download,
   FileText,
   Landmark,
   ListTree,
-  MessageSquare,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
   Paperclip,
-  Rocket,
   RotateCcw,
   Save,
-  Settings,
   Share2,
   Ship,
   Sparkles,
@@ -84,7 +80,15 @@ import {
 type ContextItem = {
   id: string
   title: string
-  kind: 'Documento' | 'Informe' | 'Detalle'
+  kind:
+    | 'Documento'
+    | 'Documentos'
+    | 'Informe'
+    | 'Detalle'
+    | 'Ficha'
+    | 'Ficha Aduanal'
+    | 'Alertas Operativas'
+    | 'Seguimiento'
   description: string
   sourceId: string
   elementType: string
@@ -103,19 +107,32 @@ function contextItemsFromSpec(
   spec: JsonRenderSpec,
   sourceId: string,
 ): ContextItem[] {
-  return Object.entries(spec.elements).map(([id, element], index) => {
+  return Object.entries(spec.elements)
+    .filter(([, element]) => {
+      const type = element.type.toLowerCase()
+      // Los mensajes conversacionales de Ari no son fichas contextuales.
+      return !type.includes('assistantmessage') && !type.includes('message')
+    })
+    .map(([id, element], index) => {
     const props = element.props as Record<string, unknown>
-    const kind = element.type.toLowerCase().includes('issue')
-      ? 'Informe'
-      : element.type.toLowerCase().includes('document')
-        ? 'Documento'
-        : 'Detalle'
+    const type = element.type.toLowerCase()
+    const kind = type.includes('issue')
+      ? 'Alertas Operativas'
+      : type.includes('document')
+        ? 'Documentos'
+        : type.includes('customs') || type.includes('aduan')
+          ? 'Ficha Aduanal'
+          : type.includes('shipment') || type.includes('timeline')
+            ? 'Seguimiento'
+            : 'Ficha'
     const title =
       typeof props.title === 'string'
         ? props.title
         : typeof props.reference === 'string'
           ? props.reference
-          : `${kind} ${index + 1}`
+          : typeof props.name === 'string'
+            ? props.name
+            : `${kind} ${index + 1}`
     const url =
       typeof props.url === 'string'
         ? props.url
@@ -143,12 +160,6 @@ function contextItemsFromSpec(
 
 const backendUrl =
   process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
-
-const fixedInstructions = `You are Ari, the lead logistics agent.
-
-Ground operational answers in the live Supabase query tools. Delegate Bill of Lading, Commercial Invoice, and Packing List reconciliation to Recon.
-
-Return client-friendly explanations and preserve validated structured tool results so the backend can compose evidence-backed json-render components.`
 
 const THINKING_COPY: Record<ThinkingAnimationType, string> = {
   thinking: 'Ari está procesando tu solicitud...',
@@ -683,8 +694,6 @@ function ChatMessageRow({
   )
 }
 
-const fieldClass =
-  'w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-shadow focus:border-ring focus:ring-2 focus:ring-ring/20'
 const kickerClass = 'text-xs font-medium uppercase tracking-wider text-muted-foreground'
 
 export default function AgentBuilderView({
@@ -711,15 +720,9 @@ export default function AgentBuilderView({
     locale,
     onNotify,
   })
-  const [tab, setTab] = useState('Test Agent')
   const [input, setInput] = useState('')
   const [composerRevision, setComposerRevision] = useState(0)
-  const [agentName, setAgentName] = useState('Ari')
-  const [language, setLanguage] = useState('Español')
-  const [purpose, setPurpose] = useState('Asistente general')
-  const [company, setCompany] = useState('Muebles del Sur')
-  const [companyDesc, setCompanyDesc] = useState('Empresa de distribución y logística')
-  const [saved, setSaved] = useState(false)
+  const [agentName] = useState('Ari')
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set())
@@ -743,12 +746,6 @@ export default function AgentBuilderView({
       setInput('')
       setComposerRevision((current) => current + 1)
     }
-  }
-
-  function save() {
-    setSaved(true)
-    window.setTimeout(() => setSaved(false), 2000)
-    onNotify('Configuración del tracer guardada')
   }
 
   function handleClearChat() {
@@ -1129,131 +1126,6 @@ export default function AgentBuilderView({
                 <small className="block text-xs text-muted-foreground">Origen: {selectedContext.sourceId}</small>
               </div>
             )}
-
-            <section className="space-y-4 border-t border-border p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold tracking-tight">{agentName}</h3>
-                  <span className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                    <span className="size-1.5 rounded-full bg-emerald-500" />
-                    Tracer activo
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={save}>
-                    {saved ? <CheckCircle2 className="size-4" /> : <Save className="size-4" />}
-                    {saved ? 'Guardado' : 'Guardar'}
-                  </Button>
-                  <Button type="button" size="sm" onClick={() => onNotify('El tracer ya está activo')}>
-                    <Rocket className="size-4" /> Activo
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
-                {['Test Agent', 'Settings', 'Instructions'].map((item) => (
-                  <button
-                    type="button"
-                    key={item}
-                    className={`flex min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-colors ${
-                      tab === item
-                        ? 'bg-card text-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    onClick={() => setTab(item)}
-                  >
-                    {item === 'Test Agent' && <MessageSquare className="size-3.5 shrink-0" />}
-                    {item === 'Settings' && <Settings className="size-3.5 shrink-0" />}
-                    {item === 'Instructions' && <FileText className="size-3.5 shrink-0" />}
-                    <span className="truncate">{item}</span>
-                  </button>
-                ))}
-              </div>
-
-              {tab === 'Test Agent' && (
-                <div className="space-y-3">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Conversa con Ari. Cada turno cruza Mastra, RunCoordinator, Socket.IO y el renderer validado por catálogo.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {[
-                      ['Modelo activo', 'GPT-5 mini'],
-                      ['Idioma', language],
-                      ['Salida', 'Recon → json-render'],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl border border-border bg-card p-3">
-                        <span className={kickerClass}>{label}</span>
-                        <b className="mt-1 block text-sm font-medium">{value}</b>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {tab === 'Settings' && (
-                <div className="space-y-3">
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Language</span>
-                    <select className={fieldClass} value={language} onChange={(event) => setLanguage(event.target.value)}>
-                      <option>Español</option>
-                      <option>Inglés</option>
-                      <option>Francés</option>
-                      <option>Portugués</option>
-                    </select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Agent Name</span>
-                    <input className={fieldClass} value={agentName} onChange={(event) => setAgentName(event.target.value)} />
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Agent Purpose</span>
-                    <select className={fieldClass} value={purpose} onChange={(event) => setPurpose(event.target.value)}>
-                      <option>Asistente general</option>
-                      <option>Atención al cliente</option>
-                      <option>Soporte técnico</option>
-                    </select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Company Name</span>
-                    <input className={fieldClass} value={company} onChange={(event) => setCompany(event.target.value)} />
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Company Description</span>
-                    <textarea
-                      className={`${fieldClass} min-h-24 resize-y`}
-                      value={companyDesc}
-                      onChange={(event) => setCompanyDesc(event.target.value)}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {tab === 'Instructions' && (
-                <div className="space-y-3">
-                  <label className="block space-y-1.5">
-                    <span className={kickerClass}>Fixed system instructions</span>
-                    <textarea className={`${fieldClass} min-h-44 resize-y`} value={fixedInstructions} readOnly />
-                  </label>
-                  <div className="rounded-xl border border-border bg-card p-3">
-                    <label className="block space-y-1.5">
-                      <span className={kickerClass}>Model</span>
-                      <input className={fieldClass} value="GPT-5.6 Luna · main: medium · Recon: none" readOnly />
-                    </label>
-                    <small className="mt-2 block text-xs leading-5 text-muted-foreground">
-                      Ari supplies the answer. The render tool supplies the fixed, catalog-valid component tree.
-                    </small>
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-xl border border-border bg-card p-4">
-                <h4 className="text-base font-semibold tracking-tight">Tracer contract</h4>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  Ari → Recon → reconcileShipmentDocumentsTool → renderDemoTool. Recon alone owns the reconciliation
-                  capability; rendered component names and props remain catalog-validated.
-                </p>
-              </div>
-            </section>
           </div>
         </aside>
       )}
