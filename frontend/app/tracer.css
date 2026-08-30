@@ -46,6 +46,114 @@
   display: none;
 }
 
+.context-view-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 10px 12px 0;
+}
+
+.context-view-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  padding: 9px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.context-view-tabs button:hover {
+  color: var(--foreground);
+}
+
+.context-view-tabs button.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+.context-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px 24px;
+}
+
+.context-trace-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.trace-steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trace-step {
+  position: relative;
+  display: flex;
+  gap: 14px;
+}
+
+.trace-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 13px;
+  top: 30px;
+  bottom: -18px;
+  width: 2px;
+  background: var(--line);
+}
+
+.trace-step-marker {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: linear-gradient(120deg, #dc63c7, #8b5cf6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  z-index: 1;
+}
+
+.trace-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 3px;
+}
+
+.trace-step-body b {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--foreground);
+}
+
+.trace-step-body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
 .context-tabs {
   display: flex;
   gap: 6px;
