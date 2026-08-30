@@ -276,12 +276,6 @@
   box-shadow: none;
 }
 
-.chat-bubble > small {
-  display: block;
-  margin-bottom: 6px;
-  padding: 0 3px;
-}
-
 .chat-bubble > p {
   width: fit-content;
   max-width: min(100%, 620px);
@@ -292,19 +286,6 @@
   background: var(--surface);
   color: var(--foreground);
   line-height: 1.55;
-}
-
-.chat-actions {
-  display: flex;
-  gap: 4px;
-  margin-top: 5px;
-  padding-left: 3px;
-}
-
-.chat-actions button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
 }
 
 .dark-mode .chat-message.rendered .json-render-bubble {
