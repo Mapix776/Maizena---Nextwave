@@ -226,7 +226,7 @@ function savedTitle(spec: JsonRenderSpec, fallback: string): string {
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
-type TraceStep = { title: string; detail: string }
+type TraceStep = { title: string; detail: string; outputSummary?: string }
 
 const ELEMENT_STEP_LABELS: Record<string, string> = {
   AssistantMessage: 'mensaje del asistente',
@@ -259,9 +259,19 @@ const DOCUMENT_ELEMENT_TYPES = new Set([
 function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
   const types = Object.values(spec.elements).map((element) => element.type)
   const hasDocuments = types.some((type) => DOCUMENT_ELEMENT_TYPES.has(type))
+  const hasCustoms = types.some((type) => type.toLowerCase().includes('customs'))
+  const hasRoute = types.some(
+    (type) => type.toLowerCase().includes('route') || type.toLowerCase().includes('map'),
+  )
   const componentNames = types
     .map((type) => ELEMENT_STEP_LABELS[type] ?? type)
     .filter((name, index, all) => all.indexOf(name) === index)
+
+  const dataSource = hasCustoms
+    ? 'Fuente: Pedimento de importación y semáforo fiscal aduanal'
+    : hasRoute
+      ? 'Fuente: Telemetría satelital AIS del buque'
+      : 'Fuente: Detalle 360° de operaciones (Supabase)'
 
   const steps: TraceStep[] = [
     {
@@ -273,6 +283,7 @@ function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
       title: 'Consultar datos operativos',
       detail:
         'Ejecuta las tools de Supabase para traer operaciones, contenedores y estados verificados en tiempo real.',
+      outputSummary: dataSource,
     },
   ]
 
@@ -281,6 +292,7 @@ function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
       title: 'Reconciliar documentos',
       detail:
         'Delega en Recon el cruce de Bill of Lading, Commercial Invoice y Packing List para detectar discrepancias.',
+      outputSummary: 'Fuente: Bill of Lading, Commercial Invoice y Packing List certificados',
     })
   }
 
@@ -631,6 +643,12 @@ function ChatMessageRow({
                         <p className="mt-1 text-sm leading-5 text-muted-foreground">
                           {step.detail}
                         </p>
+                        {step.outputSummary && (
+                          <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-primary">
+                            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                            <span>{step.outputSummary}</span>
+                          </div>
+                        )}
                       </div>
                     </li>
                   ))}
