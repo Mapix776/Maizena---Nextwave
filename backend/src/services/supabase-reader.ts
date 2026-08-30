@@ -78,8 +78,6 @@ export interface SupabaseReaderConfig {
 }
 
 export class SupabaseReader {
-  static readonly #readCache = new Map<string, { expiresAt: number; value: unknown }>();
-  static readonly #readCacheTtlMs = 2_000;
   readonly #url: string;
   readonly #serviceRoleKey: string;
   readonly #fetch: typeof fetch;
@@ -91,11 +89,6 @@ export class SupabaseReader {
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
 
-  /** In-memory micro-cache for repeated read-only UI queries within one run. */
-  static clearReadCache(): void {
-    this.#readCache.clear();
-  }
-
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     if (!this.#url || !this.#serviceRoleKey) {
       throw new Error(
@@ -104,12 +97,6 @@ export class SupabaseReader {
     }
 
     const url = `${this.#url}/rest/v1/${path}`;
-    const isRead = !options.method || options.method.toUpperCase() === 'GET';
-    const now = Date.now();
-    const cached = isRead ? SupabaseReader.#readCache.get(url) : undefined;
-    if (cached && cached.expiresAt > now) {
-      return structuredClone(cached.value) as T;
-    }
     const headers = {
       apikey: this.#serviceRoleKey,
       Authorization: `Bearer ${this.#serviceRoleKey}`,
@@ -125,14 +112,7 @@ export class SupabaseReader {
       );
     }
 
-    const data = (await response.json()) as T;
-    if (isRead) {
-      SupabaseReader.#readCache.set(url, {
-        expiresAt: now + SupabaseReader.#readCacheTtlMs,
-        value: structuredClone(data),
-      });
-    }
-    return data;
+    return (await response.json()) as T;
   }
 
   // ===========================================================================
@@ -639,27 +619,7 @@ export class SupabaseReader {
     };
 
     const operations = await this.listOperations({ limit: 50 });
-    if (operations.length === 0) return [];
-
-    // Fetch the document corpus once instead of issuing one request per operation.
-    const operationIds = operations.map((op) => op.id);
-    const allDocuments = await this.request<DocumentRow[]>(
-      `documents?operation_id=in.(${operationIds.join(',')})&select=operation_id,type,file_name,extracted_json`,
-    );
-    const documentsByOperation = new Map<string, DocumentRow[]>();
-    for (const document of allDocuments) {
-      const current = documentsByOperation.get(document.operation_id) ?? [];
-      current.push(document);
-      documentsByOperation.set(document.operation_id, current);
-    }
-
-    const matchedOperations: Array<{
-      operation: OperationRow;
-      description: string;
-      quantity?: number;
-      unitPriceUsd?: number;
-      sourceDocument?: string;
-    }> = [];
+    const results: CargoItemSearchResult[] = [];
 
     for (const op of operations) {
       let matchFound = false;
@@ -692,7 +652,7 @@ export class SupabaseReader {
       }
 
       // 3. Revisar documentos extraídos (Commercial Invoice, Packing List, PO)
-      const docs = documentsByOperation.get(op.id) ?? [];
+      const docs = await this.getDocumentsByOperation(op.id);
       for (const doc of docs) {
         if (!doc.extracted_json) continue;
         const extracted = doc.extracted_json as Record<string, unknown>;
@@ -728,63 +688,43 @@ export class SupabaseReader {
       }
 
       if (matchFound) {
-        matchedOperations.push({
-          operation: op,
-          description: matchedDescription,
-          quantity: matchedQuantity,
-          unitPriceUsd: matchedPrice,
-          sourceDocument: matchedDoc,
+        const [containers, events] = await Promise.all([
+          this.getContainersByOperation(op.id),
+          this.getEvents({ operationId: op.id }),
+        ]);
+
+        results.push({
+          operationId: op.id,
+          referenceCode: op.reference_code,
+          clientName: op.client_name,
+          operationStatus: op.status,
+          matchedItem: {
+            description: matchedDescription,
+            quantity: matchedQuantity,
+            unitPriceUsd: matchedPrice,
+            sourceDocument: matchedDoc,
+          },
+          containers: containers.map((c) => ({
+            containerNumber: c.container_number,
+            status: c.status,
+            currentLocation: c.current_location,
+            currentVessel: c.current_vessel,
+            originPort: c.origin_port,
+            destinationPort: c.destination_port,
+            eta: c.eta,
+            originalEta: c.original_eta,
+            actualArrival: c.actual_arrival,
+            customsLight: c.customs_light ?? null,
+          })),
+          alerts: events.map((e) => ({
+            severity: e.severity,
+            title: e.title,
+            message: e.message,
+          })),
         });
       }
     }
 
-    if (matchedOperations.length === 0) return [];
-
-    const matchedIds = matchedOperations.map(({ operation }) => operation.id);
-    const [allContainers, allEvents] = await Promise.all([
-      this.request<ContainerRow[]>(
-        `containers?operation_id=in.(${matchedIds.join(',')})&select=*`,
-      ),
-      this.request<EventRow[]>(
-        `events?operation_id=in.(${matchedIds.join(',')})&select=*`,
-      ),
-    ]);
-    const containersByOperation = new Map<string, ContainerRow[]>();
-    const eventsByOperation = new Map<string, EventRow[]>();
-    for (const container of allContainers) {
-      const current = containersByOperation.get(container.operation_id) ?? [];
-      current.push(container);
-      containersByOperation.set(container.operation_id, current);
-    }
-    for (const event of allEvents) {
-      const current = eventsByOperation.get(event.operation_id) ?? [];
-      current.push(event);
-      eventsByOperation.set(event.operation_id, current);
-    }
-
-    return matchedOperations.map(({ operation, description, quantity, unitPriceUsd, sourceDocument }) => ({
-      operationId: operation.id,
-      referenceCode: operation.reference_code,
-      clientName: operation.client_name,
-      operationStatus: operation.status,
-      matchedItem: { description, quantity, unitPriceUsd, sourceDocument },
-      containers: (containersByOperation.get(operation.id) ?? []).map((container) => ({
-        containerNumber: container.container_number,
-        status: container.status,
-        currentLocation: container.current_location,
-        currentVessel: container.current_vessel,
-        originPort: container.origin_port,
-        destinationPort: container.destination_port,
-        eta: container.eta,
-        originalEta: container.original_eta,
-        actualArrival: container.actual_arrival,
-        customsLight: container.customs_light ?? null,
-      })),
-      alerts: (eventsByOperation.get(operation.id) ?? []).map((event) => ({
-        severity: event.severity,
-        title: event.title,
-        message: event.message,
-      })),
-    }));
+    return results;
   }
 }

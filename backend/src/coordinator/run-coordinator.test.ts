@@ -22,13 +22,12 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
   assert.deepEqual(envelopes, [
     { type: 'run:status', sequence: 1 },
     { type: 'ui:replace', sequence: 2 },
-    { type: 'ui:replace', sequence: 3 },
-    { type: 'run:complete', sequence: 4 },
+    { type: 'run:complete', sequence: 3 },
   ]);
 
   const complete = coordinator.getSnapshot(initial.runId);
   assert.equal(complete.status, 'completed');
-  assert.equal(complete.sequence, 4);
+  assert.equal(complete.sequence, 3);
   assert.equal(complete.facts.greeting, 'Hello from Ari');
   assert.ok(complete.ui);
   assert.deepEqual([...tracerCatalog.componentNames].sort(), [
@@ -224,9 +223,9 @@ test('invalid reconciliation facts never mutate run state or emit UI', async () 
   const run = coordinator.createRun();
   await coordinator.execute(run.runId);
 
-  assert.deepEqual(eventTypes, ['run:status', 'ui:replace', 'run:complete']);
+  assert.deepEqual(eventTypes, ['run:status', 'run:complete']);
   assert.deepEqual(coordinator.getSnapshot(run.runId).facts, {});
-  assert.ok(coordinator.getSnapshot(run.runId).ui);
+  assert.equal(coordinator.getSnapshot(run.runId).ui, null);
   assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
   assert.equal(
     coordinator.getSnapshot(run.runId).error,
@@ -253,7 +252,7 @@ test('non-success StepResults cannot mutate facts or complete successfully', asy
 
     assert.deepEqual(
       envelopes.map(({ type }) => type),
-      ['run:status', 'ui:replace', 'run:complete'],
+      ['run:status', 'run:complete'],
     );
     assert.deepEqual(envelopes.at(-1)?.payload, {
       status: 'failed',
@@ -263,7 +262,7 @@ test('non-success StepResults cannot mutate facts or complete successfully', asy
     const failed = coordinator.getSnapshot(run.runId);
     assert.equal(failed.status, 'failed');
     assert.deepEqual(failed.facts, {});
-    assert.ok(failed.ui);
+    assert.equal(failed.ui, null);
   }
 });
 
