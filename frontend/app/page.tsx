@@ -70,6 +70,7 @@ function DashboardsView({
     { key: 'metrics', label: t.filterMetrics, icon: Gauge },
     { key: 'alert_list', label: t.filterAlerts, icon: Bell },
     { key: 'route_map', label: t.filterMaps, icon: MapPinned },
+    { key: 'card', label: 'Others', icon: MoreHorizontal },
   ]
 
   const query = search.trim().toLowerCase()

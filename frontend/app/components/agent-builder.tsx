@@ -417,6 +417,125 @@ function StatusPill({
   )
 }
 
+function SaveToDashboardModal({
+  isOpen,
+  initialTitle,
+  initialKind,
+  payload,
+  subtitle,
+  onClose,
+  onConfirm,
+}: {
+  isOpen: boolean
+  initialTitle: string
+  initialKind: DashboardItemKind
+  payload: JsonRenderSpec
+  subtitle?: string
+  onClose: () => void
+  onConfirm: (input: SaveDashboardInput) => void
+}) {
+  const [title, setTitle] = useState(initialTitle)
+  const [kind, setKind] = useState<DashboardItemKind>(initialKind)
+
+  useEffect(() => {
+    setTitle(initialTitle)
+    setKind(initialKind)
+  }, [initialTitle, initialKind, isOpen])
+
+  if (!isOpen) return null
+
+  const categories: Array<{ kind: DashboardItemKind; label: string }> = [
+    { kind: 'full_spec', label: 'Full results' },
+    { kind: 'chart', label: 'Charts' },
+    { kind: 'decision', label: 'Decisions' },
+    { kind: 'table', label: 'Tables' },
+    { kind: 'metrics', label: 'Metrics' },
+    { kind: 'alert_list', label: 'Alerts' },
+    { kind: 'route_map', label: 'Maps' },
+    { kind: 'card', label: 'Others' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-in fade-in">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl animate-in zoom-in-95">
+        <div className="flex items-center justify-between pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <BookmarkPlus className="size-4" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Guardar en Dashboard</h3>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-accent hover:text-foreground">
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 py-4">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Nombre personalizado (saldrá arribita del widget)
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+              placeholder="Ej: Distribución de costes"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+              ¿Dónde lo quieres guardar? (Categoría)
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {categories.map((cat) => (
+                <button
+                  key={cat.kind}
+                  type="button"
+                  onClick={() => setKind(cat.kind)}
+                  className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs font-medium transition ${
+                    kind === cat.kind
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'bg-muted/60 text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  <span>{cat.label}</span>
+                  {kind === cat.kind && <Check className="size-3.5" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+          <Button variant="ghost" size="sm" onClick={onClose} className="rounded-xl">
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              if (title.trim()) {
+                onConfirm({
+                  title: title.trim(),
+                  kind,
+                  payload,
+                  subtitle: subtitle || 'Guardado personalizado',
+                })
+                onClose()
+              }
+            }}
+            className="rounded-xl"
+          >
+            Guardar en Dashboard
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SavableComponentCard({
   component,
   isSaved,
@@ -430,29 +549,49 @@ function SavableComponentCard({
   onNotify: (message: string) => void
   t: ReturnType<typeof getTranslations>
 }) {
+  const [modalOpen, setModalOpen] = useState(false)
   const saved = isSaved?.(component.title, component.kind) ?? false
   return (
     <div className="group/savable relative w-full">
       {onSaveComponent && (
-        <button
-          type="button"
-          className={`absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-border bg-card/90 px-2 py-1 text-xs font-medium shadow-xs backdrop-blur transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover/savable:opacity-100 ${
-            saved ? 'text-primary opacity-100' : 'text-muted-foreground opacity-0'
-          }`}
-          aria-pressed={saved}
-          onClick={() => {
-            const nowSaved = onSaveComponent({
-              title: component.title,
-              kind: component.kind,
-              payload: component.spec,
-              subtitle: component.subtitle,
-            })
-            onNotify(nowSaved ? t.saveToDashboardDone : t.removeFromDashboardDone)
-          }}
-        >
-          {saved ? <BookmarkCheck className="size-3.5" /> : <BookmarkPlus className="size-3.5" />}
-          {saved ? t.savedResult : t.saveToDashboard}
-        </button>
+        <>
+          <button
+            type="button"
+            className={`absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-border bg-card/90 px-2 py-1 text-xs font-medium shadow-xs backdrop-blur transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover/savable:opacity-100 ${
+              saved ? 'text-primary opacity-100' : 'text-muted-foreground opacity-0'
+            }`}
+            aria-pressed={saved}
+            onClick={() => {
+              if (saved) {
+                onSaveComponent({
+                  title: component.title,
+                  kind: component.kind,
+                  payload: component.spec,
+                  subtitle: component.subtitle,
+                })
+                onNotify(t.removeFromDashboardDone)
+              } else {
+                setModalOpen(true)
+              }
+            }}
+          >
+            {saved ? <BookmarkCheck className="size-3.5" /> : <BookmarkPlus className="size-3.5" />}
+            {saved ? t.savedResult : t.saveToDashboard}
+          </button>
+
+          <SaveToDashboardModal
+            isOpen={modalOpen}
+            initialTitle={component.title}
+            initialKind={component.kind}
+            payload={component.spec}
+            subtitle={component.subtitle}
+            onClose={() => setModalOpen(false)}
+            onConfirm={(input) => {
+              onSaveComponent(input)
+              onNotify(t.saveToDashboardDone)
+            }}
+          />
+        </>
       )}
       <JsonRenderClient spec={component.spec as Spec} />
     </div>
@@ -534,6 +673,7 @@ function ChatMessageRow({
   onSaveComponent?: (input: SaveDashboardInput) => boolean
   t: ReturnType<typeof getTranslations>
 }) {
+  const [modalOpen, setModalOpen] = useState(false)
   const assistant = message.role === 'assistant'
   const fullTitle = message.spec ? fullResultTitle(message.spec as JsonRenderSpec, message.text) : ''
   const saved = isSaved?.(fullTitle, 'full_spec') ?? false
@@ -561,25 +701,44 @@ function ChatMessageRow({
                   {t.openInfo}
                 </Button>
                 {onSaveComponent && (
-                  <Button
-                    type="button"
-                    variant={saved ? 'secondary' : 'outline'}
-                    size="sm"
-                    className="rounded-full"
-                    aria-pressed={saved}
-                    onClick={() => {
-                      const nowSaved = onSaveComponent({
-                        title: fullTitle,
-                        kind: 'full_spec',
-                        payload: message.spec as JsonRenderSpec,
-                        subtitle: 'Full result',
-                      })
-                      onNotify(nowSaved ? t.saveCardDone : t.unsaveCardDone)
-                    }}
-                  >
-                    {saved ? <BookmarkCheck className="size-3.5" /> : <Bookmark className="size-3.5" />}
-                    {saved ? t.savedCardShort : t.saveResult}
-                  </Button>
+                  <>
+                    <Button
+                      type="button"
+                      variant={saved ? 'secondary' : 'outline'}
+                      size="sm"
+                      className="rounded-full"
+                      aria-pressed={saved}
+                      onClick={() => {
+                        if (saved) {
+                          onSaveComponent({
+                            title: fullTitle,
+                            kind: 'full_spec',
+                            payload: message.spec as JsonRenderSpec,
+                            subtitle: 'Full result',
+                          })
+                          onNotify(t.unsaveCardDone)
+                        } else {
+                          setModalOpen(true)
+                        }
+                      }}
+                    >
+                      {saved ? <BookmarkCheck className="size-3.5" /> : <Bookmark className="size-3.5" />}
+                      {saved ? t.savedCardShort : t.saveResult}
+                    </Button>
+
+                    <SaveToDashboardModal
+                      isOpen={modalOpen}
+                      initialTitle={fullTitle}
+                      initialKind="full_spec"
+                      payload={message.spec as JsonRenderSpec}
+                      subtitle="Full result"
+                      onClose={() => setModalOpen(false)}
+                      onConfirm={(input) => {
+                        onSaveComponent(input)
+                        onNotify(t.saveCardDone)
+                      }}
+                    />
+                  </>
                 )}
               </>
             )}
