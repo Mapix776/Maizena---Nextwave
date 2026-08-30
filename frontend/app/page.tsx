@@ -5,19 +5,27 @@ export const dynamic = 'force-dynamic'
 import { useEffect, useState } from 'react'
 import { getTranslations } from '@/lib/i18n'
 import { useOrderIncidents } from '@/lib/use-order-incidents'
-import { useSavedSpecs } from '@/lib/use-saved-specs'
+import { useDashboard, type DashboardItemKind } from '@/lib/use-dashboard'
+import { JsonRenderClient } from '@/app/json-render/render-client'
+import type { Spec } from '@json-render/core'
 import nextDynamic from 'next/dynamic'
 import type { OrderIncident } from '../../backend/src/contracts/order-incident'
 import {
   Activity,
   BarChart3,
   Bell,
-  Bookmark,
   ChevronRight,
   CircleHelp,
+  Gauge,
+  GripVertical,
+  Layers,
+  LayoutDashboard,
+  ListChecks,
   MapPinned,
+  Maximize2,
   Menu,
   MessageCircle,
+  Minimize2,
   Moon,
   MoreHorizontal,
   Newspaper,
@@ -25,33 +33,187 @@ import {
   ShieldAlert,
   Sparkles,
   Sun,
+  Table2,
+  Trash2,
   Zap,
 } from 'lucide-react'
 
 const OperationsMapView = nextDynamic(() => import('@/app/components/operations-map'), { ssr: false })
 const AgentBuilderView = nextDynamic(() => import('@/app/components/agent-builder'), { ssr: false })
-const SavedView = nextDynamic(() => import('@/app/components/saved-view'), { ssr: false })
 
 const navItems = [
   { key: 'issues', icon: ShieldAlert },
   { key: 'map', icon: MapPinned },
-  { key: 'analytics', icon: BarChart3 },
 ]
 
-function AnalyticsView({ onNotify, t }: { onNotify: (message: string) => void; t: ReturnType<typeof getTranslations> }) {
-  const bars = [48, 66, 54, 79, 61, 88, 72]
-  return <div className="analytics-screen"><div className="view-heading"><div><p className="section-kicker">{t.intelligence}</p><h2>{t.analytics}</h2><p>{t.analyticsDescription}</p></div><button className="primary-button" onClick={() => onNotify(t.exportSuccess)}>{t.exportReport} <ChevronRight size={15} /></button></div><div className="analytics-kpis"><div><span>On-time delivery</span><strong>94.2%</strong><small className="positive">+3.8% this month</small></div><div><span>Distance traveled</span><strong>128,460</strong><small className="positive">+12.4% vs. previous</small></div><div><span>Average cost / run</span><strong>€602</strong><small className="positive">-6.1% optimized</small></div><div><span>Issues resolved</span><strong>87%</strong><small>12 open</small></div></div><div className="analytics-grid"><div className="panel analytics-chart"><div className="panel-heading"><div><p className="section-kicker">Operations volume</p><h3>Completed operations</h3></div><button className="filter-button" onClick={() => onNotify('Period changed to this month')}>This month <ChevronRight size={13} /></button></div><div className="analytics-bars">{bars.map((height, index) => <div className="analytics-bar-col" key={index}><div className="analytics-bar-track"><span style={{ height: `${height}%` }} /></div><small>{['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'][index]}</small></div>)}</div></div><div className="panel analytics-ring-panel"><div className="panel-heading"><div><p className="section-kicker">Network health</p><h3>Global efficiency</h3></div><button className="dots-button" onClick={() => onNotify('Efficiency detail opened')}><MoreHorizontal size={18} /></button></div><div className="analytics-ring"><span>94<small>%</small></span></div><div className="legend"><span><i className="legend-pink" /> On target <b>76%</b></span><span><i className="legend-violet" /> Needs review <b>18%</b></span><span><i className="legend-gray" /> No data <b>6%</b></span></div></div><div className="panel analytics-chart wide"><div className="panel-heading"><div><p className="section-kicker">Route comparison</p><h3>Cost per kilometer</h3></div><span className="chart-value">€0.84 <small>current average</small></span></div><div className="cost-lines"><div className="cost-line"><span>Madrid → Lyon</span><div><i style={{ width: '82%' }} /></div><b>€0.72</b></div><div className="cost-line"><span>Valencia → Lisbon</span><div><i style={{ width: '67%' }} /></div><b>€0.68</b></div><div className="cost-line"><span>Bilbao → Paris</span><div><i style={{ width: '94%' }} /></div><b>€0.91</b></div><div className="cost-line"><span>Seville → Marseille</span><div><i style={{ width: '76%' }} /></div><b>€0.79</b></div></div></div></div></div>
-}
+function DashboardsView({
+  dashboard,
+  onNotify,
+  onGoToChat,
+  t,
+}: {
+  dashboard: ReturnType<typeof useDashboard>
+  onNotify: (message: string) => void
+  onGoToChat: () => void
+  t: ReturnType<typeof getTranslations>
+}) {
+  const { items, deleteItem, resizeItem } = dashboard
+  const [filter, setFilter] = useState<'all' | DashboardItemKind>('all')
+  const [search, setSearch] = useState('')
 
+  const filters: Array<{ key: 'all' | DashboardItemKind; label: string; icon: typeof Layers }> = [
+    { key: 'all', label: t.filterAll, icon: Layers },
+    { key: 'full_spec', label: t.filterResults, icon: LayoutDashboard },
+    { key: 'chart', label: t.filterCharts, icon: BarChart3 },
+    { key: 'decision', label: t.filterDecisions, icon: ListChecks },
+    { key: 'table', label: t.filterTables, icon: Table2 },
+    { key: 'metrics', label: t.filterMetrics, icon: Gauge },
+    { key: 'alert_list', label: t.filterAlerts, icon: Bell },
+    { key: 'route_map', label: t.filterMaps, icon: MapPinned },
+  ]
+
+  const query = search.trim().toLowerCase()
+  const visible = [...items]
+    .sort((a, b) => a.order - b.order)
+    .filter((item) => {
+      const matchesFilter = filter === 'all' || item.kind === filter
+      const matchesSearch = !query || item.title.toLowerCase().includes(query)
+      return matchesFilter && matchesSearch
+    })
+
+  return (
+    <div className="view-screen dashboards-screen">
+      <div className="view-heading">
+        <div>
+          <p className="section-kicker">{t.dashboardsKicker}</p>
+          <h2>{t.dashboardsTitle}</h2>
+          <p>{t.dashboardsDescription}</p>
+        </div>
+        <button className="primary-button" onClick={onGoToChat}>
+          <Sparkles size={15} /> {t.dashboardsCta}
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {filters.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                filter === key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-[var(--accent-soft)] text-primary hover:opacity-80'
+              }`}
+            >
+              <Icon size={13} aria-hidden="true" /> {label}
+            </button>
+          ))}
+        </div>
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={t.dashboardSearch}
+          className="w-full rounded-full border border-border bg-card px-4 py-2 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30 md:w-64"
+          aria-label={t.dashboardSearch}
+        />
+      </div>
+
+      {visible.length === 0 ? (
+        <div className="mt-4 flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card/60 p-12 text-center">
+          <span className="grid size-16 place-items-center rounded-2xl bg-[var(--accent-soft)] text-primary">
+            <LayoutDashboard size={30} aria-hidden="true" />
+          </span>
+          <div className="space-y-1">
+            <h3 className="text-lg font-bold tracking-tight text-foreground">{t.dashboardsEmptyTitle}</h3>
+            <p className="mx-auto max-w-md text-sm leading-relaxed text-muted-foreground">{t.dashboardsEmptyText}</p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-medium text-primary transition-opacity hover:opacity-80"
+            onClick={onGoToChat}
+          >
+            <MessageCircle size={13} aria-hidden="true" /> {t.dashboardsGoChat}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-4 grid auto-rows-min grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {visible.map((item) => {
+            const colSpanClass =
+              item.size === 'small'
+                ? 'col-span-1'
+                : item.size === 'medium'
+                  ? 'md:col-span-2'
+                  : 'md:col-span-2 lg:col-span-3'
+            return (
+              <div
+                key={item.id}
+                className={`flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-xs ${colSpanClass}`}
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <GripVertical size={14} className="shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-bold leading-tight text-foreground">{item.title}</p>
+                      {item.subtitle && <p className="truncate text-[11px] text-muted-foreground">{item.subtitle}</p>}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {item.size === 'small' && (
+                      <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Expand to 2 columns" aria-label="Expand to 2 columns" onClick={() => resizeItem(item.id, 'medium')}>
+                        <Maximize2 size={13} aria-hidden="true" />
+                      </button>
+                    )}
+                    {item.size === 'medium' && (
+                      <>
+                        <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Shrink to 1 column" aria-label="Shrink to 1 column" onClick={() => resizeItem(item.id, 'small')}>
+                          <Minimize2 size={13} aria-hidden="true" />
+                        </button>
+                        <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Expand to full width" aria-label="Expand to full width" onClick={() => resizeItem(item.id, 'large')}>
+                          <Maximize2 size={13} aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
+                    {item.size === 'large' && (
+                      <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Reduce to 2 columns" aria-label="Reduce to 2 columns" onClick={() => resizeItem(item.id, 'medium')}>
+                        <Minimize2 size={13} aria-hidden="true" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-[color-mix(in_srgb,#e5484d_14%,transparent)] hover:text-[#e5484d]"
+                      title={t.removeWidget}
+                      aria-label={t.removeWidget}
+                      onClick={() => {
+                        deleteItem(item.id)
+                        onNotify(t.removeFromDashboardDone)
+                      }}
+                    >
+                      <Trash2 size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 p-4">
+                  <JsonRenderClient spec={item.payload as Spec} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 function IncidentsView({ incidents, onAcknowledge }: { incidents: OrderIncident[]; onAcknowledge: (incidentId: string) => Promise<void> }) {
   return <div className="view-screen"><div className="view-heading"><div><p className="section-kicker">Attention</p><h2>Incidents</h2><p>Review active alerts that require a human decision.</p></div>{incidents.length > 0 && <span className="incident-total">{incidents.length} active</span>}</div>{incidents.length === 0 ? <div className="incident-empty"><ShieldAlert size={24} /><b>No active incidents</b><span>New order incidents will appear here in real time.</span></div> : <div className="incident-list">{incidents.map((incident) => <article className={`incident-row ${incident.severity}`} key={incident.incidentId}><span className="incident-row-icon"><ShieldAlert size={18} /></span><div className="incident-row-copy"><div><strong>{incident.orderId}</strong><span>{incident.type}</span><em>{incident.severity === 'critical' ? 'Critical' : 'Warning'}</em></div><p>{incident.message}</p><small>{new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(incident.raisedAt))}</small></div><button className="secondary-button" onClick={() => void onAcknowledge(incident.incidentId)}>Acknowledge</button></article>)}</div>}</div>
 }
 
-function ViewScreen({ active, onNotify, t, sidebarOpen, onToggleSidebar, saved, onNavigate, incidents, onAcknowledge }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; sidebarOpen: boolean; onToggleSidebar: () => void; saved: ReturnType<typeof useSavedSpecs>; onNavigate: (label: string) => void; incidents: OrderIncident[]; onAcknowledge: (incidentId: string) => Promise<void> }) {
+function ViewScreen({ active, onNotify, t, sidebarOpen, onToggleSidebar, dashboard, onNavigate, incidents, onAcknowledge }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; sidebarOpen: boolean; onToggleSidebar: () => void; dashboard: ReturnType<typeof useDashboard>; onNavigate: (label: string) => void; incidents: OrderIncident[]; onAcknowledge: (incidentId: string) => Promise<void> }) {
   if (active === 'Map') return <OperationsMapView />
-  if (active === 'Analytics') return <AnalyticsView onNotify={onNotify} t={t} />
-  if (active === 'Saved') return <SavedView savedSpecs={saved.savedSpecs} onRemove={saved.removeSpec} onNotify={onNotify} onGoToChat={() => onNavigate('Chat')} t={t} dateLocale={t.dateLocale} />
-  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} isSaved={saved.isSaved} onToggleSave={saved.toggleSave} />
+  if (active === 'Dashboards') return <DashboardsView dashboard={dashboard} onNotify={onNotify} onGoToChat={() => onNavigate('Chat')} t={t} />
+  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} isSaved={dashboard.isSaved} onSaveComponent={dashboard.toggleItem} />
   if (active === 'Incidents') return <IncidentsView incidents={incidents} onAcknowledge={onAcknowledge} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
     News: { kicker: 'Communication', title: 'News', description: 'Stay up to date with changes relevant to your logistics network.', items: ['New driving window in Lyon', 'Seur expands coverage to Lisbon', 'Rate update for June'] },
@@ -70,7 +232,7 @@ function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [currentDate, setCurrentDate] = useState('')
-  const saved = useSavedSpecs()
+  const dashboard = useDashboard()
   const { incidents, acknowledge } = useOrderIncidents()
   const newestIncident = incidents[0]
 
@@ -122,8 +284,8 @@ function App() {
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Main navigation">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
-          <button className={active === 'Saved' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Saved')}><Bookmark size={17} /><span>{t.savedNav}</span>{saved.savedSpecs.length > 0 && <em>{saved.savedSpecs.length}</em>}</button>
-          {navItems.map(({ key, icon: Icon }) => { const label = t[key as keyof typeof t]; const destination = key === 'issues' ? 'Incidents' : key === 'map' ? 'Map' : 'Analytics'; return <button key={key} className={active === destination ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(destination)}><Icon size={17} /><span>{label}</span>{key === 'issues' && incidents.length > 0 && <em>{incidents.length}</em>}</button> })}
+          <button className={active === 'Dashboards' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Dashboards')}><LayoutDashboard size={17} /><span>{t.dashboardsNav}</span>{dashboard.items.length > 0 && <em>{dashboard.items.length}</em>}</button>
+          {navItems.map(({ key, icon: Icon }) => { const label = t[key as keyof typeof t]; const destination = key === 'issues' ? 'Incidents' : 'Map'; return <button key={key} className={active === destination ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(destination)}><Icon size={17} /><span>{label}</span>{key === 'issues' && incidents.length > 0 && <em>{incidents.length}</em>}</button> })}
           <button className={active === 'News' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('News')}><Newspaper size={17} /><span>{t.news}</span><em className="news-dot">2</em></button>
         </nav>
         <p className="nav-label secondary-label">{t.workspace}</p>
@@ -140,7 +302,7 @@ function App() {
       <section className={active === 'Chat' ? 'content-area chat-mode' : 'content-area'}>
         {active !== 'Chat' && <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active}</h1></div></header>}
 
-        <ViewScreen active={active} onNotify={notify} t={t} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} saved={saved} onNavigate={handleNav} incidents={incidents} onAcknowledge={acknowledge} />
+        <ViewScreen active={active} onNotify={notify} t={t} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} dashboard={dashboard} onNavigate={handleNav} incidents={incidents} onAcknowledge={acknowledge} />
       </section>
       {newestIncident && <aside className={`incident-alert ${newestIncident.severity}`} role="alert" aria-live="assertive"><span className="incident-alert-icon"><ShieldAlert size={19} /></span><div className="incident-alert-copy"><div><strong>{newestIncident.severity === 'critical' ? 'Critical incident' : 'Order warning'}</strong>{incidents.length > 1 && <em>{incidents.length} active</em>}</div><p><b>{newestIncident.orderId}</b> · {newestIncident.message}</p></div><button onClick={() => handleNav('Incidents')}>View incident <ChevronRight size={15} /></button></aside>}
       {active !== 'Chat' && <button className="floating-chat" aria-label={t.openChat} onClick={() => { setActive('Chat'); setMobileOpen(false); notify('route.pilot AI chat opened') }}><Sparkles size={19} /><span>AI Chat</span></button>}

@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bookmark,
   BookmarkCheck,
+  BookmarkPlus,
   CheckCircle2,
   Copy,
   Download,
@@ -70,6 +71,8 @@ import { JsonRenderClient } from '@/app/json-render/render-client'
 import { getBackendUrl } from '@/lib/backend-url'
 import { getTranslations, type Locale } from '@/lib/i18n'
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
+import { extractSavableComponents, fullResultTitle } from '@/lib/dashboard-extract'
+import type { DashboardItemKind, SaveDashboardInput } from '@/lib/use-dashboard'
 import {
   closePaneTabState,
   keyboardPaneTabTarget,
@@ -189,19 +192,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function savedTitle(spec: JsonRenderSpec, fallback: string): string {
-  for (const element of Object.values(spec.elements)) {
-    const props = element.props as Record<string, unknown>
-    if (typeof props?.title === 'string' && props.title.trim()) return props.title
-    if (typeof props?.reference === 'string' && props.reference.trim()) {
-      return props.reference
-    }
-  }
-  const text = fallback.trim()
-  if (!text) return 'Tarjeta guardada'
-  return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
 
 const quickPrompts = [
@@ -427,25 +417,126 @@ function StatusPill({
   )
 }
 
+function SavableComponentCard({
+  component,
+  isSaved,
+  onSaveComponent,
+  onNotify,
+  t,
+}: {
+  component: ReturnType<typeof extractSavableComponents>[number]
+  isSaved?: (title: string, kind?: DashboardItemKind) => boolean
+  onSaveComponent?: (input: SaveDashboardInput) => boolean
+  onNotify: (message: string) => void
+  t: ReturnType<typeof getTranslations>
+}) {
+  const saved = isSaved?.(component.title, component.kind) ?? false
+  return (
+    <div className="group/savable relative w-full">
+      {onSaveComponent && (
+        <button
+          type="button"
+          className={`absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-full border border-border bg-card/90 px-2 py-1 text-xs font-medium shadow-xs backdrop-blur transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover/savable:opacity-100 ${
+            saved ? 'text-primary opacity-100' : 'text-muted-foreground opacity-0'
+          }`}
+          aria-pressed={saved}
+          onClick={() => {
+            const nowSaved = onSaveComponent({
+              title: component.title,
+              kind: component.kind,
+              payload: component.spec,
+              subtitle: component.subtitle,
+            })
+            onNotify(nowSaved ? t.saveToDashboardDone : t.removeFromDashboardDone)
+          }}
+        >
+          {saved ? <BookmarkCheck className="size-3.5" /> : <BookmarkPlus className="size-3.5" />}
+          {saved ? t.savedResult : t.saveToDashboard}
+        </button>
+      )}
+      <JsonRenderClient spec={component.spec as Spec} />
+    </div>
+  )
+}
+
+function SavableResponse({
+  spec,
+  isSaved,
+  onSaveComponent,
+  onNotify,
+  t,
+}: {
+  spec: JsonRenderSpec
+  isSaved?: (title: string, kind?: DashboardItemKind) => boolean
+  onSaveComponent?: (input: SaveDashboardInput) => boolean
+  onNotify: (message: string) => void
+  t: ReturnType<typeof getTranslations>
+}) {
+  const rootElement = spec.elements[spec.root]
+  const components = extractSavableComponents(spec)
+
+  // When the reply is wrapped in an AssistantMessage, mirror its layout (intro
+  // text, then a spaced stack) so a save control can sit on each rendered block
+  // without changing the visual result.
+  if (rootElement?.type === 'AssistantMessage') {
+    const text = (rootElement.props as { text?: string }).text ?? ''
+    return (
+      <div className="w-full text-foreground">
+        {text && <p className="text-sm leading-relaxed text-foreground">{text}</p>}
+        {components.length > 0 && (
+          <div className="mt-4 w-full space-y-4">
+            {components.map((component) => (
+              <SavableComponentCard
+                key={component.elementId}
+                component={component}
+                isSaved={isSaved}
+                onSaveComponent={onSaveComponent}
+                onNotify={onNotify}
+                t={t}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Root is itself a rendered widget (e.g. a lone chart): one savable card.
+  if (components.length === 1) {
+    return (
+      <SavableComponentCard
+        component={components[0]}
+        isSaved={isSaved}
+        onSaveComponent={onSaveComponent}
+        onNotify={onNotify}
+        t={t}
+      />
+    )
+  }
+
+  return <JsonRenderClient spec={spec as Spec} />
+}
+
 function ChatMessageRow({
   isSaved,
   message,
   onNotify,
   onOpenAttachment,
   onOpenContext,
-  onToggleSave,
+  onSaveComponent,
   t,
 }: {
-  isSaved?: (id: string) => boolean
+  isSaved?: (title: string, kind?: DashboardItemKind) => boolean
   message: ChatMessage
   onNotify: (message: string) => void
   onOpenAttachment: (attachment: ChatAttachment, sourceId: string) => void
   onOpenContext: (spec: JsonRenderSpec, sourceId: string) => void
-  onToggleSave?: (entry: { id: string; title: string; spec: JsonRenderSpec }) => boolean
+  onSaveComponent?: (input: SaveDashboardInput) => boolean
   t: ReturnType<typeof getTranslations>
 }) {
   const assistant = message.role === 'assistant'
-  const saved = isSaved?.(message.id) ?? false
+  const fullTitle = message.spec ? fullResultTitle(message.spec as JsonRenderSpec, message.text) : ''
+  const saved = isSaved?.(fullTitle, 'full_spec') ?? false
 
   return (
     <Message
@@ -469,7 +560,7 @@ function ChatMessageRow({
                   <FileText className="size-3.5" />
                   {t.openInfo}
                 </Button>
-                {onToggleSave && (
+                {onSaveComponent && (
                   <Button
                     type="button"
                     variant={saved ? 'secondary' : 'outline'}
@@ -477,16 +568,17 @@ function ChatMessageRow({
                     className="rounded-full"
                     aria-pressed={saved}
                     onClick={() => {
-                      const nowSaved = onToggleSave({
-                        id: message.id,
-                        title: savedTitle(message.spec as JsonRenderSpec, message.text),
-                        spec: message.spec as JsonRenderSpec,
+                      const nowSaved = onSaveComponent({
+                        title: fullTitle,
+                        kind: 'full_spec',
+                        payload: message.spec as JsonRenderSpec,
+                        subtitle: 'Full result',
                       })
                       onNotify(nowSaved ? t.saveCardDone : t.unsaveCardDone)
                     }}
                   >
                     {saved ? <BookmarkCheck className="size-3.5" /> : <Bookmark className="size-3.5" />}
-                    {saved ? t.savedCardShort : t.saveCard}
+                    {saved ? t.savedCardShort : t.saveResult}
                   </Button>
                 )}
               </>
@@ -515,7 +607,13 @@ function ChatMessageRow({
             />
           )}
           {message.spec ? (
-            <JsonRenderClient spec={message.spec as Spec} />
+            <SavableResponse
+              spec={message.spec as JsonRenderSpec}
+              isSaved={isSaved}
+              onSaveComponent={onSaveComponent}
+              onNotify={onNotify}
+              t={t}
+            />
           ) : assistant ? (
             <MessageResponse>{message.text}</MessageResponse>
           ) : (
@@ -565,14 +663,14 @@ export default function AgentBuilderView({
   sidebarOpen = true,
   onToggleSidebar,
   isSaved,
-  onToggleSave,
+  onSaveComponent,
 }: {
   onNotify: (message: string) => void
   locale?: Locale
   sidebarOpen?: boolean
   onToggleSidebar?: () => void
-  isSaved?: (id: string) => boolean
-  onToggleSave?: (entry: { id: string; title: string; spec: JsonRenderSpec }) => boolean
+  isSaved?: (title: string, kind?: DashboardItemKind) => boolean
+  onSaveComponent?: (input: SaveDashboardInput) => boolean
 }) {
   const t = getTranslations(locale)
   const composerSubmittingRef = useRef(false)
@@ -937,7 +1035,7 @@ export default function AgentBuilderView({
                     onNotify={onNotify}
                     onOpenAttachment={openAttachment}
                     onOpenContext={openContextPanel}
-                    onToggleSave={onToggleSave}
+                    onSaveComponent={onSaveComponent}
                     t={t}
                   />
                 ))}
