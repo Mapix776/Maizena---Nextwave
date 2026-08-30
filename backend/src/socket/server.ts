@@ -65,6 +65,9 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
         callback(null, isOriginAllowed(origin));
       },
     },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 10000,
+    pingInterval: 5000,
   });
   const runIdsByStartRequest = new Map<string, string>();
   const coordinator = new RunCoordinator({

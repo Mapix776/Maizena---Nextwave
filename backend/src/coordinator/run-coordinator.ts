@@ -62,21 +62,33 @@ export class RunCoordinator {
       { role: 'user', content: 'Run the json-render demo.' },
     ],
   ): Promise<void> {
+    const t0 = performance.now();
+    const logTiming = (evento: string) => {
+      const ms = Math.round(performance.now() - t0);
+      console.log(`[timing] runId=${runId} evento=${evento} ms_desde_inicio=${ms}`);
+    };
+
+    logTiming('uiIntent_received');
     const run = this.#getMutableRun(runId);
     run.status = 'running';
     await this.#emitNext(run, 'run:status', { status: run.status });
+    logTiming('ws_status_running_emitted');
 
     try {
+      logTiming('step_execution_started');
       const parsedResult = stepResultSchema.safeParse(
         await this.#executeStep(messages),
       );
+      logTiming('step_execution_completed');
 
       if (!parsedResult.success) {
         throw new Error('Invalid StepResult', { cause: parsedResult.error });
       }
 
       const result = parsedResult.data;
+      logTiming('ui_composition_started');
       const ui = validateTracerSpec(this.#composeUi(result));
+      logTiming('ui_composition_completed');
       const traceSteps = (result.factPatch?.executionSteps as unknown[]) || [];
 
       run.facts = { ...run.facts, ...result.factPatch };
@@ -87,6 +99,7 @@ export class RunCoordinator {
         spec: ui,
         traceSteps,
       });
+      logTiming('ws_ui_replace_emitted');
 
       run.status = 'completed';
       await this.#emitNext(run, 'run:complete', {
@@ -94,7 +107,9 @@ export class RunCoordinator {
         traceSteps,
         findings: result.findings,
       });
+      logTiming('stream_closed');
     } catch (error) {
+      logTiming('run_failed');
       run.status = 'failed';
       run.error = error instanceof Error ? error.message : 'Run failed';
       await this.#emitNext(run, 'run:complete', {

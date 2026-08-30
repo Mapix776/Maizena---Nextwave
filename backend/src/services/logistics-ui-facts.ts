@@ -201,8 +201,8 @@ export function buildOperationCatalogFacts(
       id: container.id,
       containerNumber: container.container_number,
       status: container.status,
-      originPort: container.origin_port,
-      destinationPort: container.destination_port,
+      originPort: container.origin_port || 'Por confirmar',
+      destinationPort: container.destination_port || 'Por confirmar',
       ...(present(container.eta) ? { eta: container.eta } : {}),
       ...(present(container.actual_arrival)
         ? { actualArrival: container.actual_arrival }
