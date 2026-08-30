@@ -196,31 +196,34 @@ Este resultado demostró empíricamente el valor del **Held-Out Set**: si se hub
 
 ---
 
-### 7.3. Tabla Comparativa de Resultados (Antes vs. Después de la Corrección)
+### 7.3. Tabla Comparativa de Resultados (Heurística Local vs. LLM Real OpenAI)
 
-Tras reemplazar las heurísticas hardcodeadas por extractores estructurados multi-idioma:
+Con la suite ejecutando llamadas reales contra `gpt-4o-mini` (95 llamadas en Suite A, 24 ejecuciones multi-herramienta en Suite B):
 
-| Campo / Métrica Evaluada | Accuracy Antes | Accuracy Después | Delta | Explicación del Resultado |
+| Campo / Métrica Evaluada | Heurística Local | LLM Real (OpenAI gpt-4o-mini) | Latencia Media LLM | Estado / Gate |
 | :--- | :---: | :---: | :---: | :--- |
-| **`originPort`** | 0.0% | **80.0%** | 🟢 **+80.0%** | Ahora extrae puertos de China, Bangladesh, Corea, Bélgica y Brasil. |
-| **`destinationPort`** | 46.7% | **100.0%** | 🟢 **+53.3%** | 100% de puertos de destino extraídos correctamente sin importar el país. |
-| **`vessel`** | 55.6% | **100.0%** | 🟢 **+44.4%** | Captura buques con y sin número de viaje (`COSCO HARMONY / 118W`, `ONE APUS`). |
-| **`documentReference`** | 89.5% | **94.7%** | 🟢 **+5.2%** | Reconoce referencias de B/L, PO, Booking y Packing List multilingües. |
-| **`containerNumber` (Control)** | 100.0% | **100.0%** | 🔒 **0.0%** | Validación ISO 6346 impecable (cero degradación). |
-| **`grossWeightKg` (Control)** | 100.0% | **100.0%** | 🔒 **0.0%** | Extracción métrica numérica 100% exacta. |
-| **`discrepancyDetectionRate`** | 100.0% | **100.0%** | 🔒 **0.0%** | 100% de las alertas de discrepancia activadas con éxito. |
-| **`discrepancyFalseNegativeRate`** | 0.0% | **0.0%** | 🔒 **0.0%** | **CERO falsos negativos** en aduanas/pesos (cero riesgo operacional). |
+| **`documentType`** | 73.7% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`documentReference`** | 94.7% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`originPort`** | 80.0% | **93.3%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`destinationPort`** | 100.0% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`totalUsd`** | 70.0% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`vessel`** | 100.0% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 80\%$) |
+| **`containerNumber`** | 100.0% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 95\%$) |
+| **`grossWeightKg`** | 100.0% | **100.0%** | ~1,650 ms | 🟢 **PASS** ($\ge 95\%$) |
+| **`discrepancyDetectionRate`** | 100.0% | **100.0%** | N/A | 🟢 **PASS** ($100\%$) |
+| **`discrepancyFalseNegativeRate`** | 0.0% | **0.0%** | N/A | 🟢 **PASS** ($0.0\%$) |
 
 ---
 
-### 7.4. Evaluación del Render Agent (Generación de UI)
+### 7.4. Evaluación del Render Agent (Generación de UI con OpenAI Real)
 
-En la Suite B se evaluaron 8 `uiIntent` cubriendo todos los focos de UI (`route_update`, `decision_required`, `document_alert`, `status_change`, `reconciliation_result`, `customs_hold`, `eta_slip`, `operations_overview`):
+En la Suite B se ejecutó el agente Ari en tiempo real con resolución multi-step y tool calling:
 
+- **Total de Corridas Realizadas:** 24 corridas sobre 8 `uiIntent` ($N=3$).
 - **Validez Estructural del Árbol:** **100.0%** (Todos los árboles poseen nodo `root` válido, cero hijos huérfanos y cero ciclos).
-- **Conformidad con Catálogo json-render:** **100.0%** (Todos los componentes emitidos corresponden exactamente a los registrados: `DeliveryCard`, `InteractiveRouteMap`, `HumanDecisionCard`, `OperationalAlertList`, `CustomsClearancePanel`, `EtaRiskCard`, `ReconciliationFindings`, etc.).
-- **Estabilidad de Componentes ($N=3$):** **100.0%** (Cero variación caótica en la elección de componentes para el mismo prompt).
-- **Latencia de Composición:** **Promedio de 0.60 ms** (Mínima 0.05 ms, Máxima 3.17 ms).
+- **Conformidad con Catálogo json-render:** **100.0%** (Todos los componentes emitidos corresponden exactamente a los registrados).
+- **Estabilidad de Componentes:** **100.0%**.
+- **Latencia de Ejecución del Agente:** **Promedio de 6,175 ms** (Mínima 3,300 ms, Máxima 10,957 ms, Mediana 5,778 ms) reflejando llamadas reales de inferencia y resolución de herramientas.
 
 ---
 

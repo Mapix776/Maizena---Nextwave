@@ -95,6 +95,65 @@ ${
 `;
 }
 
+export interface QualityGateResult {
+  passed: boolean;
+  violations: string[];
+}
+
+export function evaluateQualityGates(
+  extractionSummary: ExtractionSuiteSummary,
+  uiSummary: UIGenerationSuiteSummary,
+): QualityGateResult {
+  const violations: string[] = [];
+
+  // Critical Domain Gates
+  if (extractionSummary.discrepancyFalseNegativeRate > 0) {
+    violations.push(`Falsos negativos en discrepancias (${extractionSummary.discrepancyFalseNegativeRate}%) supera el umbral estricto de 0.0%`);
+  }
+  if ((extractionSummary.fieldAccuracy.containerNumber ?? 0) < 95) {
+    violations.push(`containerNumber accuracy (${extractionSummary.fieldAccuracy.containerNumber}%) < 95%`);
+  }
+  if ((extractionSummary.fieldAccuracy.grossWeightKg ?? 0) < 95) {
+    violations.push(`grossWeightKg accuracy (${extractionSummary.fieldAccuracy.grossWeightKg}%) < 95%`);
+  }
+  if ((extractionSummary.fieldAccuracy.totalUsd ?? 0) < 80) {
+    violations.push(`totalUsd accuracy (${extractionSummary.fieldAccuracy.totalUsd}%) < 80%`);
+  }
+  if ((extractionSummary.fieldAccuracy.documentType ?? 0) < 80) {
+    violations.push(`documentType accuracy (${extractionSummary.fieldAccuracy.documentType}%) < 80%`);
+  }
+
+  // Operational Context Gates
+  if ((extractionSummary.fieldAccuracy.originPort ?? 0) < 80) {
+    violations.push(`originPort accuracy (${extractionSummary.fieldAccuracy.originPort}%) < 80%`);
+  }
+  if ((extractionSummary.fieldAccuracy.destinationPort ?? 0) < 80) {
+    violations.push(`destinationPort accuracy (${extractionSummary.fieldAccuracy.destinationPort}%) < 80%`);
+  }
+  if ((extractionSummary.fieldAccuracy.vessel ?? 0) < 80) {
+    violations.push(`vessel accuracy (${extractionSummary.fieldAccuracy.vessel}%) < 80%`);
+  }
+  if ((extractionSummary.fieldAccuracy.documentReference ?? 0) < 80) {
+    violations.push(`documentReference accuracy (${extractionSummary.fieldAccuracy.documentReference}%) < 80%`);
+  }
+
+  // UI Generative Gates
+  if (uiSummary.structuralValidityRate < 100) {
+    violations.push(`structuralValidityRate (${uiSummary.structuralValidityRate}%) < 100%`);
+  }
+  if (uiSummary.catalogComplianceRate < 100) {
+    violations.push(`catalogComplianceRate (${uiSummary.catalogComplianceRate}%) < 100%`);
+  }
+  if (uiSummary.componentSelectionStability < 90) {
+    violations.push(`componentSelectionStability (${uiSummary.componentSelectionStability}%) < 90%`);
+  }
+
+  return {
+    passed: violations.length === 0,
+    violations,
+  };
+}
+
 function printConsoleSummary(
   extractionSummary: ExtractionSuiteSummary,
   uiSummary: UIGenerationSuiteSummary,
@@ -103,8 +162,9 @@ function printConsoleSummary(
   console.log('======================================================================');
   console.log('                       REPORTE FINAL DE EVALS                        ');
   console.log('======================================================================');
-  console.log('\n--- SUITE A: EXTRACCIÓN Y CLASIFICACIÓN (HELD-OUT SET) ---');
+  console.log('\n--- SUITE A: EXTRACCIÓN Y CLASIFICACIÓN (HELD-OUT SET - OPENAI REAL) ---');
   console.log(`  • Documentos evaluados: ${extractionSummary.totalDocuments} | Corridas: ${extractionSummary.totalRuns}`);
+  console.log(`  • Latencia promedio API: ${extractionSummary.averageLatencyMs}ms por documento`);
   console.log(`  • Estabilidad entre corridas: ${extractionSummary.stabilityScore}%`);
   console.log(`  • Detección de discrepancias: ${extractionSummary.discrepancyDetectionRate}%`);
   console.log(`  • Falsos negativos en discrepancias: ${extractionSummary.discrepancyFalseNegativeRate}%`);
@@ -113,28 +173,29 @@ function printConsoleSummary(
     console.log(`      - ${field.padEnd(20)}: ${acc}%`);
   }
 
-  console.log('\n--- SUITE B: GENERACIÓN DE UI (RENDER AGENT) ---');
+  console.log('\n--- SUITE B: GENERACIÓN DE UI (RENDER AGENT - OPENAI REAL) ---');
   console.log(`  • uiIntents evaluados: ${uiSummary.totalIntents} | Corridas: ${uiSummary.totalRuns}`);
+  console.log(`  • Latencia promedio agent execution: ${uiSummary.averageLatencyMs}ms`);
   console.log(`  • Validez estructural del árbol: ${uiSummary.structuralValidityRate}%`);
   console.log(`  • Conformidad con catálogo: ${uiSummary.catalogComplianceRate}%`);
   console.log(`  • Estabilidad de componentes: ${uiSummary.componentSelectionStability}%`);
   console.log(`  • Latencia composición UI: avg=${uiSummary.latencies.avgMs}ms | median=${uiSummary.latencies.medianMs}ms | min=${uiSummary.latencies.minMs}ms | max=${uiSummary.latencies.maxMs}ms`);
 
   console.log('\n======================================================================');
-  const globalPass =
-    extractionSummary.discrepancyFalseNegativeRate === 0 &&
-    uiSummary.structuralValidityRate === 100 &&
-    uiSummary.catalogComplianceRate === 100;
+  const gateResult = evaluateQualityGates(extractionSummary, uiSummary);
 
-  if (globalPass) {
+  if (gateResult.passed) {
     console.log('  VEREDICTO GLOBAL: [PASS] (Todos los gates de calidad superados)');
   } else {
-    console.log('  VEREDICTO GLOBAL: [FAIL] (Se detectaron anomalías en las suites)');
+    console.log('  VEREDICTO GLOBAL: [FAIL] (Se detectaron violaciones en los gates de calidad):');
+    for (const v of gateResult.violations) {
+      console.log(`    ❌ ${v}`);
+    }
   }
   console.log(`  Detalle guardado en: evals/results/${timestamp}_summary.md`);
   console.log('======================================================================\n');
 
-  return globalPass;
+  return gateResult.passed;
 }
 
 async function main(): Promise<void> {
