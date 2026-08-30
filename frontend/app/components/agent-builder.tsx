@@ -720,7 +720,10 @@ export default function AgentBuilderView({
               <div className="model-section">
                 <label className="field">
                   <span>Model</span>
-                  <input value="GPT-5 mini (OPENAI_MODEL)" readOnly />
+                  <input
+                    value="GPT-5.6 Luna · main: medium · Recon: none"
+                    readOnly
+                  />
                 </label>
                 <small>
                   Ari supplies the answer. The render tool supplies the fixed,

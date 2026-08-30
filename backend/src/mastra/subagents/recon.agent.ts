@@ -1,7 +1,10 @@
 import { Agent } from '@mastra/core/agent';
 import type { LanguageModelV4 } from '@ai-sdk/provider';
 
-import { createProductionModel } from '../models.js';
+import {
+  createSmallModel,
+  SMALL_REASONING_EFFORT,
+} from '../models.js';
 import {
   createToolRegistry,
   selectTools,
@@ -32,8 +35,14 @@ export function createReconAgent(options: ReconAgentOptions = {}) {
     name: 'Recon',
     description:
       'Reconciles Bill of Lading, Commercial Invoice, and Packing List facts across container number, weight, and amount; reports warning or critical discrepancies.',
-    instructions: RECON_INSTRUCTIONS,
-    model: options.model ?? createProductionModel(),
+    instructions: {
+      role: 'system',
+      content: RECON_INSTRUCTIONS,
+      providerOptions: {
+        openai: { reasoningEffort: SMALL_REASONING_EFFORT },
+      },
+    },
+    model: options.model ?? createSmallModel(),
     tools: selectTools(toolRegistry, RECON_TOOL_KEYS),
   });
 }
