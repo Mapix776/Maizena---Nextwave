@@ -24,8 +24,6 @@ import {
   MoreHorizontal,
   Newspaper,
   Paperclip,
-  PanelLeftClose,
-  PanelLeftOpen,
   Settings,
   ShieldAlert,
   Sparkles,
@@ -72,10 +70,10 @@ function AnalyticsView({ onNotify, t }: { onNotify: (message: string) => void; t
   return <div className="analytics-screen"><div className="view-heading"><div><p className="section-kicker">{t.intelligence}</p><h2>{t.analytics}</h2><p>{t.analyticsDescription}</p></div><button className="primary-button" onClick={() => onNotify('Informe exportado en modo demo')}>Exportar informe <ChevronRight size={15} /></button></div><div className="analytics-kpis"><div><span>Entrega a tiempo</span><strong>94,2%</strong><small className="positive">+3,8% este mes</small></div><div><span>Km recorridos</span><strong>128.460</strong><small className="positive">+12,4% vs. anterior</small></div><div><span>Coste medio / run</span><strong>602€</strong><small className="positive">-6,1% optimizado</small></div><div><span>Incidencias resueltas</span><strong>87%</strong><small>12 abiertas</small></div></div><div className="analytics-grid"><div className="panel analytics-chart"><div className="panel-heading"><div><p className="section-kicker">Volumen de operaciones</p><h3>Runs completados</h3></div><button className="filter-button" onClick={() => onNotify('Periodo cambiado a este mes')}>Este mes <ChevronRight size={13} /></button></div><div className="analytics-bars">{bars.map((height, index) => <div className="analytics-bar-col" key={index}><div className="analytics-bar-track"><span style={{ height: `${height}%` }} /></div><small>{['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul'][index]}</small></div>)}</div></div><div className="panel analytics-ring-panel"><div className="panel-heading"><div><p className="section-kicker">Salud de red</p><h3>Eficiencia global</h3></div><button className="dots-button" onClick={() => onNotify('Detalle de eficiencia abierto')}><MoreHorizontal size={18} /></button></div><div className="analytics-ring"><span>94<small>%</small></span></div><div className="legend"><span><i className="legend-pink" /> En objetivo <b>76%</b></span><span><i className="legend-violet" /> Necesita revisión <b>18%</b></span><span><i className="legend-gray" /> Sin datos <b>6%</b></span></div></div><div className="panel analytics-chart wide"><div className="panel-heading"><div><p className="section-kicker">Comparativa de rutas</p><h3>Coste por kilómetro</h3></div><span className="chart-value">0,84€ <small>media actual</small></span></div><div className="cost-lines"><div className="cost-line"><span>Madrid → Lyon</span><div><i style={{ width: '82%' }} /></div><b>0,72€</b></div><div className="cost-line"><span>Valencia → Lisboa</span><div><i style={{ width: '67%' }} /></div><b>0,68€</b></div><div className="cost-line"><span>Bilbao → París</span><div><i style={{ width: '94%' }} /></div><b>0,91€</b></div><div className="cost-line"><span>Sevilla → Marsella</span><div><i style={{ width: '76%' }} /></div><b>0,79€</b></div></div></div></div></div>
 }
 
-function ViewScreen({ active, onNotify, t, locale }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale }) {
+function ViewScreen({ active, onNotify, t, locale, sidebarOpen, onToggleSidebar }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale; sidebarOpen: boolean; onToggleSidebar: () => void }) {
   if (active === 'Mapa') return <OperationsMapView />
   if (active === 'Analíticas') return <AnalyticsView onNotify={onNotify} t={t} />
-  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} locale={locale} />
+  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
     Incidencias: { kicker: 'Atención', title: 'Incidencias', description: 'Revisa las alertas que requieren una decisión humana.', items: ['Retraso de 35 min · RUN-2046', 'Documentación pendiente · RUN-2047', 'Cambio de muelle solicitado · Centro Lyon'] },
     Chat: { kicker: 'Comunicación', title: 'Chat del equipo', description: 'Coordina decisiones rápidas con las personas de operaciones.', items: ['Lucía · ¿Confirmamos la salida de Valencia?', 'Diego · El muelle 4 ya está disponible', 'Marina · He actualizado el ETA de Lyon'] },
@@ -128,7 +126,6 @@ function App() {
   function handleNav(label: string) {
     setActive(label)
     setMobileOpen(false)
-    if (label === 'Chat') setSidebarOpen(false)
     notify(`Vista ${label} seleccionada`)
   }
 
@@ -158,8 +155,8 @@ function App() {
         </div>
       </aside>
 
-      <section className="content-area">
-        <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div><div className="top-actions">{active === 'Chat' && <button className="icon-button" aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'} onClick={() => setSidebarOpen(!sidebarOpen)}>{sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}</button>}</div></header>
+      <section className={active === 'Chat' ? 'content-area chat-mode' : 'content-area'}>
+        {active !== 'Chat' && <header className="topbar"><div><p className="eyebrow">{currentDate || t.loadingDate}</p><h1>{active === 'Resumen' ? t.goodMorning : active}</h1></div></header>}
 
         {active === 'Resumen' ? <>
         <div className="hero-card"><div><span className="pill pink-pill">{t.operationalSummary} <Activity size={13} /></span><h2>{t.allControl}</h2><p>{t.networkCapacity} <strong>94%</strong> de capacidad. {t.decisionsAttention}</p><button className="primary-button" onClick={() => { setActive('Incidencias'); notify(t.review) }}>{t.review} <ChevronRight size={15} /></button></div><div className="hero-art"><div className="route-line line-one" /><div className="route-line line-two" /><Truck size={84} strokeWidth={1.2} /><span className="map-pin pin-one" /><span className="map-pin pin-two" /></div></div>
@@ -170,9 +167,9 @@ function App() {
           <div className="panel cost-panel"><div className="panel-heading"><div><p className="section-kicker">{t.finances}</p><h3>{t.operatingCost}</h3></div><button className="dots-button" onClick={() => notify('Más opciones de finanzas')}><MoreHorizontal size={18} /></button></div><p className="big-number">13.840€ <small>este mes</small></p><MiniBars /><div className="budget-line"><span>Presupuesto mensual</span><b>72%</b></div><div className="progress"><span style={{ width: '72%' }} /></div></div>
           <div className="panel runs-panel"><div className="panel-heading"><div><p className="section-kicker">{t.tracking}</p><h3>{t.recentRuns}</h3></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? t.seeLess : t.seeAll} <ChevronRight size={14} /></button></div><div className="run-list">{filteredRuns.slice(0, showAll ? 3 : 2).map((run) => <button className="run-row" key={run.id} onClick={() => notify(`${run.id} seleccionado`)}><span className={`run-icon ${run.tone}`}><Truck size={16} /></span><span className="run-info"><b>{run.route}</b><small>{run.id} · {run.carrier}</small></span><span className={`status ${run.tone}`}>{locale === 'en' ? ({ 'En tránsito': 'In transit', 'En preparación': 'Preparing', Revisar: 'Review' }[run.status] ?? run.status) : locale === 'pt' ? ({ 'En tránsito': 'Em trânsito', 'En preparación': 'Em preparação', Revisar: 'Revisar' }[run.status] ?? run.status) : run.status}</span><span className="run-eta">{run.eta}</span><ChevronRight size={15} /></button>)}</div></div>
         </div>
-        </> : <ViewScreen active={active} onNotify={notify} t={t} locale={locale} />}
+        </> : <ViewScreen active={active} onNotify={notify} t={t} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />}
       </section>
-      <button className="floating-chat" aria-label="Abrir chatbot de IA" onClick={() => { setActive('Chat'); setMobileOpen(false); notify('Chat con route.pilot AI abierto') }}><Sparkles size={19} /><span>Chat IA</span></button>
+      {active !== 'Chat' && <button className="floating-chat" aria-label="Abrir chatbot de IA" onClick={() => { setActive('Chat'); setMobileOpen(false); notify('Chat con route.pilot AI abierto') }}><Sparkles size={19} /><span>Chat IA</span></button>}
       {notice && <div className="toast"><Sparkles size={15} />{notice}</div>}
     </main>
   )

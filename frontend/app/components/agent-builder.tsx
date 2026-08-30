@@ -6,14 +6,20 @@ import {
   CheckCircle2,
   Copy,
   FileText,
+  Landmark,
   MessageSquare,
+  Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Paperclip,
   Rocket,
   Save,
   Send,
   Settings,
   Share2,
+  Ship,
   ThumbsUp,
+  ThumbsDown,
   Sparkles,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -123,9 +129,13 @@ function responseText(spec: JsonRenderSpec): string {
 export default function AgentBuilderView({
   onNotify,
   locale = 'es',
+  sidebarOpen = true,
+  onToggleSidebar,
 }: {
   onNotify: (message: string) => void
   locale?: Locale
+  sidebarOpen?: boolean
+  onToggleSidebar?: () => void
 }) {
   const t = getTranslations(locale)
   const socketRef = useRef<Socket | null>(null)
@@ -332,11 +342,10 @@ export default function AgentBuilderView({
     }
   }, [messages, connectionStatus])
 
-  function sendMessage() {
-    const text = input.trim()
+  function dispatchMessage(text: string, atts: ChatAttachment[]) {
     const socket = socketRef.current
 
-    if ((!text && attachments.length === 0) || connectionStatus === 'running') return
+    if ((!text && atts.length === 0) || connectionStatus === 'running') return
     if (!socket?.connected) {
       onNotify(`No se pudo conectar con el backend en ${backendUrl}`)
       return
@@ -346,7 +355,7 @@ export default function AgentBuilderView({
       id: `user-${crypto.randomUUID()}`,
       role: 'user',
       text: text || t.attach,
-      attachments: attachments.length ? attachments : undefined,
+      attachments: atts.length ? atts : undefined,
     }
     const nextMessages = [...messages, userMessage]
     const requestId = crypto.randomUUID()
@@ -390,6 +399,14 @@ export default function AgentBuilderView({
     )
   }
 
+  function sendMessage() {
+    dispatchMessage(input.trim(), attachments)
+  }
+
+  function sendQuickPrompt(promptText: string) {
+    dispatchMessage(promptText, [])
+  }
+
   function save() {
     setSaved(true)
     window.setTimeout(() => setSaved(false), 2000)
@@ -430,13 +447,18 @@ export default function AgentBuilderView({
     <div className={`agent-builder ${showContextPanel ? 'context-panel-visible' : 'context-panel-hidden'}`}>
       <div className="builder-left">
         <div className="chat-header">
-          <div className="chat-brand">
-            <Sparkles size={18} />
-            <span>Agent Studio · json-render tracer</span>
+          {onToggleSidebar && (
+            <button type="button" className="chat-header-toggle" onClick={onToggleSidebar} aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}>
+              {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+            </button>
+          )}
+          <div className="chat-header-title">
+            <span className="chat-header-avatar"><Sparkles size={15} /></span>
+            <div>
+              <b>{agentName}</b>
+              <small>Asistente de logística de Nauta</small>
+            </div>
           </div>
-          <button type="button" className="chat-share-button" onClick={() => void shareConversation()} aria-label={t.share}>
-            <Share2 size={14} /> <span>{t.share}</span>
-          </button>
           <span
             className={`status-pill ${connected ? 'ok' : 'idle'}`}
             data-testid="chat-status"
@@ -444,6 +466,9 @@ export default function AgentBuilderView({
             <span />
             <b>{statusLabel}</b>
           </span>
+          <button type="button" className="chat-share-button" onClick={() => void shareConversation()} aria-label={t.share}>
+            <Share2 size={14} /> <span>{t.share}</span>
+          </button>
         </div>
 
         <div
@@ -454,7 +479,26 @@ export default function AgentBuilderView({
             shouldAutoScroll.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80
           }}
         >
-          {messages.map((message) => (
+          {messages.length <= 1 && connectionStatus !== 'running' ? (
+            <div className="chat-empty-state">
+              <span className="chat-empty-avatar"><Sparkles size={26} /></span>
+              <h2>Hola, soy {agentName}</h2>
+              <p>Asistente de logística de Nauta. Puedo ayudarte a consultar operaciones, revisar documentos de comercio exterior y reconciliar BL, Invoice y Packing List.</p>
+              <div className="chat-empty-prompts">
+                {[
+                  { icon: Ship, label: 'Consultar embarques', prompt: 'Muéstrame el estado de mis embarques activos.' },
+                  { icon: Package, label: 'Revisar contenedores', prompt: 'Revisa el estado de mis contenedores en tránsito.' },
+                  { icon: Landmark, label: 'Consultar aduanas', prompt: 'Consulta el estado de mis trámites de aduana.' },
+                  { icon: FileText, label: 'Revisar documentos', prompt: 'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.' },
+                ].map(({ icon: Icon, label, prompt }) => (
+                  <button key={label} type="button" className="chat-prompt-chip" onClick={() => sendQuickPrompt(prompt)}>
+                    <span className="chat-prompt-icon"><Icon size={17} /></span>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : messages.map((message) => (
             <div
               key={message.id}
               className={`chat-message ${message.role} ${message.spec ? 'rendered' : ''}`}
@@ -494,8 +538,9 @@ export default function AgentBuilderView({
                 </div>
                 {message.role === 'assistant' && (
                   <div className="chat-actions">
-                    <button aria-label={t.responseRated} onClick={() => onNotify('Respuesta valorada')}><ThumbsUp size={13} /></button>
                     <button aria-label={t.copy} onClick={() => { void navigator.clipboard?.writeText(message.text); onNotify('Respuesta copiada') }}><Copy size={13} /></button>
+                    <button aria-label={t.responseRated} onClick={() => onNotify('Respuesta valorada')}><ThumbsUp size={13} /></button>
+                    <button aria-label="Marcar como poco útil" onClick={() => onNotify('Gracias por tu opinión')}><ThumbsDown size={13} /></button>
                   </div>
                 )}
               </div>
@@ -521,6 +566,7 @@ export default function AgentBuilderView({
         </div>
 
         <div className="chat-composer">
+          <div className={`composer-inner ${connectionStatus === 'running' ? 'is-sending' : ''}`}>
           {attachments.length > 0 && (
             <div className="pending-attachments" aria-label="Archivos seleccionados">
               {attachments.map((attachment) => (
@@ -534,7 +580,7 @@ export default function AgentBuilderView({
           )}
           <div className="composer-row">
           <label className="attach-button" aria-label="Adjuntar archivo">
-            <Paperclip size={17} />
+            <Paperclip size={18} />
             <input
               type="file"
               onChange={(event) => {
@@ -553,16 +599,23 @@ export default function AgentBuilderView({
               }}
             />
           </label>
-          <input
+          <textarea
+            rows={1}
             value={input}
             disabled={connectionStatus === 'running'}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              setInput(event.target.value)
+              event.target.style.height = 'auto'
+              event.target.style.height = `${Math.min(event.target.scrollHeight, 168)}px`
+            }}
             onKeyDown={(event) => {
               if (
                 event.key === 'Enter' &&
+                !event.shiftKey &&
                 !event.nativeEvent.isComposing &&
                 event.keyCode !== 229
               ) {
+                event.preventDefault()
                 sendMessage()
               }
             }}
@@ -571,12 +624,13 @@ export default function AgentBuilderView({
           />
           <button
             className="send-button"
-            disabled={connectionStatus === 'running' || !input.trim()}
+            disabled={connectionStatus === 'running' || (!input.trim() && attachments.length === 0)}
             onClick={sendMessage}
             aria-label="Enviar"
           >
             <Send size={18} />
           </button>
+          </div>
           </div>
         </div>
       </div>
