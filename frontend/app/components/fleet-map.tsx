@@ -6,8 +6,8 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import { Search, X } from 'lucide-react'
 
 const countryPins = [
-  { name: 'España', coordinates: [-3.7, 40.4] as [number, number], value: '12 runs' },
-  { name: 'Francia', coordinates: [2.2, 46.2] as [number, number], value: '8 runs' },
+  { name: 'Spain', coordinates: [-3.7, 40.4] as [number, number], value: '12 runs' },
+  { name: 'France', coordinates: [2.2, 46.2] as [number, number], value: '8 runs' },
   { name: 'Portugal', coordinates: [-8.2, 39.5] as [number, number], value: '3 runs' },
 ]
 
@@ -28,15 +28,15 @@ export default function FleetMap() {
     <div className="panel map-panel">
       <div className="panel-heading">
         <div>
-          <p className="section-kicker">Cobertura europea</p>
-          <h3>Mapa de operaciones</h3>
+          <p className="section-kicker">European coverage</p>
+          <h3>Operations map</h3>
         </div>
-        <span className="map-live"><i /> En vivo</span>
+        <span className="map-live"><i /> Live</span>
       </div>
       <label className="map-search">
         <Search size={14} />
-        <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Buscar país..." aria-label="Buscar país" />
-        {country && <button onClick={() => setCountry('')} aria-label="Limpiar país"><X size={13} /></button>}
+        <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Search country..." aria-label="Search country" />
+        {country && <button onClick={() => setCountry('')} aria-label="Clear country"><X size={13} /></button>}
       </label>
       <div className="map-canvas">
         <MapContainer center={[43, 2]} zoom={4} style={{ height: '100%', width: '100%' }} zoomControl={false} attributionControl={false}>
@@ -61,7 +61,7 @@ export default function FleetMap() {
                 <b>{pin.value}</b>
               </button>
             ))
-          : <span>No hay operaciones para ese país</span>}
+          : <span>No operations for that country</span>}
       </div>
     </div>
   )

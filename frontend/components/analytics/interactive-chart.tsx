@@ -51,9 +51,9 @@ const tooltipItemStyle = { color: 'var(--muted-foreground)', fontSize: 12 }
 const iconButton = 'grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 
 const chartTypes: Array<{ id: ChartType; label: string; Icon: typeof BarChart3 }> = [
-  { id: 'bar', label: 'Barras', Icon: BarChart3 },
-  { id: 'line', label: 'Línea', Icon: LineIcon },
-  { id: 'pie', label: 'Circular', Icon: PieIcon },
+  { id: 'bar', label: 'Bars', Icon: BarChart3 },
+  { id: 'line', label: 'Line', Icon: LineIcon },
+  { id: 'pie', label: 'Pie', Icon: PieIcon },
 ]
 
 // Presentation-only widget: moving, switching type, and editing the title all
@@ -102,7 +102,7 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
         <button
           type="button"
           className={`${iconButton} cursor-grab active:cursor-grabbing active:bg-muted active:text-primary`}
-          aria-label="Mover gráfico"
+          aria-label="Move chart"
           onPointerDown={handleDragStart}
           onPointerMove={handleDragMove}
           onPointerUp={endDrag}
@@ -125,12 +125,12 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
                 }
                 if (event.key === 'Escape') setIsEditingTitle(false)
               }}
-              aria-label="Editar título del gráfico"
+              aria-label="Edit chart title"
             />
             <button
               type="button"
               className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              aria-label="Guardar título"
+              aria-label="Save title"
               onClick={() => setIsEditingTitle(false)}
             >
               <Check size={15} aria-hidden="true" />
@@ -141,14 +141,14 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
             type="button"
             className="mr-auto flex min-w-0 cursor-text items-center gap-2 rounded-lg px-1.5 py-1 text-base font-semibold tracking-tight text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => setIsEditingTitle(true)}
-            aria-label="Editar título del gráfico"
+            aria-label="Edit chart title"
           >
             <span className="truncate">{localTitle}</span>
             <PencilLine size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         )}
 
-        <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Tipo de gráfico">
+        <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Chart type">
           {chartTypes.map(({ id, label, Icon }) => (
             <button
               key={id}
@@ -165,8 +165,8 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
           <button
             type="button"
             className={iconButton}
-            aria-label="Restablecer posición"
-            title="Restablecer posición"
+            aria-label="Reset position"
+            title="Reset position"
             onClick={() => setPosition({ x: 0, y: 0 })}
           >
             <RotateCcw size={15} aria-hidden="true" />
@@ -207,7 +207,7 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
             )}
           </ResponsiveContainer>
         ) : (
-          <div className="grid h-full place-items-center text-sm text-muted-foreground">Sin datos para mostrar</div>
+          <div className="grid h-full place-items-center text-sm text-muted-foreground">No data to display</div>
         )}
       </div>
     </section>

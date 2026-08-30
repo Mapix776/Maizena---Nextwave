@@ -14,11 +14,11 @@ function ChangeView({ center, zoom }: { center: [number, number]; zoom: number }
 }
 
 const locations = [
-  { name: 'Madrid', country: 'España', coordinates: [-3.7, 40.4] as [number, number], runs: 12 },
-  { name: 'Barcelona', country: 'España', coordinates: [2.17, 41.38] as [number, number], runs: 7 },
-  { name: 'Lisboa', country: 'Portugal', coordinates: [-9.14, 38.72] as [number, number], runs: 3 },
-  { name: 'París', country: 'Francia', coordinates: [2.35, 48.85] as [number, number], runs: 8 },
-  { name: 'Lyon', country: 'Francia', coordinates: [4.83, 45.76] as [number, number], runs: 5 },
+  { name: 'Madrid', country: 'Spain', coordinates: [-3.7, 40.4] as [number, number], runs: 12 },
+  { name: 'Barcelona', country: 'Spain', coordinates: [2.17, 41.38] as [number, number], runs: 7 },
+  { name: 'Lisbon', country: 'Portugal', coordinates: [-9.14, 38.72] as [number, number], runs: 3 },
+  { name: 'Paris', country: 'France', coordinates: [2.35, 48.85] as [number, number], runs: 8 },
+  { name: 'Lyon', country: 'France', coordinates: [4.83, 45.76] as [number, number], runs: 5 },
 ]
 
 const operationMarker = divIcon({
@@ -31,7 +31,7 @@ const operationMarker = divIcon({
 export default function OperationsMapView() {
   const [search, setSearch] = useState('')
   const [zoom, setZoom] = useState(5)
-  const [layer, setLayer] = useState('Operaciones')
+  const [layer, setLayer] = useState('Operations')
   const results = locations.filter((location) =>
     `${location.name} ${location.country}`.toLowerCase().includes(search.toLowerCase())
   )
@@ -41,28 +41,28 @@ export default function OperationsMapView() {
     <div className="map-page">
       <div className="view-heading">
         <div>
-          <p className="section-kicker">Red geográfica</p>
-          <h2>Mapa de operaciones</h2>
-          <p>Explora países, ciudades y puntos activos de tu red logística.</p>
+          <p className="section-kicker">Geographic network</p>
+          <h2>Operations map</h2>
+          <p>Explore countries, cities and active points of your logistics network.</p>
         </div>
-        <span className="map-live"><i /> Datos en vivo</span>
+        <span className="map-live"><i /> Live data</span>
       </div>
       <div className="map-layout">
         <div className="panel full-map-panel">
           <div className="full-map-toolbar">
             <label className="map-search">
               <Search size={14} />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar país o ciudad..." aria-label="Buscar país o ciudad" />
-              {search && <button onClick={() => setSearch('')} aria-label="Limpiar búsqueda"><X size={13} /></button>}
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search country or city..." aria-label="Search country or city" />
+              {search && <button onClick={() => setSearch('')} aria-label="Clear search"><X size={13} /></button>}
             </label>
             <div className="map-controls">
-              <button onClick={() => setZoom(Math.min(14, zoom + 1))} aria-label="Acercar mapa">+</button>
-              <button onClick={() => setZoom(Math.max(3, zoom - 1))} aria-label="Alejar mapa">−</button>
-              <button onClick={() => setZoom(5)} aria-label="Restablecer mapa">⌂</button>
+              <button onClick={() => setZoom(Math.min(14, zoom + 1))} aria-label="Zoom in">+</button>
+              <button onClick={() => setZoom(Math.max(3, zoom - 1))} aria-label="Zoom out">−</button>
+              <button onClick={() => setZoom(5)} aria-label="Reset map">⌂</button>
             </div>
           </div>
           <div className="layer-tabs">
-            {['Operaciones', 'Ciudades', 'Calles'].map((item) => (
+            {['Operations', 'Cities', 'Streets'].map((item) => (
               <button className={layer === item ? 'selected' : ''} key={item} onClick={() => setLayer(item)}>
                 {item}
               </button>
