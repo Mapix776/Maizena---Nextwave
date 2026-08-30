@@ -48,6 +48,7 @@ export interface RunEnvelope {
   runId: string
   sequence: number
   type: 'run:status' | 'work-trace:replace' | 'ui:replace' | 'run:complete'
+  timestamp?: string
   payload: Record<string, unknown>
 }
 
@@ -113,6 +114,7 @@ const envelopeSchema = z
       'ui:replace',
       'run:complete',
     ]),
+    timestamp: z.string().datetime().optional(),
     payload: z.record(z.string(), z.unknown()),
   })
   .strict()

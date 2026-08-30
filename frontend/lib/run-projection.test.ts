@@ -346,18 +346,21 @@ test('events received before a delayed start acknowledgement settle the same pen
       runId,
       sequence: 1,
       type: 'run:status' as const,
+      timestamp: '2026-08-30T15:10:12.877Z',
       payload: { status: 'running' },
     },
     {
       runId,
       sequence: 2,
       type: 'work-trace:replace' as const,
+      timestamp: '2026-08-30T15:10:13.877Z',
       payload: { responseMessageId, workTrace: liveTrace },
     },
     {
       runId,
       sequence: 3,
       type: 'ui:replace' as const,
+      timestamp: '2026-08-30T15:10:21.936Z',
       payload: {
         uiVersion: 1,
         reason: 'step-complete',
@@ -385,6 +388,7 @@ test('events received before a delayed start acknowledgement settle the same pen
       runId,
       sequence: 4,
       type: 'run:complete' as const,
+      timestamp: '2026-08-30T15:10:21.937Z',
       payload: { status: 'completed' },
     },
   ]
