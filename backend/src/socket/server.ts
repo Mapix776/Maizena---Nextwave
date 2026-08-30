@@ -461,6 +461,16 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       return;
     }
 
+    const acknowledgeMatch = request.url?.match(
+      /^\/api\/demo\/incidents\/([^/]+)\/acknowledge$/,
+    );
+    if (request.method === 'POST' && acknowledgeMatch) {
+      const snapshot = incidentStore.acknowledge(acknowledgeMatch[1]);
+      io.emit('incidents:snapshot', snapshot);
+      sendJson(response, 200, snapshot);
+      return;
+    }
+
     if (
       request.method === 'GET' &&
       request.url === '/api/analytics/pinned'
