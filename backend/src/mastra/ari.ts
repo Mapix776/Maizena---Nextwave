@@ -3,7 +3,11 @@ import type { LanguageModelV4 } from '@ai-sdk/provider';
 
 import type { ChatMessage } from '../contracts/chat.js';
 import type { StepResult } from '../contracts/step-result.js';
-import { createProductionModel } from './models.js';
+import {
+  createMainModel,
+  createSmallModel,
+  MAIN_REASONING_EFFORT,
+} from './models.js';
 import {
   createSubagentRegistry,
   type SubagentRegistry,
@@ -69,13 +73,15 @@ const ARI_TOOL_KEYS = [
 
 export interface AriOptions {
   model?: LanguageModelV4;
+  smallModel?: LanguageModelV4;
   onRenderToolExecution?: () => void;
   toolRegistry?: ToolRegistry;
   subagentRegistry?: SubagentRegistry;
 }
 
 export function createAriAgent(options: AriOptions = {}) {
-  const model = options.model ?? createProductionModel();
+  const model = options.model ?? createMainModel();
+  const smallModel = options.smallModel ?? options.model ?? createSmallModel();
   const toolRegistry =
     options.toolRegistry ??
     createToolRegistry({
@@ -83,12 +89,18 @@ export function createAriAgent(options: AriOptions = {}) {
     });
   const subagentRegistry =
     options.subagentRegistry ??
-    createSubagentRegistry({ model, toolRegistry });
+    createSubagentRegistry({ model: smallModel, toolRegistry });
 
   return new Agent({
     id: 'ari',
     name: 'Ari',
-    instructions: ARI_INSTRUCTIONS,
+    instructions: {
+      role: 'system',
+      content: ARI_INSTRUCTIONS,
+      providerOptions: {
+        openai: { reasoningEffort: MAIN_REASONING_EFFORT },
+      },
+    },
     model,
     tools: selectTools(toolRegistry, ARI_TOOL_KEYS),
     agents: subagentRegistry,
