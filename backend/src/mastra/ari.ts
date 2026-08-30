@@ -18,7 +18,7 @@ import {
   buildOperationCatalogFacts,
   buildOperationsMetricsCatalogFacts,
 } from '../services/logistics-ui-facts.js';
-import type { ContainerRow } from '../types/database.js';
+import type { ContainerRow, DocumentRow } from '../types/database.js';
 import {
   createMainModel,
   createSmallModel,
