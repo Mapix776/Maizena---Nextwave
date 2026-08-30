@@ -88,8 +88,8 @@ test('readDocumentTool accepts BOOKING_CONFIRMATION and returns operation docume
     getDocumentByReference: async () => null,
   } as any;
 
-  const tool = createReadDocumentTool({ reader: mockReader });
-  const result = await tool.execute({
+  const tool: any = createReadDocumentTool({ reader: mockReader });
+  const result: any = await tool.execute({
     operationIdOrRef: 'OP-2026-9201',
     documentType: 'BOOKING_CONFIRMATION',
   });
@@ -99,7 +99,7 @@ test('readDocumentTool accepts BOOKING_CONFIRMATION and returns operation docume
   assert.equal(result.documents[0].type, 'BOOKING_CONFIRMATION');
   assert.equal(result.documents[0].document_reference, 'BK-MUEBLES-2026');
 
-  const emptyResult = await tool.execute({
+  const emptyResult: any = await tool.execute({
     operationIdOrRef: 'non-existent-op',
   });
   assert.equal(emptyResult.found, false);

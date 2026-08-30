@@ -92,26 +92,6 @@ function evaluateField(actual: unknown, expected: unknown): FieldResultStatus {
   return 'incorrect';
 }
 
-function parseJsonClean(text: string): ExtractedLLMOutput {
-  const cleaned = text
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/\s*```$/i, '')
-    .trim();
-  try {
-    return JSON.parse(cleaned) as ExtractedLLMOutput;
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as ExtractedLLMOutput;
-      } catch {
-        return {};
-      }
-    }
-    return {};
-  }
-}
 
 export async function runExtractionEvalSuite(runsPerDocument: number = 3): Promise<ExtractionSuiteSummary> {
   const agent = createExtractorAgent();

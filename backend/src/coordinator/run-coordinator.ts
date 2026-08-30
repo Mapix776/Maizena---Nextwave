@@ -166,7 +166,7 @@ export class RunCoordinator {
             : 'Estructurando vista operativa...';
 
         const partialResult: StepResult = {
-          status: 'in_progress',
+          status: 'completed',
           summary: 'Construyendo vista de operaciones...',
           factPatch: {
             ...currentAccumulatedFacts,
