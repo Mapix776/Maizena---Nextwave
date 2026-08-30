@@ -8,7 +8,7 @@ import type {
   OrderIncidentsSnapshot,
 } from '../../backend/src/contracts/order-incident'
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+import { getBackendUrl } from './backend-url'
 
 export interface UseOrderIncidentsResult {
   incidents: OrderIncident[]
@@ -19,7 +19,8 @@ export function useOrderIncidents(): UseOrderIncidentsResult {
   const [incidents, setIncidents] = useState<OrderIncident[]>([])
 
   useEffect(() => {
-    const socket = io(backendUrl, { transports: ['websocket'] })
+    const url = getBackendUrl()
+    const socket = io(url, { transports: ['websocket'] })
 
     socket.on(
       'incidents:snapshot',

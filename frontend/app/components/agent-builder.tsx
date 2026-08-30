@@ -159,9 +159,6 @@ function contextItemsFromSpec(
   })
 }
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
-
 const THINKING_COPY: Record<ThinkingAnimationType, string> = {
   thinking: 'Ari está procesando tu solicitud...',
   reading: 'Ari está extrayendo datos del documento...',

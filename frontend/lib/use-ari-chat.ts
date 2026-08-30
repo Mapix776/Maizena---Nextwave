@@ -59,8 +59,7 @@ export interface RunEnvelope {
   payload: Record<string, unknown>
 }
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+import { getBackendUrl } from './backend-url'
 const CHAT_STORAGE_KEY = 'nauta_chat_messages_v1'
 
 function loadStoredMessages(): ChatMessage[] | null {
@@ -157,7 +156,8 @@ export function useAriChat({
   }, [])
 
   useEffect(() => {
-    const socket = io(backendUrl, { transports: ['websocket'] })
+    const url = getBackendUrl()
+    const socket = io(url, { transports: ['websocket'] })
     socketRef.current = socket
 
     function applyRenderedResponse(

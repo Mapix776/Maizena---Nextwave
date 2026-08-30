@@ -25,7 +25,7 @@ interface RunEnvelope {
   payload: Record<string, unknown>
 }
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+import { getBackendUrl } from '@/lib/backend-url'
 
 export function RunClient() {
   const socketRef = useRef<Socket | null>(null)
@@ -131,7 +131,8 @@ export function RunClient() {
   }, [startRun])
 
   useEffect(() => {
-    const socket = io(backendUrl, { transports: ['websocket'] })
+    const url = getBackendUrl()
+    const socket = io(url, { transports: ['websocket'] })
     socketRef.current = socket
 
     socket.on('connect', () => {
@@ -147,7 +148,7 @@ export function RunClient() {
 
     socket.on('connect_error', () => {
       setStatus('failed')
-      setError(`Cannot reach the backend at ${backendUrl}.`)
+      setError(`Cannot reach the backend at ${url}.`)
     })
 
     socket.on('run:event', (envelope: RunEnvelope) => {
