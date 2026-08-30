@@ -8,6 +8,7 @@ import {
   Bookmark,
   BookmarkCheck,
   CheckCircle2,
+  ChevronRight,
   Copy,
   Download,
   FileText,
@@ -274,7 +275,7 @@ export default function AgentBuilderView({
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
   const [contextSpec, setContextSpec] = useState<JsonRenderSpec | null>(null)
-  const [panelView, setPanelView] = useState<'detail' | 'trace'>('detail')
+  const [expandedTraces, setExpandedTraces] = useState<Record<string, boolean>>({})
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set())
   const [savingDocId, setSavingDocId] = useState<string | null>(null)
 
@@ -569,7 +570,6 @@ export default function AgentBuilderView({
     setContextItems(items)
     setSelectedContextId(items[0]?.id ?? null)
     setContextSpec(spec)
-    setPanelView('detail')
   }
 
   function openAttachment(attachment: ChatAttachment, sourceId: string) {
@@ -587,13 +587,11 @@ export default function AgentBuilderView({
     setContextItems([item])
     setSelectedContextId(item.id)
     setContextSpec(null)
-    setPanelView('detail')
   }
 
   function closeContextPanel() {
     setContextItems([])
     setContextSpec(null)
-    setPanelView('detail')
   }
 
   const selectedContext = contextItems.find((item) => item.id === selectedContextId)
@@ -638,8 +636,6 @@ export default function AgentBuilderView({
     anchor.click()
     URL.revokeObjectURL(url)
   }
-  const traceSteps = contextSpec ? deriveTraceSteps(contextSpec) : []
-  const showTraceTab = traceSteps.length > 0
   const statusLabel = {
     connecting: t.connecting,
     ready: t.connected,
@@ -734,6 +730,42 @@ export default function AgentBuilderView({
                 )}
                 {message.spec ? (
                   <>
+                    {(() => {
+                      const steps = deriveTraceSteps(message.spec as JsonRenderSpec)
+                      if (steps.length === 0) return null
+                      const open = expandedTraces[message.id] ?? false
+                      return (
+                        <div className={`chat-trace ${open ? 'open' : ''}`}>
+                          <button
+                            type="button"
+                            className="chat-trace-toggle"
+                            aria-expanded={open}
+                            onClick={() => setExpandedTraces((current) => ({ ...current, [message.id]: !open }))}
+                          >
+                            <ListTree size={13} />
+                            <span>{t.stepByStepTab}</span>
+                            <small>{steps.length}</small>
+                            <ChevronRight size={14} className="chat-trace-caret" aria-hidden="true" />
+                          </button>
+                          {open && (
+                            <div className="chat-trace-body">
+                              <p className="chat-trace-intro">{t.stepByStepIntro}</p>
+                              <ol className="chat-trace-steps">
+                                {steps.map((step, index) => (
+                                  <li key={step.title} className="chat-trace-step">
+                                    <span className="chat-trace-marker">{index + 1}</span>
+                                    <div className="chat-trace-step-body">
+                                      <b>{step.title}</b>
+                                      <p>{step.detail}</p>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                     <div className="json-render-toolbar">
                       <button
                         className="open-context-button"
@@ -869,17 +901,6 @@ export default function AgentBuilderView({
           <span><Activity size={14} /> {t.contextualInfo}</span>
           <button aria-label="Cerrar panel" onClick={closeContextPanel}>×</button>
         </div>
-        <div className="context-view-tabs" role="tablist" aria-label={t.availableInfo}>
-          <button role="tab" aria-selected={panelView === 'detail'} className={panelView === 'detail' ? 'selected' : ''} onClick={() => setPanelView('detail')}>
-            <FileText size={14} /> {t.detailTab}
-          </button>
-          {showTraceTab && (
-            <button role="tab" aria-selected={panelView === 'trace'} className={panelView === 'trace' ? 'selected' : ''} onClick={() => setPanelView('trace')}>
-              <ListTree size={14} /> {t.stepByStepTab}
-            </button>
-          )}
-        </div>
-        {panelView === 'detail' && <>
         <div className="context-tabs" role="tablist" aria-label={t.availableInfo}>
           {contextItems.map((item) => (
             <button key={item.id} role="tab" aria-selected={selectedContextId === item.id} className={selectedContextId === item.id ? 'selected' : ''} onClick={() => setSelectedContextId(item.id)}>
@@ -928,23 +949,6 @@ export default function AgentBuilderView({
               <p>{selectedContext.description}</p>
             )}
             <small>Origen: {selectedContext.sourceId}</small>
-          </div>
-        )}
-        </>}
-        {panelView === 'trace' && showTraceTab && (
-          <div className="context-trace">
-            <p className="context-trace-intro">{t.stepByStepIntro}</p>
-            <ol className="trace-steps">
-              {traceSteps.map((step, index) => (
-                <li key={step.title} className="trace-step">
-                  <span className="trace-step-marker">{index + 1}</span>
-                  <div className="trace-step-body">
-                    <b>{step.title}</b>
-                    <p>{step.detail}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
           </div>
         )}
         <div className="config-header">
