@@ -88,10 +88,10 @@ Your tool execution workflow:
    - When asked "contenedores", "dame los contenedores", "mostrar contenedores", "mis envios", or general container status, call \`getCustomsStatusTool\` and \`getOperationsSummaryTool\` and \`renderDemoTool\`. Output 1 concise sentence and present the full visual container inventory.
 2. 🤝 Pending Approvals, Human Decisions & Direct User Directives (HITL):
    - When asked about pending approvals or decisions, call \`getPendingDecisionsTool\` and immediately \`requestHumanDecisionTool\`.
-   - WHEN THE USER REPLIES WITH CUSTOM COMMENTS, FREE-TEXT DIRECTIVES, OR CHOICES:
-     - The human user may click a button, type a free-form comment, or give specific constraints (e.g. "Reroute to Veracruz instead", "Approve but negotiate a 5% discount", "Split the container delivery into two batches").
-     - Always parse the user's direct instruction, validate it against the operation context, and respect the human's command.
-     - Acknowledge their exact decision in natural, executive language, state the next operational action taken, and invoke \`renderDemoTool\` to visually confirm the updated shipment state.
+   - WHEN THE USER REPLIES WITH CUSTOM COMMENTS, FREE-TEXT DIRECTIVES, OR CHOICES (e.g. "The user selected: ...", "Notify all parties about the delay", "Reroute to Veracruz", "Assign broker"):
+     - NEVER ask for confirmation again. NEVER generate a second or third confirmation panel for the same action.
+     - Execute the chosen action directly and state the outcome and consequence clearly (e.g. "Action confirmed: Notified all parties and assigned broker for expedited inspection. Shipment status updated.").
+     - Call \`renderDemoTool\` or the relevant data tool to visually confirm the updated shipment state with an operational card, not another decision panel.
 3. 🔍 Finding Cargo & Container Tracking:
    - When asked to find, track, or inspect a container (e.g. "MSKU1234567 MUESTRAME ESE CONTENEDOR", "Where is container MSKU1234567?", "Track CMAU9876543"), call \`getContainerStatusTool\` or \`findContainerTool\`.
    - When asked to find cargo items (e.g. "Have the electronics arrived yet?", "Where are the dining tables?"), call \`searchCargoTool\` or \`findContainerTool\`.
@@ -125,7 +125,14 @@ Your tool execution workflow:
 11. 💰 Logistics Finances, Costs & Freight Expenses:
    - When asked about costs, expenses, freight spend, or financial summaries (e.g. "cuánto he gastado", "gastos de flete", "cost breakdown", "presupuesto logístico"):
      - Call \`getOperationsSummaryTool\` and \`drawChartTool\` with \`chartType: 'bar'\` and \`metric: 'shipment_costs'\`.
-     - Provide a clear 1-sentence breakdown and display the cost distribution chart and KPI metrics.`;
+     - Provide a clear 1-sentence breakdown and display the cost distribution chart and KPI metrics.
+12. 🔄 Dynamic Flow Adaptation & Live Document Validation ("Trial by Fire"):
+   - When asked to add a new step or validate documents in the flow (e.g. "add a new step to this flow: validate BL against Booking Confirmation for the current operation", "agregar un paso de validación BL vs Booking Confirmation a la operación actual", "validar documentos del flow"):
+     - FIRST query \`getOperationDetailsTool\` or \`readDocumentTool\` (with \`operationIdOrRef: "current"\` or the active operation reference code) to check all documents persisted for the operation in Supabase.
+     - Inspect what documents ALREADY exist in the operation dossier (such as an ingested Booking Confirmation or Purchase Order).
+     - NEVER claim that an existing document is missing if it exists in the operation dossier!
+     - Report the live status accurately: acknowledge the documents already on file (e.g. "The Booking Confirmation is already registered on file for operation OP-2026-9201"), state what document is still awaited (e.g. "Awaiting the Bill of Lading (BL) to complete cross-validation before vessel departure"), and register the validation step.
+     - Call \`renderDemoTool\` to visually display the updated flow step and shipment state.`;
 
 const ARI_TOOL_KEYS = [
   'requestHumanDecisionTool',
@@ -836,11 +843,30 @@ export async function executeAriStep(
     );
   }
 
+  const lastUserText = (
+    typeof messages === 'string'
+      ? messages
+      : messages[messages.length - 1]?.content || ''
+  ).toLowerCase();
+
+  const isDecisionResolution =
+    lastUserText.includes('user selected') ||
+    lastUserText.includes('the user selected') ||
+    lastUserText.includes('proceed with this shipment') ||
+    lastUserText.includes('ha seleccionado:') ||
+    lastUserText.includes('opción elegida:');
+
+  if (isDecisionResolution) {
+    delete catalogFactPatch.humanDecision;
+  }
+
   const renderResult = response.toolResults.find(
     ({ payload }) =>
       !payload.isError &&
-      (payload.toolName === 'requestHumanDecisionTool' ||
-        payload.toolName === 'renderDemoTool'),
+      (isDecisionResolution
+        ? payload.toolName === 'renderDemoTool'
+        : payload.toolName === 'requestHumanDecisionTool' ||
+          payload.toolName === 'renderDemoTool'),
   );
   const result = renderResult
     ? stepResultSchema.parse(renderResult.payload.result)
@@ -852,6 +878,10 @@ export async function executeAriStep(
         },
         evidence: [{ id: 'agent-response', source: 'ari-text' }],
       });
+
+  if (isDecisionResolution && result.factPatch?.humanDecision) {
+    delete result.factPatch.humanDecision;
+  }
 
   const reconciliationEvidence = reconciliationFindings
     ? [

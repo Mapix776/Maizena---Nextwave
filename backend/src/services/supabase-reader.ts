@@ -148,16 +148,38 @@ export class SupabaseReader {
     );
   }
 
-  /** Obtiene operación por su código (ej. 'OP-2026-101') o UUID */
+  /** Obtiene operación por su código (ej. 'OP-2026-101'), UUID o palabras clave como 'current'/'latest' */
   async getOperationByReferenceOrId(refOrId: string): Promise<OperationRow | null> {
     const clean = refOrId.trim();
+    if (!clean) {
+      const latest = await this.request<OperationRow[]>('operations?select=*&order=created_at.desc&limit=1');
+      return latest[0] ?? null;
+    }
+
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
     const filter = isUuid
       ? `id=eq.${clean}`
       : `reference_code=eq.${encodeURIComponent(clean)}`;
 
     const rows = await this.request<OperationRow[]>(`operations?${filter}&select=*&limit=1`);
-    return rows[0] ?? null;
+    if (rows[0]) return rows[0];
+
+    // Búsqueda flexible ilike
+    const fuzzyRows = await this.request<OperationRow[]>(
+      `operations?reference_code=ilike.*${encodeURIComponent(clean)}*&select=*&limit=1`,
+    );
+    if (fuzzyRows[0]) return fuzzyRows[0];
+
+    // Si el usuario dijo 'current', 'latest', 'active', 'actual' o no se encontró por código específico, retornar la operación más reciente
+    const isGenericCurrent = ['current', 'latest', 'active', 'actual', 'operacion actual', 'the current operation', 'main'].includes(
+      clean.toLowerCase(),
+    );
+    if (isGenericCurrent) {
+      const latest = await this.request<OperationRow[]>('operations?select=*&order=created_at.desc&limit=1');
+      return latest[0] ?? null;
+    }
+
+    return null;
   }
 
   /** Listar operaciones con filtros opcionales */

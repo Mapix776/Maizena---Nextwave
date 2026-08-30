@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { SupabaseReader } from '../../services/supabase-reader.js';
+import { DocumentTypeSchema } from '../../contracts/domain.js';
 
 export interface ReadDocumentToolOptions {
   reader?: SupabaseReader;
@@ -11,24 +12,13 @@ export function createReadDocumentTool(options: ReadDocumentToolOptions = {}) {
   return createTool({
     id: 'read-shipment-document',
     description:
-      'Read and parse shipment documents (Bill of Lading, Commercial Invoice, Packing List, Pedimento, Purchase Order) for an operation. Extracts facts, weights, amounts, items, and references.',
+      'Read and parse shipment documents (Booking Confirmation, Bill of Lading, Commercial Invoice, Packing List, Pedimento, Purchase Order) for an operation. Extracts facts, weights, amounts, items, and references.',
     inputSchema: z.object({
       operationIdOrRef: z
         .string()
         .min(1)
-        .describe('Operation reference code (e.g. "OP-2026-101") or UUID.'),
-      documentType: z
-        .enum([
-          'BILL_OF_LADING',
-          'COMMERCIAL_INVOICE',
-          'PACKING_LIST',
-          'PURCHASE_ORDER',
-          'PEDIMENTO',
-          'ARRIVAL_NOTICE',
-          'CUSTOMS_DECLARATION',
-        ])
-        .optional()
-        .describe('Optional document type filter.'),
+        .describe('Operation reference code (e.g. "OP-2026-9201", "OP-2026-101", "current") or UUID.'),
+      documentType: DocumentTypeSchema.optional().describe('Optional document type filter (e.g. BOOKING_CONFIRMATION, BILL_OF_LADING, COMMERCIAL_INVOICE, PACKING_LIST).'),
       documentReference: z
         .string()
         .optional()

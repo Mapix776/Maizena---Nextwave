@@ -348,6 +348,87 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
     });
 
     const run = coordinator.createRun();
+  }
+});
+
+test('invalid component trees never mutate facts or emit ui:replace', async () => {
+  const invalidTrees = [
+    {
+      root: 'bad',
+      elements: {
+        bad: { type: 'UnknownComponent', props: {}, children: [] },
+      },
+    },
+    {
+      root: 'bad',
+      elements: {
+        bad: {
+          type: 'DeliveryCard',
+          props: {
+            id: 'Hello from Ari',
+            from: 'Cartagena',
+            to: 'Bogotá',
+            transportType: 'Land',
+            status: 'Not a delivery status',
+            createdAt: '2026-08-29T20:00:00.000Z',
+            deliveryTime: '6 hours',
+          },
+          children: [],
+        },
+      },
+    },
+    {
+      root: 'bad',
+      elements: {
+        bad: {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'Not a delivery status' },
+          children: [],
+        },
+      },
+    },
+    {
+      root: 'missing-root',
+      elements: {
+        bad: {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'In Transit' },
+          children: [],
+        },
+      },
+    },
+    {
+      root: 'bad',
+      elements: {
+        bad: {
+          type: 'DeliveryCard',
+          props: {
+            id: 'Hello from Ari',
+            from: 'Cartagena',
+            to: 'Bogotá',
+            transportType: 'Land',
+            status: 'In Transit',
+            createdAt: '2026-08-29T20:00:00.000Z',
+            deliveryTime: '6 hours',
+          },
+          children: ['missing-child'],
+        },
+      },
+    },
+  ];
+
+  for (const [index, tree] of invalidTrees.entries()) {
+    const eventTypes: string[] = [];
+    const coordinator = new RunCoordinator({
+      executeStep: async () => HELLO_STEP_RESULT,
+      composeUi: () => tree,
+      emit: ({ type }) => {
+        eventTypes.push(type);
+      },
+      createRunId: () => `invalid-${index}`,
+    });
+
+    const run = coordinator.createRun();
     await coordinator.execute(run.runId);
 
     assert.deepEqual(eventTypes, ['run:status', 'run:complete']);
@@ -355,4 +436,67 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
     assert.equal(coordinator.getSnapshot(run.runId).ui, null);
     assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
   }
+});
+
+test('RunCoordinator clears transient humanDecision when subsequent turn resolves decision', async () => {
+  let turn = 1;
+  const coordinator = new RunCoordinator({
+    executeStep: async () => {
+      if (turn === 1) {
+        return {
+          status: 'completed',
+          summary: 'Decision required',
+          factPatch: {
+            assistantResponse: 'Please choose how to handle the delay.',
+            humanDecision: {
+              title: 'Choose customs response',
+              question: 'How should Ari handle the red-light inspection?',
+              severity: 'critical',
+              options: [
+                { id: 'opt-1', label: 'Notify all parties about the delay' },
+                { id: 'opt-2', label: 'Assign broker' },
+              ],
+            },
+          },
+          evidence: [{ id: 'ev-1', source: 'test' }],
+        };
+      }
+      return {
+        status: 'completed',
+        summary: 'Decision resolved',
+        factPatch: {
+          assistantResponse: 'Action executed: Notification sent to all parties.',
+        },
+        evidence: [{ id: 'ev-2', source: 'test' }],
+      };
+    },
+    emit: () => {},
+    createRunId: () => 'run-decision-loop-test',
+  });
+
+  const run = coordinator.createRun();
+  // Turn 1: presents decision
+  await coordinator.execute(run.runId, [{ role: 'user', content: 'Show decisions' }]);
+  let snapshot = coordinator.getSnapshot(run.runId);
+  assert.ok(snapshot.facts.humanDecision, 'Turn 1 should have humanDecision');
+  assert.ok(
+    Object.values((snapshot.ui as any).elements).some((el: any) => el.type === 'HumanDecisionCard'),
+    'Turn 1 UI must contain HumanDecisionCard',
+  );
+
+  // Turn 2: user selects option -> must resolve and NOT show HumanDecisionCard again
+  turn = 2;
+  await coordinator.execute(run.runId, [
+    { role: 'user', content: 'The user selected: "Notify all parties about the delay"' },
+  ]);
+  snapshot = coordinator.getSnapshot(run.runId);
+  assert.equal(
+    snapshot.facts.humanDecision,
+    undefined,
+    'Turn 2 must clear transient humanDecision',
+  );
+  assert.ok(
+    !Object.values((snapshot.ui as any).elements).some((el: any) => el.type === 'HumanDecisionCard'),
+    'Turn 2 UI must NOT contain HumanDecisionCard',
+  );
 });

@@ -154,6 +154,12 @@ export class RunCoordinator {
       const result = parsedResult.data;
       const accumulatedFacts = { ...run.facts, ...result.factPatch };
 
+      // Transient facts: humanDecision is only active when the current step explicitly emits it.
+      // Once the user responds, any previous humanDecision is resolved and must not repeat.
+      if (!result.factPatch?.humanDecision) {
+        delete accumulatedFacts.humanDecision;
+      }
+
       const mergedResult: StepResult = {
         ...result,
         factPatch: accumulatedFacts,
