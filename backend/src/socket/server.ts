@@ -32,6 +32,7 @@ import {
   saveDocumentInputSchema,
 } from '../services/supabase-documents.js';
 import { createOrderIncidentStore } from '../services/order-incidents.js';
+import { SupabaseReader } from '../services/supabase-reader.js';
 import { AnalyticsService } from '../services/analytics.service.js';
 import { createPinnedChartStore } from '../services/pinned-charts.store.js';
 import {
@@ -288,6 +289,76 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
         .getAnalytics()
         .then((data) => sendJson(response, 200, data))
         .catch(() => sendJson(response, 500, { error: 'Failed to compute analytics' }));
+      return;
+    }
+
+    if (
+      request.method === 'GET' &&
+      (request.url === '/api/map/locations' || request.url === '/api/map')
+    ) {
+      void (async () => {
+        try {
+          const supabaseReader = new SupabaseReader();
+          const containers = await supabaseReader.listContainers(100).catch(() => []);
+          const PORT_COORDS: Record<string, { lat: number; lng: number; country: string }> = {
+            'buenaventura': { lat: 3.882, lng: -77.031, country: 'Colombia' },
+            'cartagena': { lat: 10.399, lng: -75.514, country: 'Colombia' },
+            'barranquilla': { lat: 10.963, lng: -74.796, country: 'Colombia' },
+            'santa marta': { lat: 11.240, lng: -74.211, country: 'Colombia' },
+            'manzanillo': { lat: 19.052, lng: -104.316, country: 'Mexico' },
+            'veracruz': { lat: 19.173, lng: -96.134, country: 'Mexico' },
+            'shanghai': { lat: 31.230, lng: 121.473, country: 'China' },
+            'ningbo': { lat: 29.868, lng: 121.544, country: 'China' },
+            'shenzhen': { lat: 22.543, lng: 114.057, country: 'China' },
+            'hamburg': { lat: 53.551, lng: 9.993, country: 'Germany' },
+            'rotterdam': { lat: 51.924, lng: 4.477, country: 'Netherlands' },
+            'antwerp': { lat: 51.221, lng: 4.405, country: 'Belgium' },
+            'miami': { lat: 25.761, lng: -80.191, country: 'United States' },
+            'houston': { lat: 29.760, lng: -95.369, country: 'United States' },
+            'santos': { lat: -23.961, lng: -46.332, country: 'Brazil' },
+            'callao': { lat: -12.056, lng: -77.152, country: 'Peru' },
+            'guayaquil': { lat: -2.189, lng: -79.889, country: 'Ecuador' },
+            'panama': { lat: 8.982, lng: -79.520, country: 'Panama' },
+          };
+
+          const mapLocationsMap = new Map<string, { name: string; country: string; coordinates: [number, number]; runs: number; containers: string[] }>();
+
+          for (const [key, val] of Object.entries(PORT_COORDS)) {
+            const displayName = key.charAt(0).toUpperCase() + key.slice(1);
+            mapLocationsMap.set(key, {
+              name: displayName,
+              country: val.country,
+              coordinates: [val.lat, val.lng],
+              runs: 0,
+              containers: [],
+            });
+          }
+
+          for (const c of containers) {
+            const dest = (c.destination_port || '').toLowerCase().trim();
+            const orig = (c.origin_port || '').toLowerCase().trim();
+            
+            for (const portKey of [dest, orig]) {
+              if (!portKey) continue;
+              const matchedKey = Object.keys(PORT_COORDS).find((k) => portKey.includes(k));
+              if (matchedKey && mapLocationsMap.has(matchedKey)) {
+                const loc = mapLocationsMap.get(matchedKey)!;
+                loc.runs += 1;
+                if (c.container_number && !loc.containers.includes(c.container_number)) {
+                  loc.containers.push(c.container_number);
+                }
+              }
+            }
+          }
+
+          const locations = Array.from(mapLocationsMap.values()).filter(
+            (l) => l.runs > 0 || ['Buenaventura', 'Cartagena', 'Manzanillo', 'Shanghai', 'Rotterdam', 'Miami'].includes(l.name),
+          );
+          sendJson(response, 200, { ok: true, locations });
+        } catch {
+          sendJson(response, 500, { error: 'Failed to fetch map locations' });
+        }
+      })();
       return;
     }
 
