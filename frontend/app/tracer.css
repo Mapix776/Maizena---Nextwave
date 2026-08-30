@@ -582,7 +582,7 @@
 .chat-message-author { margin: 1px 0 4px; font-size: 11px; font-weight: 800; letter-spacing: .02em; text-transform: none; color: var(--foreground); }
 .chat-message.user .chat-message-author { display: none; }
 .chat-bubble > p { border: 0; border-radius: 0; padding: 0; background: transparent; color: var(--foreground); font-size: 14px; line-height: 1.65; }
-.chat-message.user .chat-bubble { width: auto; }
+.chat-message.user .chat-bubble { width: auto; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; }
 .chat-message.user .chat-bubble > p { width: fit-content; margin-left: auto; padding: 10px 15px; border-radius: 18px; background: var(--surface); color: var(--foreground); }
 .chat-actions { opacity: .55; transition: opacity 160ms ease; }
 .chat-message:hover .chat-actions, .chat-actions:focus-within { opacity: 1; }
@@ -758,8 +758,18 @@
 }
 
 /* User bubble in brand purple */
+.chat-mode .chat-message.user {
+  justify-content: flex-end;
+  flex-direction: row;
+  text-align: left;
+}
+
 .chat-mode .chat-message.user .chat-message-content {
+  flex: 0 1 auto;
   max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .chat-mode .chat-message.user .chat-bubble > p {
