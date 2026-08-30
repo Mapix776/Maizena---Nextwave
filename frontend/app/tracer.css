@@ -960,6 +960,38 @@
 .sidebar-icon-button:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--accent); }
 .sidebar-icon-button.notification i { position: absolute; right: 8px; top: 8px; width: 5px; height: 5px; border-radius: 50%; background: var(--pink, #f27d9a); }
 
+/* Theme toggle in the brand row (top of sidebar) */
+.brand-theme-toggle {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+}
+.brand-theme-toggle:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+.dark-mode .brand-theme-toggle {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.72);
+}
+.dark-mode .brand-theme-toggle:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+/* Keep badge counters legible when their nav item is active */
+.nav-item.active em { color: #fff; background: #a83fc7; }
+.dark-mode .nav-item.active em { color: #9e40bb; background: #fff; }
+
 .language-menu.language-menu-up {
   top: auto;
   bottom: calc(100% + 8px);
