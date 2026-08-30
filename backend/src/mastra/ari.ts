@@ -8,6 +8,7 @@ import {
   mapToolToTraceStep,
 } from '../contracts/trace-step.js';
 import { interactiveChartPropsSchema } from '../contracts/ui.js';
+import { SupabaseReader } from '../services/supabase-reader.js';
 import {
   buildCustomsClearanceCatalogFacts,
   buildHumanDecisionCatalogFact,
@@ -148,12 +149,124 @@ export function createAriAgent(options: AriOptions = {}) {
   });
 }
 
+const CONTAINER_REFERENCE = /\b[A-Z]{4}\d{7}\b/i;
+const OPERATION_REFERENCE = /\b(?:MDS-DEMO-[A-Z]+-\d{3}|PO-\d{4}-\d{4}|OP-\d{4}-\d{3})\b/i;
+const COMPLEX_TRACKING_INTENT = /\b(?:compare|reconcile|discrepanc|risk|recommend|decision|chart|graph|analy[sz]e|document|product|cargo|item)\b/i;
+const SIMPLE_TRACKING_INTENT = /\b(?:status|where|track|location|located|arrived|arrival|eta|when|customs|shipment)\b/i;
+
+function toDeliveryStatus(status: string): 'Booking Confirmed' | 'In Transit' | 'Arrived at Port' | 'Customs' | 'Delivered' {
+  const normalized = status.toUpperCase();
+  if (normalized.includes('DELIVERED')) return 'Delivered';
+  // Customs release authorizes pickup; it is not proof of final delivery.
+  if (normalized.includes('RELEASED')) return 'Customs';
+  if (normalized.includes('CUSTOMS')) return 'Customs';
+  if (normalized.includes('PORT') || normalized.includes('ARRIVED')) return 'Arrived at Port';
+  if (normalized.includes('BOOK')) return 'Booking Confirmed';
+  return 'In Transit';
+}
+
+function readCanonicalPort(canonical: Record<string, unknown>, key: 'origin_port' | 'destination_port'): string | undefined {
+  const value = canonical[key];
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'value' in value && typeof value.value === 'string') {
+    return value.value;
+  }
+  return undefined;
+}
+
+/**
+ * Exact status tracking does not need an LLM planning loop. This preserves the
+ * same StepResult/UI contract while reducing the request to one or two reads.
+ */
+export async function executeFastTrackingStep(
+  messages: ChatMessage[],
+  reader = new SupabaseReader(),
+): Promise<StepResult | null> {
+  const prompt = messages.at(-1)?.content.trim() ?? '';
+  if (!prompt || COMPLEX_TRACKING_INTENT.test(prompt)) return null;
+
+  const containerMatch = prompt.match(CONTAINER_REFERENCE);
+  const operationMatch = prompt.match(OPERATION_REFERENCE);
+  if (!containerMatch && !(operationMatch && SIMPLE_TRACKING_INTENT.test(prompt))) return null;
+
+  const timestamp = new Date().toISOString();
+  if (containerMatch) {
+    const container = await reader.getEnrichedContainerByNumber(containerMatch[0]);
+    if (!container) {
+      const message = `I could not find container ${containerMatch[0].toUpperCase()}.`;
+      return {
+        status: 'completed', summary: message,
+        factPatch: { assistantResponse: message },
+        evidence: [{ id: 'fast-container-miss', source: 'supabase:container-lookup' }],
+      };
+    }
+
+    const status = toDeliveryStatus(container.status);
+    const issue = container.customs_light === 'red'
+      ? 'Customs inspection is required.'
+      : container.eta && container.original_eta && Date.parse(container.eta) > Date.parse(container.original_eta)
+        ? 'The latest ETA is later than the original schedule.'
+        : undefined;
+    const message = `${container.container_number} is ${status.toLowerCase()}${container.current_location ? ` at ${container.current_location}` : ''}.`;
+    return {
+      status: 'completed', summary: message,
+      factPatch: {
+        assistantResponse: message,
+        deliveryId: container.operationReference || container.container_number,
+        from: container.origin_port,
+        to: container.destination_port,
+        status,
+        transportType: 'Sea',
+        deliveryTime: container.eta ?? 'ETA not available',
+        ...(issue ? { issue } : {}),
+        executionSteps: [{
+          id: 'fast-container-lookup', stepNumber: 1, kind: 'querying_database',
+          title: 'Retrieved live container status', detail: `Loaded the latest tracking record for ${container.container_number}.`,
+          toolName: 'fastContainerLookup', outputSummary: 'Container status retrieved.', durationMs: 0, timestamp,
+        }],
+      },
+      evidence: [{ id: 'fast-container-lookup', source: 'supabase:container-lookup' }],
+    };
+  }
+
+  const operation = await reader.getOperationByReferenceOrId(operationMatch![0].toUpperCase());
+  if (!operation) return null;
+  const containers = await reader.getContainersByOperation(operation.id);
+  const container = containers[0];
+  const status = toDeliveryStatus(container?.status ?? operation.status);
+  const from = container?.origin_port || readCanonicalPort(operation.canonical_data, 'origin_port') || 'Origin not available';
+  const to = container?.destination_port || readCanonicalPort(operation.canonical_data, 'destination_port') || 'Destination not available';
+  const message = `${operation.reference_code} is ${status.toLowerCase()}${container?.current_location ? ` at ${container.current_location}` : ''}.`;
+  return {
+    status: 'completed', summary: message,
+    factPatch: {
+      assistantResponse: message,
+      deliveryId: operation.reference_code,
+      from,
+      to,
+      status,
+      transportType: 'Sea',
+      deliveryTime: container?.eta ?? 'ETA not available',
+      executionSteps: [{
+        id: 'fast-operation-lookup', stepNumber: 1, kind: 'querying_database',
+        title: 'Retrieved live shipment status', detail: `Loaded the operation and its current container status for ${operation.reference_code}.`,
+        toolName: 'fastOperationLookup', outputSummary: 'Shipment status retrieved.', durationMs: 0, timestamp,
+      }],
+    },
+    evidence: [{ id: 'fast-operation-lookup', source: 'supabase:operation-lookup' }],
+  };
+}
+
 export async function executeAriStep(
   messages: ChatMessage[] = [
     { role: 'user', content: 'Run the json-render demo.' },
   ],
-  agent = createAriAgent(),
+  agent?: ReturnType<typeof createAriAgent>,
 ): Promise<StepResult> {
+  const fastResult = await executeFastTrackingStep(messages).catch(() => null);
+  if (fastResult) return fastResult;
+
+  const activeAgent = agent ?? createAriAgent();
   const modelMessages = messages.map((message) =>
     message.role === 'user'
       ? { role: 'user' as const, content: message.content }
@@ -182,7 +295,7 @@ export async function executeAriStep(
     }
   };
 
-  const response = await agent.generate(modelMessages, {
+  const response = await activeAgent.generate(modelMessages, {
     maxSteps: 10,
     delegation: {
       onDelegationComplete: ({ result }) => {
@@ -311,7 +424,7 @@ export async function executeAriStep(
     });
   }
 
-  // Populate DeliveryCard facts when container tools run
+  // Populate DeliveryCard facts dynamically when container tools run
   const containerToolResult = response.toolResults.find(
     ({ payload }) =>
       !payload.isError &&
@@ -328,17 +441,41 @@ export async function executeAriStep(
     };
     if (rawData?.found && rawData.container) {
       const c = rawData.container;
-      const originPort = (c.origin_port as string) || 'Shanghai / Haiphong';
-      const destPort = (c.destination_port as string) || 'Manzanillo, México';
-      const opRef = (c.operationReference as string) || 'OP-2026-101';
-      const eta = (c.eta as string) || '2026-09-08T00:00:00Z';
+      const originPort = (c.origin_port as string) || (c.origin as string) || '';
+      const destPort = (c.destination_port as string) || (c.destination as string) || '';
+      const opRef = (c.operationReference as string) || (c.container_number as string) || '';
+      const eta = (c.eta as string) || '';
 
-      catalogFactPatch.deliveryId = opRef;
-      catalogFactPatch.from = originPort;
-      catalogFactPatch.to = destPort;
-      catalogFactPatch.transportType = 'Sea';
-      catalogFactPatch.status = 'In Transit';
-      catalogFactPatch.deliveryTime = `${new Date(eta).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} (in 10 days)`;
+      if (opRef) {
+        catalogFactPatch.deliveryId = opRef;
+      }
+      if (originPort) {
+        catalogFactPatch.from = originPort;
+      }
+      if (destPort) {
+        catalogFactPatch.to = destPort;
+      }
+      catalogFactPatch.transportType = (c.transport_type as string) === 'Air' ? 'Air' : 'Sea';
+      const rawStatus = (c.status as string) || 'IN_TRANSIT';
+      catalogFactPatch.status =
+        rawStatus === 'DELIVERED'
+          ? 'Delivered'
+          : rawStatus === 'AT_PORT'
+            ? 'Arrived at Port'
+            : rawStatus === 'CUSTOMS_HOLD' || rawStatus === 'CUSTOMS_CLEARANCE'
+              ? 'Customs'
+              : 'In Transit';
+
+      if (eta) {
+        try {
+          const etaDate = new Date(eta);
+          catalogFactPatch.deliveryTime = !isNaN(etaDate.getTime())
+            ? etaDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : eta;
+        } catch {
+          catalogFactPatch.deliveryTime = eta;
+        }
+      }
     }
   }
 

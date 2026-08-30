@@ -67,6 +67,24 @@ export class RunCoordinator {
     await this.#emitNext(run, 'run:status', { status: run.status });
 
     try {
+      // Emit a catalog-valid UI immediately. The final generated interface will
+      // replace it once the live lookup or model workflow completes.
+      const loadingUi = validateTracerSpec(
+        this.#composeUi({
+          status: 'completed',
+          summary: 'Checking live logistics data…',
+          factPatch: { assistantResponse: 'Checking live logistics data…' },
+          evidence: [{ id: 'run-loading', source: 'run-coordinator' }],
+        }),
+      );
+      run.ui = loadingUi;
+      await this.#emitNext(run, 'ui:replace', {
+        uiVersion: 1,
+        reason: 'loading',
+        spec: loadingUi,
+        traceSteps: [],
+      });
+
       const parsedResult = stepResultSchema.safeParse(
         await this.#executeStep(messages),
       );

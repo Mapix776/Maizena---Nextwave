@@ -6,9 +6,58 @@ import { Agent } from '@mastra/core/agent';
 import {
   ARI_SYSTEM_PROMPT,
   createAriAgent,
+  executeFastTrackingStep,
   executeAriStep,
 } from './ari.js';
 import { DeterministicRenderModel } from './models.js';
+import type { SupabaseReader } from '../services/supabase-reader.js';
+
+test('Ari bypasses the model loop for an exact shipment status request', async () => {
+  let operationLookups = 0;
+  const reader = {
+    getOperationByReferenceOrId: async () => {
+      operationLookups += 1;
+      return {
+        id: '10300000-0000-4000-8000-000000000003',
+        reference_code: 'MDS-DEMO-GREEN-082',
+        status: 'CUSTOMS_CLEARANCE',
+        canonical_data: { origin_port: { value: 'Ho Chi Minh City, Vietnam' }, destination_port: { value: 'Manzanillo, Mexico' } },
+      };
+    },
+    getContainersByOperation: async () => [{
+      status: 'RELEASED',
+      origin_port: 'Ho Chi Minh City, Vietnam',
+      destination_port: 'Manzanillo, Mexico',
+      current_location: 'Terminal Manzanillo',
+      eta: '2026-08-28T09:00:00.000Z',
+    }],
+  } as unknown as SupabaseReader;
+
+  const result = await executeFastTrackingStep(
+    [{ role: 'user', content: 'What is the status of MDS-DEMO-GREEN-082?' }],
+    reader,
+  );
+
+  assert.equal(operationLookups, 1);
+  assert.equal(result?.factPatch?.deliveryId, 'MDS-DEMO-GREEN-082');
+  assert.equal(result?.factPatch?.status, 'Customs');
+  assert.match(result?.summary ?? '', /terminal manzanillo/i);
+});
+
+test('Ari reserves complex shipment requests for the full agent workflow', async () => {
+  const reader = {
+    getOperationByReferenceOrId: async () => {
+      throw new Error('The fast path must not query Supabase for complex prompts.');
+    },
+  } as unknown as SupabaseReader;
+
+  const result = await executeFastTrackingStep(
+    [{ role: 'user', content: 'Compare documents for MDS-DEMO-GREEN-082.' }],
+    reader,
+  );
+
+  assert.equal(result, null);
+});
 
 test('Ari uses the helpful-assistant prompt and returns one render-demo tool result', async () => {
   let toolExecutions = 0;

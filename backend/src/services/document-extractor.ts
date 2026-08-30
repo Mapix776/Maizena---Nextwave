@@ -224,6 +224,7 @@ export class DocumentExtractorService {
         });
         operationId = created.id;
         isNewOperation = true;
+        SupabaseReader.clearReadCache();
       } catch {
         operationId = 'op-auto-fallback';
       }
@@ -259,6 +260,7 @@ export class DocumentExtractorService {
         if (res.ok) {
           const rows = (await res.json()) as Array<{ id: string }>;
           if (rows[0]?.id) documentId = rows[0].id;
+          SupabaseReader.clearReadCache();
         }
       } catch {
         // Fallback safe
