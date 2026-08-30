@@ -144,6 +144,44 @@
   cursor: pointer;
 }
 
+.json-render-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.json-render-toolbar .open-context-button {
+  margin-bottom: 10px;
+}
+
+.save-card-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.save-card-button:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.save-card-button.saved {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(100deg, #dc63c7, #8b5cf6);
+}
+
 .agent-builder.context-panel-hidden .builder-left {
   max-width: 980px;
   width: 100%;

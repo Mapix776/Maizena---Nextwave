@@ -4,11 +4,13 @@ export const dynamic = 'force-dynamic'
 
 import { useEffect, useMemo, useState } from 'react'
 import { getTranslations, localeLabels, type Locale } from '@/lib/i18n'
+import { useSavedSpecs } from '@/lib/use-saved-specs'
 import nextDynamic from 'next/dynamic'
 import {
   Activity,
   BarChart3,
   Bell,
+  Bookmark,
   ChevronDown,
   ChevronRight,
   CircleHelp,
@@ -36,6 +38,7 @@ import {
 
 const OperationsMapView = nextDynamic(() => import('@/app/components/operations-map'), { ssr: false })
 const AgentBuilderView = nextDynamic(() => import('@/app/components/agent-builder'), { ssr: false })
+const SavedView = nextDynamic(() => import('@/app/components/saved-view'), { ssr: false })
 
 type Run = { id: string; route: string; carrier: string; status: string; eta: string; tone: string }
 
@@ -70,10 +73,11 @@ function AnalyticsView({ onNotify, t }: { onNotify: (message: string) => void; t
   return <div className="analytics-screen"><div className="view-heading"><div><p className="section-kicker">{t.intelligence}</p><h2>{t.analytics}</h2><p>{t.analyticsDescription}</p></div><button className="primary-button" onClick={() => onNotify('Informe exportado en modo demo')}>Exportar informe <ChevronRight size={15} /></button></div><div className="analytics-kpis"><div><span>Entrega a tiempo</span><strong>94,2%</strong><small className="positive">+3,8% este mes</small></div><div><span>Km recorridos</span><strong>128.460</strong><small className="positive">+12,4% vs. anterior</small></div><div><span>Coste medio / run</span><strong>602€</strong><small className="positive">-6,1% optimizado</small></div><div><span>Incidencias resueltas</span><strong>87%</strong><small>12 abiertas</small></div></div><div className="analytics-grid"><div className="panel analytics-chart"><div className="panel-heading"><div><p className="section-kicker">Volumen de operaciones</p><h3>Runs completados</h3></div><button className="filter-button" onClick={() => onNotify('Periodo cambiado a este mes')}>Este mes <ChevronRight size={13} /></button></div><div className="analytics-bars">{bars.map((height, index) => <div className="analytics-bar-col" key={index}><div className="analytics-bar-track"><span style={{ height: `${height}%` }} /></div><small>{['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul'][index]}</small></div>)}</div></div><div className="panel analytics-ring-panel"><div className="panel-heading"><div><p className="section-kicker">Salud de red</p><h3>Eficiencia global</h3></div><button className="dots-button" onClick={() => onNotify('Detalle de eficiencia abierto')}><MoreHorizontal size={18} /></button></div><div className="analytics-ring"><span>94<small>%</small></span></div><div className="legend"><span><i className="legend-pink" /> En objetivo <b>76%</b></span><span><i className="legend-violet" /> Necesita revisión <b>18%</b></span><span><i className="legend-gray" /> Sin datos <b>6%</b></span></div></div><div className="panel analytics-chart wide"><div className="panel-heading"><div><p className="section-kicker">Comparativa de rutas</p><h3>Coste por kilómetro</h3></div><span className="chart-value">0,84€ <small>media actual</small></span></div><div className="cost-lines"><div className="cost-line"><span>Madrid → Lyon</span><div><i style={{ width: '82%' }} /></div><b>0,72€</b></div><div className="cost-line"><span>Valencia → Lisboa</span><div><i style={{ width: '67%' }} /></div><b>0,68€</b></div><div className="cost-line"><span>Bilbao → París</span><div><i style={{ width: '94%' }} /></div><b>0,91€</b></div><div className="cost-line"><span>Sevilla → Marsella</span><div><i style={{ width: '76%' }} /></div><b>0,79€</b></div></div></div></div></div>
 }
 
-function ViewScreen({ active, onNotify, t, locale, sidebarOpen, onToggleSidebar }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale; sidebarOpen: boolean; onToggleSidebar: () => void }) {
+function ViewScreen({ active, onNotify, t, locale, sidebarOpen, onToggleSidebar, saved, onNavigate }: { active: string; onNotify: (message: string) => void; t: ReturnType<typeof getTranslations>; locale: Locale; sidebarOpen: boolean; onToggleSidebar: () => void; saved: ReturnType<typeof useSavedSpecs>; onNavigate: (label: string) => void }) {
   if (active === 'Mapa') return <OperationsMapView />
   if (active === 'Analíticas') return <AnalyticsView onNotify={onNotify} t={t} />
-  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} />
+  if (active === 'Guardados') return <SavedView savedSpecs={saved.savedSpecs} onRemove={saved.removeSpec} onNotify={onNotify} onGoToChat={() => onNavigate('Chat')} t={t} dateLocale={t.dateLocale} />
+  if (active === 'Chat') return <AgentBuilderView onNotify={onNotify} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={onToggleSidebar} isSaved={saved.isSaved} onToggleSave={saved.toggleSave} />
   const copy: Record<string, { kicker: string; title: string; description: string; items: string[] }> = {
     Incidencias: { kicker: 'Atención', title: 'Incidencias', description: 'Revisa las alertas que requieren una decisión humana.', items: ['Retraso de 35 min · RUN-2046', 'Documentación pendiente · RUN-2047', 'Cambio de muelle solicitado · Centro Lyon'] },
     Chat: { kicker: 'Comunicación', title: 'Chat del equipo', description: 'Coordina decisiones rápidas con las personas de operaciones.', items: ['Lucía · ¿Confirmamos la salida de Valencia?', 'Diego · El muelle 4 ya está disponible', 'Marina · He actualizado el ETA de Lyon'] },
@@ -97,6 +101,7 @@ function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [currentDate, setCurrentDate] = useState('')
+  const saved = useSavedSpecs()
 
   useEffect(() => {
     const savedLocale = window.localStorage.getItem('route-pilot-locale') as Locale | null
@@ -139,6 +144,7 @@ function App() {
         <p className="nav-label">{t.operations}</p>
         <nav aria-label="Navegación principal">
           <button className={active === 'Chat' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Chat')}><MessageCircle size={17} /><span>Chat</span></button>
+          <button className={active === 'Guardados' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Guardados')}><Bookmark size={17} /><span>{t.savedNav}</span>{saved.savedSpecs.length > 0 && <em>{saved.savedSpecs.length}</em>}</button>
           {navItems.map(({ key, icon: Icon, badge }) => { const label = t[key as keyof typeof t]; return <button key={key} className={active === key ? 'nav-item active' : 'nav-item'} onClick={() => handleNav(key === 'summary' ? 'Resumen' : key === 'issues' ? 'Incidencias' : key === 'map' ? 'Mapa' : 'Analíticas')}><Icon size={17} /><span>{label}</span>{badge && <em>{badge}</em>}</button> })}
           <button className={active === 'Noticias' ? 'nav-item active' : 'nav-item'} onClick={() => handleNav('Noticias')}><Newspaper size={17} /><span>Noticias</span><em className="news-dot">2</em></button>
         </nav>
@@ -167,7 +173,7 @@ function App() {
           <div className="panel cost-panel"><div className="panel-heading"><div><p className="section-kicker">{t.finances}</p><h3>{t.operatingCost}</h3></div><button className="dots-button" onClick={() => notify('Más opciones de finanzas')}><MoreHorizontal size={18} /></button></div><p className="big-number">13.840€ <small>este mes</small></p><MiniBars /><div className="budget-line"><span>Presupuesto mensual</span><b>72%</b></div><div className="progress"><span style={{ width: '72%' }} /></div></div>
           <div className="panel runs-panel"><div className="panel-heading"><div><p className="section-kicker">{t.tracking}</p><h3>{t.recentRuns}</h3></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? t.seeLess : t.seeAll} <ChevronRight size={14} /></button></div><div className="run-list">{filteredRuns.slice(0, showAll ? 3 : 2).map((run) => <button className="run-row" key={run.id} onClick={() => notify(`${run.id} seleccionado`)}><span className={`run-icon ${run.tone}`}><Truck size={16} /></span><span className="run-info"><b>{run.route}</b><small>{run.id} · {run.carrier}</small></span><span className={`status ${run.tone}`}>{locale === 'en' ? ({ 'En tránsito': 'In transit', 'En preparación': 'Preparing', Revisar: 'Review' }[run.status] ?? run.status) : locale === 'pt' ? ({ 'En tránsito': 'Em trânsito', 'En preparación': 'Em preparação', Revisar: 'Revisar' }[run.status] ?? run.status) : run.status}</span><span className="run-eta">{run.eta}</span><ChevronRight size={15} /></button>)}</div></div>
         </div>
-        </> : <ViewScreen active={active} onNotify={notify} t={t} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />}
+        </> : <ViewScreen active={active} onNotify={notify} t={t} locale={locale} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} saved={saved} onNavigate={handleNav} />}
       </section>
       {active !== 'Chat' && <button className="floating-chat" aria-label="Abrir chatbot de IA" onClick={() => { setActive('Chat'); setMobileOpen(false); notify('Chat con route.pilot AI abierto') }}><Sparkles size={19} /><span>Chat IA</span></button>}
       {notice && <div className="toast"><Sparkles size={15} />{notice}</div>}

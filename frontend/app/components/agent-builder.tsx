@@ -3,6 +3,8 @@
 import type { Spec } from '@json-render/core'
 import {
   Activity,
+  Bookmark,
+  BookmarkCheck,
   CheckCircle2,
   Copy,
   FileText,
@@ -126,16 +128,31 @@ function responseText(spec: JsonRenderSpec): string {
   return typeof props?.text === 'string' ? props.text : 'Respuesta renderizada.'
 }
 
+function savedTitle(spec: JsonRenderSpec, fallback: string): string {
+  for (const element of Object.values(spec.elements)) {
+    const props = element.props as Record<string, unknown>
+    if (typeof props?.title === 'string' && props.title.trim()) return props.title
+    if (typeof props?.reference === 'string' && props.reference.trim()) return props.reference
+  }
+  const text = fallback.trim()
+  if (!text) return 'Tarjeta guardada'
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text
+}
+
 export default function AgentBuilderView({
   onNotify,
   locale = 'es',
   sidebarOpen = true,
   onToggleSidebar,
+  isSaved,
+  onToggleSave,
 }: {
   onNotify: (message: string) => void
   locale?: Locale
   sidebarOpen?: boolean
   onToggleSidebar?: () => void
+  isSaved?: (id: string) => boolean
+  onToggleSave?: (entry: { id: string; title: string; spec: JsonRenderSpec }) => boolean
 }) {
   const t = getTranslations(locale)
   const socketRef = useRef<Socket | null>(null)
@@ -524,12 +541,31 @@ export default function AgentBuilderView({
                 )}
                 {message.spec ? (
                   <>
-                    <button
-                      className="open-context-button"
-                      onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
-                    >
-                      <FileText size={13} /> {t.openInfo}
-                    </button>
+                    <div className="json-render-toolbar">
+                      <button
+                        className="open-context-button"
+                        onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
+                      >
+                        <FileText size={13} /> {t.openInfo}
+                      </button>
+                      {onToggleSave && (
+                        <button
+                          className={`save-card-button ${isSaved?.(message.id) ? 'saved' : ''}`}
+                          aria-pressed={isSaved?.(message.id) ?? false}
+                          onClick={() => {
+                            const nowSaved = onToggleSave({
+                              id: message.id,
+                              title: savedTitle(message.spec as JsonRenderSpec, message.text),
+                              spec: message.spec as JsonRenderSpec,
+                            })
+                            onNotify(nowSaved ? t.saveCardDone : t.unsaveCardDone)
+                          }}
+                        >
+                          {isSaved?.(message.id) ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+                          {isSaved?.(message.id) ? t.savedCardShort : t.saveCard}
+                        </button>
+                      )}
+                    </div>
                     <JsonRenderClient spec={message.spec as Spec} />
                   </>
                 ) : (
