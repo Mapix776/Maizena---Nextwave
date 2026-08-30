@@ -74,6 +74,7 @@ import {
   type ChatAttachment,
   type ChatMessage,
   type ConnectionStatus,
+  type TraceStep,
   useAriChat,
 } from '@/lib/use-ari-chat'
 
@@ -225,8 +226,6 @@ function savedTitle(spec: JsonRenderSpec, fallback: string): string {
   if (!text) return 'Tarjeta guardada'
   return text.length > 60 ? `${text.slice(0, 57)}…` : text
 }
-
-type TraceStep = { title: string; detail: string; outputSummary?: string }
 
 const ELEMENT_STEP_LABELS: Record<string, string> = {
   AssistantMessage: 'mensaje del asistente',
@@ -551,9 +550,20 @@ function ChatMessageRow({
   const assistant = message.role === 'assistant'
   const saved = isSaved?.(message.id) ?? false
   const [traceOpen, setTraceOpen] = useState(false)
-  const traceSteps = message.spec
-    ? deriveTraceSteps(message.spec as JsonRenderSpec)
-    : []
+  const traceSteps =
+    message.traceSteps && message.traceSteps.length > 0
+      ? message.traceSteps
+      : message.spec
+        ? deriveTraceSteps(message.spec as JsonRenderSpec)
+        : []
+  const hasDocSheet = Boolean(
+    message.spec &&
+      Object.values(message.spec.elements).some(
+        (element) =>
+          DOCUMENT_SHEET_TYPES.has(element.type) ||
+          Boolean((element.props as Record<string, unknown> | undefined)?.url),
+      ),
+  )
 
   return (
     <Message
@@ -567,16 +577,18 @@ function ChatMessageRow({
             <span className="text-xs font-medium text-muted-foreground">Ari</span>
             {message.spec && (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full"
-                  onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
-                >
-                  <FileText className="size-3.5" />
-                  {t.openInfo}
-                </Button>
+                {hasDocSheet && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => onOpenContext(message.spec as JsonRenderSpec, message.id)}
+                  >
+                    <FileText className="size-3.5" />
+                    {t.openInfo}
+                  </Button>
+                )}
                 {onToggleSave && (
                   <Button
                     type="button"

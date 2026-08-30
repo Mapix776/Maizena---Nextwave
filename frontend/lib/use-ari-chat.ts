@@ -17,12 +17,19 @@ export interface ChatAttachment {
   url: string
 }
 
+export interface TraceStep {
+  title: string
+  detail: string
+  outputSummary?: string
+}
+
 export interface ChatMessage {
   id: string
   role: MessageRole
   text: string
   attachments?: ChatAttachment[]
   spec?: JsonRenderSpec
+  traceSteps?: TraceStep[]
 }
 
 export interface RunSnapshot {
@@ -33,13 +40,14 @@ export interface RunSnapshot {
   ui: JsonRenderSpec | null
   error?: string
   targetMessageId?: string
+  traceSteps?: TraceStep[]
 }
 
 export interface UIReplacePayload {
   uiVersion: number
   reason: string
   spec: JsonRenderSpec
-  traceSteps?: unknown[]
+  traceSteps?: TraceStep[]
   targetMessageId?: string
 }
 
@@ -155,6 +163,7 @@ export function useAriChat({
       runId: string,
       spec: JsonRenderSpec,
       targetMessageId?: string,
+      traceSteps?: TraceStep[],
     ) {
       setMessages((current) => {
         const id = `assistant-${runId}`
@@ -190,6 +199,10 @@ export function useAriChat({
                   ...message,
                   text: responseText(nextSpec),
                   spec: nextSpec,
+                  traceSteps:
+                    traceSteps && traceSteps.length > 0
+                      ? traceSteps
+                      : message.traceSteps,
                 }
               : message,
           )
@@ -201,6 +214,7 @@ export function useAriChat({
               role: 'assistant',
               text: responseText(spec),
               spec,
+              traceSteps,
             },
           ]
         }
@@ -236,6 +250,7 @@ export function useAriChat({
           snapshot.runId,
           snapshot.ui,
           snapshot.targetMessageId,
+          snapshot.traceSteps,
         )
       }
 
@@ -295,6 +310,7 @@ export function useAriChat({
           envelope.runId,
           payload.spec,
           payload.targetMessageId,
+          payload.traceSteps,
         )
       }
 
