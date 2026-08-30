@@ -113,9 +113,7 @@ export function buildHumanDecisionCatalogFact(
   const pendingDecision = decisions.find(
     (d) =>
       (d.status === 'PENDING' || d.status === 'pending') &&
-      !d.resolved_at &&
-      d.status !== 'resolved' &&
-      d.status !== 'RESOLVED',
+      !d.resolved_at,
   );
   const decisionOptions = pendingDecision
     ? decisionOptionsSchema.safeParse(pendingDecision.options_json)
