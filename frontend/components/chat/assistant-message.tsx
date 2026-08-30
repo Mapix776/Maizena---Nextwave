@@ -8,9 +8,9 @@ export function AssistantMessage({
   children?: ReactNode
 }) {
   return (
-    <div className="rendered-assistant-message">
-      <p>{text}</p>
-      {children && <div className="rendered-assistant-demo">{children}</div>}
+    <div className="w-full text-foreground">
+      <p className="text-sm leading-relaxed text-foreground">{text}</p>
+      {children && <div className="mt-4 w-full">{children}</div>}
     </div>
   )
 }

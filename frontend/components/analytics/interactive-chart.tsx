@@ -26,14 +26,29 @@ export type InteractiveChartProps = {
   data: Array<{ label: string; value: number }>
 }
 
-const sliceColors = ['var(--primary)', 'var(--violet)', 'var(--pink)', '#39a6a3', '#e1b04a']
+// Monochrome ramp anchored on the brand primary so slices stay on-token and
+// invert correctly in dark mode (--card flips with the theme).
+const sliceColors = [
+  'var(--primary)',
+  'color-mix(in srgb, var(--primary) 62%, var(--card))',
+  'color-mix(in srgb, var(--primary) 38%, var(--card))',
+  'color-mix(in srgb, var(--primary) 22%, var(--card))',
+]
+
+const axisTick = { fill: 'var(--muted-foreground)', fontSize: 11 }
 const tooltipStyle = {
-  borderRadius: 10,
+  borderRadius: 12,
   border: '1px solid var(--border)',
-  background: 'var(--card)',
-  color: 'var(--foreground)',
+  background: 'var(--popover)',
+  color: 'var(--popover-foreground)',
+  boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.06)',
   fontSize: 12,
+  padding: '8px 10px',
 }
+const tooltipLabelStyle = { color: 'var(--popover-foreground)', fontWeight: 600, marginBottom: 2 }
+const tooltipItemStyle = { color: 'var(--muted-foreground)', fontSize: 12 }
+
+const iconButton = 'grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40'
 
 const chartTypes: Array<{ id: ChartType; label: string; Icon: typeof BarChart3 }> = [
   { id: 'bar', label: 'Barras', Icon: BarChart3 },
@@ -80,13 +95,13 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
 
   return (
     <section
-      className="interactive-chart"
+      className="relative w-full max-w-full touch-none rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs"
       style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
     >
-      <div className="interactive-chart-toolbar">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="interactive-chart-drag"
+          className={`${iconButton} cursor-grab active:cursor-grabbing active:bg-muted active:text-primary`}
           aria-label="Mover gráfico"
           onPointerDown={handleDragStart}
           onPointerMove={handleDragMove}
@@ -98,9 +113,10 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
         </button>
 
         {isEditingTitle ? (
-          <div className="interactive-chart-title-editor">
+          <div className="mr-auto flex min-w-0 items-center gap-2">
             <input
               autoFocus
+              className="w-[min(240px,60vw)] min-w-0 rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-ring/30"
               value={localTitle}
               onChange={(event) => setLocalTitle(event.target.value)}
               onKeyDown={(event) => {
@@ -111,28 +127,33 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
               }}
               aria-label="Editar título del gráfico"
             />
-            <button type="button" aria-label="Guardar título" onClick={() => setIsEditingTitle(false)}>
+            <button
+              type="button"
+              className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              aria-label="Guardar título"
+              onClick={() => setIsEditingTitle(false)}
+            >
               <Check size={15} aria-hidden="true" />
             </button>
           </div>
         ) : (
           <button
             type="button"
-            className="interactive-chart-heading"
+            className="mr-auto flex min-w-0 cursor-text items-center gap-2 rounded-lg px-1.5 py-1 text-base font-semibold tracking-tight text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => setIsEditingTitle(true)}
             aria-label="Editar título del gráfico"
           >
-            <span>{localTitle}</span>
-            <PencilLine size={13} aria-hidden="true" />
+            <span className="truncate">{localTitle}</span>
+            <PencilLine size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         )}
 
-        <div className="interactive-chart-actions" role="group" aria-label="Tipo de gráfico">
+        <div className="ml-auto flex flex-wrap gap-1" role="group" aria-label="Tipo de gráfico">
           {chartTypes.map(({ id, label, Icon }) => (
             <button
               key={id}
               type="button"
-              className={id === activeType ? 'selected' : undefined}
+              className={id === activeType ? `${iconButton} border-primary bg-primary text-primary-foreground hover:border-primary hover:text-primary-foreground` : iconButton}
               aria-pressed={id === activeType}
               aria-label={label}
               title={label}
@@ -143,6 +164,7 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
           ))}
           <button
             type="button"
+            className={iconButton}
             aria-label="Restablecer posición"
             title="Restablecer posición"
             onClick={() => setPosition({ x: 0, y: 0 })}
@@ -152,15 +174,15 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
         </div>
       </div>
 
-      {description && <p className="interactive-chart-description">{description}</p>}
+      {description && <p className="mt-2 px-0.5 text-sm leading-relaxed text-muted-foreground">{description}</p>}
 
-      <div className="interactive-chart-canvas">
+      <div className="mt-4 h-[220px] w-full sm:h-[250px]">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
             {activeType === 'pie' ? (
               <PieChart>
-                <Tooltip contentStyle={tooltipStyle} />
-                <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius="76%" label>
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
+                <Pie data={data} dataKey="value" nameKey="label" cx="50%" cy="50%" outerRadius="76%" stroke="var(--card)" strokeWidth={2} label={{ fill: 'var(--muted-foreground)', fontSize: 11 }}>
                   {data.map((entry, index) => (
                     <Cell key={entry.label} fill={sliceColors[index % sliceColors.length]} />
                   ))}
@@ -169,27 +191,23 @@ export function InteractiveChart({ title, description, chartType, data }: Intera
             ) : activeType === 'line' ? (
               <LineChart data={data} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={3} dot={{ r: 3 }} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={axisTick} />
+                <YAxis axisLine={false} tickLine={false} tick={axisTick} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} />
+                <Line type="monotone" dataKey="value" stroke="var(--primary)" strokeWidth={2} dot={{ r: 3, fill: 'var(--primary)', strokeWidth: 0 }} activeDot={{ r: 4 }} />
               </LineChart>
             ) : (
               <RechartsBarChart data={data} margin={{ top: 12, right: 18, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'var(--lavender)' }} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {data.map((entry, index) => (
-                    <Cell key={entry.label} fill={sliceColors[index % sliceColors.length]} />
-                  ))}
-                </Bar>
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={axisTick} />
+                <YAxis axisLine={false} tickLine={false} tick={axisTick} />
+                <Tooltip contentStyle={tooltipStyle} labelStyle={tooltipLabelStyle} itemStyle={tooltipItemStyle} cursor={{ fill: 'var(--muted)', opacity: 0.6 }} />
+                <Bar dataKey="value" fill="var(--primary)" radius={[6, 6, 0, 0]} />
               </RechartsBarChart>
             )}
           </ResponsiveContainer>
         ) : (
-          <div className="interactive-chart-empty">Sin datos para mostrar</div>
+          <div className="grid h-full place-items-center text-sm text-muted-foreground">Sin datos para mostrar</div>
         )}
       </div>
     </section>

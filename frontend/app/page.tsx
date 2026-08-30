@@ -101,7 +101,7 @@ function App() {
   }
 
   return (
-    <main className={`${dark ? 'app-shell dark-mode' : 'app-shell'} ${sidebarOpen ? 'sidebar-visible' : 'sidebar-hidden'}`}>
+    <main className={`${dark ? 'app-shell dark-mode dark' : 'app-shell'} ${sidebarOpen ? 'sidebar-visible' : 'sidebar-hidden'}`}>
       <div className="dot-field" aria-hidden="true" />
       <button className="mobile-menu" aria-label="Abrir menú" onClick={() => setMobileOpen(!mobileOpen)}><Menu size={20} /></button>
       <aside className={mobileOpen ? 'sidebar open' : `sidebar ${sidebarOpen ? 'open' : 'collapsed'}`}>
