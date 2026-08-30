@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { mapToolToTraceStep } from './trace-step.js';
-import { createWorkTrace } from './work-trace.js';
+import { createWorkTrace, workTraceSchema } from './work-trace.js';
 
 const timestamp = '2026-08-30T12:00:00.000Z';
 
@@ -37,19 +37,24 @@ test('createWorkTrace orders and projects only safe presentation fields', () => 
   });
 
   assert.deepEqual(trace, {
+    status: 'completed',
     durationMs: 4_500,
     steps: [
       {
-        id: 'thinking-step',
+        id: 'trace-step-1',
         stepNumber: 1,
         kind: 'thinking',
+        status: 'completed',
+        animationType: 'thinking',
         title: 'Entendiendo tu solicitud',
         detail: 'Organicé la consulta antes de revisar datos.',
       },
       {
-        id: 'tool-step',
+        id: 'trace-step-2',
         stepNumber: 2,
         kind: 'querying_database',
+        status: 'completed',
+        animationType: 'thinking',
         title: 'Consultando operación',
         detail: 'Revisé el estado confirmado de la operación.',
       },
@@ -57,7 +62,64 @@ test('createWorkTrace orders and projects only safe presentation fields', () => 
   });
   assert.doesNotMatch(
     JSON.stringify(trace),
-    /toolName|input|outputSummary|timestamp|animationType|OP-PRIVATE|provider/i,
+    /toolName|input|outputSummary|timestamp|OP-PRIVATE|provider/i,
+  );
+});
+
+test('the public Work trace contract is bounded, lifecycle-explicit, and strict', () => {
+  const step = {
+    id: 'trace-step-1',
+    stepNumber: 1,
+    kind: 'thinking',
+    status: 'running',
+    animationType: 'thinking',
+    title: 'Preparando respuesta',
+    detail: 'Organizando la solicitud.',
+  };
+
+  assert.equal(
+    workTraceSchema.safeParse({
+      status: 'running',
+      durationMs: 0,
+      steps: [step],
+    }).success,
+    true,
+  );
+  assert.equal(
+    workTraceSchema.safeParse({
+      status: 'running',
+      durationMs: 0,
+      steps: [{ ...step, id: 'step-1-toolName' }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    workTraceSchema.safeParse({
+      status: 'running',
+      durationMs: 0,
+      steps: [{ ...step, toolName: 'privateTool' }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    workTraceSchema.safeParse({
+      status: 'running',
+      durationMs: 0,
+      steps: Array.from({ length: 33 }, (_, index) => ({
+        ...step,
+        id: `trace-step-${index + 1}`,
+        stepNumber: index + 1,
+      })),
+    }).success,
+    false,
+  );
+  assert.equal(
+    workTraceSchema.safeParse({
+      status: 'running',
+      durationMs: 0,
+      steps: [step, { ...step }],
+    }).success,
+    false,
   );
 });
 
@@ -98,7 +160,7 @@ test('createWorkTrace preserves distinct safe backend summaries for every ordere
     durationMs: 1_000,
     executionSteps: [
       {
-        id: 'customs-step',
+        id: 'trace-step-1',
         stepNumber: 1,
         kind: 'querying_database',
         animationType: 'thinking',
@@ -111,7 +173,7 @@ test('createWorkTrace preserves distinct safe backend summaries for every ordere
         timestamp,
       },
       {
-        id: 'alerts-step',
+        id: 'trace-step-2',
         stepNumber: 2,
         kind: 'querying_database',
         animationType: 'thinking',
@@ -130,13 +192,13 @@ test('createWorkTrace preserves distinct safe backend summaries for every ordere
     trace.steps.map(({ id, title, detail }) => ({ id, title, detail })),
     [
       {
-        id: 'customs-step',
+        id: 'trace-step-1',
         title: 'Revisando estatus de aduana',
         detail:
           'Verifiqué el semáforo fiscal y confirmé que la carga no requiere inspección.',
       },
       {
-        id: 'alerts-step',
+        id: 'trace-step-2',
         title: 'Comprobando alertas operativas',
         detail:
           'Revisé el monitor de incidentes y encontré tres alertas activas.',
@@ -154,7 +216,7 @@ test('createWorkTrace sanitizes source values while preserving useful summaries 
     durationMs: 2_000,
     executionSteps: [
       {
-        id: 'safe-step-1',
+        id: 'trace-step-1',
         stepNumber: 1,
         kind: 'reading_document',
         animationType: 'reading',
@@ -169,7 +231,7 @@ test('createWorkTrace sanitizes source values while preserving useful summaries 
         timestamp,
       },
       {
-        id: 'safe-step-2',
+        id: 'trace-step-2',
         stepNumber: 2,
         kind: 'locating_map',
         animationType: 'mapping',
@@ -181,7 +243,7 @@ test('createWorkTrace sanitizes source values while preserving useful summaries 
         timestamp,
       },
       {
-        id: 'safe-step-3',
+        id: 'trace-step-3',
         stepNumber: 3,
         kind: 'finding_container',
         animationType: 'finding',
@@ -211,18 +273,18 @@ test('createWorkTrace sanitizes source values while preserving useful summaries 
     trace.steps.map(({ id, title, detail }) => ({ id, title, detail })),
     [
       {
-        id: 'safe-step-1',
+        id: 'trace-step-1',
         title: 'Leyendo la información solicitada',
         detail:
           'Abrí el documento la información solicitada para la información solicitada.',
       },
       {
-        id: 'safe-step-2',
+        id: 'trace-step-2',
         title: 'Ubicando la información solicitada',
         detail: 'Consulté la ruta de la información solicitada.',
       },
       {
-        id: 'safe-step-3',
+        id: 'trace-step-3',
         title: 'Buscando la información solicitada',
         detail:
           'Busqué la información solicitada con la consulta "la información solicitada".',

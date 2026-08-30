@@ -4,58 +4,32 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { io, type Socket } from 'socket.io-client'
 
 import { getTranslations, type Locale } from '@/lib/i18n'
-import type { JsonRenderSpec } from '@/lib/json-render/catalog'
-import { parseWorkTrace, type WorkTrace } from '@/lib/work-trace'
+import { getBackendUrl } from '@/lib/backend-url'
+import {
+  applyIncomingRunEnvelope,
+  applyRunProjection,
+  bindRunStartAcknowledgement,
+  createChatState,
+  failPendingRunStart,
+  prepareRunSubmission,
+  restoreActiveRunBinding,
+  settleSupersededRun,
+  settleUnavailableRun,
+  type ChatAttachment,
+  type ChatMessage,
+  type ChatState,
+  type RunEnvelope,
+  type RunSnapshot,
+} from '@/lib/run-projection'
+
+export type { ChatAttachment, ChatMessage } from '@/lib/run-projection'
 
 export type ConnectionStatus = 'connecting' | 'ready' | 'running' | 'error'
 export type MessageRole = 'user' | 'assistant'
 
-export interface ChatAttachment {
-  id: string
-  name: string
-  size: number
-  type: string
-  url: string
-}
-
-export interface ChatMessage {
-  id: string
-  role: MessageRole
-  text: string
-  attachments?: ChatAttachment[]
-  spec?: JsonRenderSpec
-  workTrace?: WorkTrace
-}
-
-export interface RunSnapshot {
-  runId: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  sequence: number
-  facts?: Record<string, unknown>
-  ui: JsonRenderSpec | null
-  workTrace: WorkTrace | null
-  error?: string
-  targetMessageId?: string
-}
-
-export interface UIReplacePayload {
-  uiVersion: number
-  reason: string
-  spec: JsonRenderSpec
-  workTrace: WorkTrace
-  targetMessageId?: string
-}
-
-export interface RunEnvelope {
-  runId: string
-  sequence: number
-  type: 'run:status' | 'ui:replace' | 'run:complete'
-  payload: Record<string, unknown>
-}
-
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+const backendUrl = getBackendUrl()
 const CHAT_STORAGE_KEY = 'nauta_chat_messages_v1'
+const ACTIVE_RUN_STORAGE_KEY = 'nauta_active_run_v1'
 
 function loadStoredMessages(): ChatMessage[] | null {
   try {
@@ -63,24 +37,7 @@ function loadStoredMessages(): ChatMessage[] | null {
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed.map((storedMessage: unknown) => {
-        if (
-          !storedMessage ||
-          typeof storedMessage !== 'object' ||
-          Array.isArray(storedMessage)
-        ) {
-          return storedMessage
-        }
-
-        const { workTrace, ...message } = storedMessage as Record<
-          string,
-          unknown
-        >
-        const validatedWorkTrace = parseWorkTrace(workTrace)
-        return validatedWorkTrace
-          ? { ...message, workTrace: validatedWorkTrace }
-          : message
-      }) as ChatMessage[]
+      return createChatState(parsed).messages
     }
   } catch (error) {
     console.error('Error al leer historial local:', error)
@@ -88,12 +45,30 @@ function loadStoredMessages(): ChatMessage[] | null {
   return null
 }
 
-function responseText(spec: JsonRenderSpec): string {
-  const root = spec.elements[spec.root]
-  const props = root?.props as Record<string, unknown> | undefined
-  return typeof props?.text === 'string'
-    ? props.text
-    : 'Respuesta renderizada.'
+function loadActiveRunBinding(): { present: boolean; value: unknown } {
+  try {
+    const raw = localStorage.getItem(ACTIVE_RUN_STORAGE_KEY)
+    return raw === null
+      ? { present: false, value: null }
+      : { present: true, value: JSON.parse(raw) }
+  } catch {
+    return { present: true, value: null }
+  }
+}
+
+function storeActiveRunBinding(binding: {
+  runId: string
+  responseMessageId: string
+} | null) {
+  try {
+    if (binding) {
+      localStorage.setItem(ACTIVE_RUN_STORAGE_KEY, JSON.stringify(binding))
+    } else {
+      localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY)
+    }
+  } catch {
+    // Recovery is best effort and never changes the live run contract.
+  }
 }
 
 function messagesForRun(messages: ChatMessage[]) {
@@ -101,42 +76,6 @@ function messagesForRun(messages: ChatMessage[]) {
     .filter((message) => message.text)
     .slice(-40)
     .map(({ role, text: content }) => ({ role, content }))
-}
-
-function mergeSpecs(
-  previous: JsonRenderSpec,
-  incoming: JsonRenderSpec,
-): JsonRenderSpec {
-  return {
-    ...previous,
-    ...incoming,
-    elements: {
-      ...previous.elements,
-      ...incoming.elements,
-    },
-  }
-}
-
-function overlappingMessageIndex(
-  messages: ChatMessage[],
-  spec: JsonRenderSpec,
-): number {
-  const incomingIds = new Set(
-    Object.keys(spec.elements).filter((id) => id !== 'assistant-message'),
-  )
-  if (incomingIds.size === 0) return -1
-
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index]
-    if (
-      message.role === 'assistant' &&
-      message.spec &&
-      Object.keys(message.spec.elements).some((id) => incomingIds.has(id))
-    ) {
-      return index
-    }
-  }
-  return -1
 }
 
 export function useAriChat({
@@ -154,8 +93,8 @@ export function useAriChat({
   const socketRef = useRef<Socket | null>(null)
   const activeRunId = useRef<string | null>(null)
   const pendingRequestId = useRef<string | null>(null)
-  const latestSequence = useRef(0)
   const messagesRef = useRef<ChatMessage[]>([])
+  const projectionStateRef = useRef<ChatState>(createChatState())
   const connectionStatusRef = useRef<ConnectionStatus>('connecting')
   const queuedDecisions = useRef<string[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -168,109 +107,59 @@ export function useAriChat({
   }, [])
 
   useEffect(() => {
+    const stored = loadStoredMessages()
+    const storedBinding = loadActiveRunBinding()
+    let restored = createChatState(stored ?? [])
+    if (storedBinding.present) {
+      const recovery = restoreActiveRunBinding(restored, storedBinding.value)
+      restored = recovery.state
+      activeRunId.current = recovery.binding?.runId ?? null
+      if (!recovery.binding) storeActiveRunBinding(null)
+    } else {
+      const unboundRunningShell = restored.messages.find(
+        ({ id, role, runId, workTrace }) =>
+          Boolean(id && role === 'assistant' && runId && workTrace?.status === 'running'),
+      )
+      if (unboundRunningShell?.runId) {
+        restored = settleUnavailableRun(restored, {
+          runId: unboundRunningShell.runId,
+          responseMessageId: unboundRunningShell.id,
+        })
+      }
+      storeActiveRunBinding(null)
+    }
+    projectionStateRef.current = restored
+    messagesRef.current = restored.messages
+    setMessages(restored.messages)
+
     const socket = io(backendUrl, { transports: ['websocket'] })
     socketRef.current = socket
 
-    function applyRenderedResponse(
-      runId: string,
-      spec: JsonRenderSpec,
-      workTrace: unknown,
-      targetMessageId?: string,
-    ) {
-      const validatedWorkTrace = parseWorkTrace(workTrace)
-      setMessages((current) => {
-        const id = `assistant-${runId}`
-        const explicitTargetIndex = targetMessageId
-          ? current.findIndex(
-              (message) =>
-                message.id === targetMessageId && message.role === 'assistant',
-            )
-          : -1
-        const sameRunIndex = current.findIndex((message) => message.id === id)
-        const inferredTargetIndex =
-          !targetMessageId && sameRunIndex < 0
-            ? overlappingMessageIndex(current, spec)
-            : -1
-        const targetIndex =
-          explicitTargetIndex >= 0
-            ? explicitTargetIndex
-            : sameRunIndex >= 0
-              ? sameRunIndex
-              : inferredTargetIndex
-
-        let next: ChatMessage[]
-        if (targetIndex >= 0) {
-          const previous = current[targetIndex]
-          const targetsEarlierBubble = targetIndex !== sameRunIndex
-          const nextSpec =
-            targetsEarlierBubble && previous.spec
-              ? mergeSpecs(previous.spec, spec)
-              : spec
-          next = current.map((message, index) =>
-            index === targetIndex
-              ? {
-                  ...message,
-                  text: responseText(nextSpec),
-                  spec: nextSpec,
-                  workTrace: validatedWorkTrace,
-                }
-              : message,
-          )
-        } else {
-          next = [
-            ...current,
-            {
-              id,
-              role: 'assistant',
-              text: responseText(spec),
-              spec,
-              workTrace: validatedWorkTrace,
-            },
-          ]
-        }
-        messagesRef.current = next
-        return next
-      })
-    }
-
-    function appendRunError(runId: string, text: string) {
-      setMessages((current) => {
-        const id = `error-${runId}`
-        if (current.some((message) => message.id === id)) return current
-        const next: ChatMessage[] = [
-          ...current,
-          { id, role: 'assistant', text },
-        ]
-        messagesRef.current = next
-        return next
-      })
+    function commitProjection(input: RunEnvelope | RunSnapshot) {
+      const next = applyRunProjection(projectionStateRef.current, input)
+      if (next === projectionStateRef.current) return false
+      projectionStateRef.current = next
+      messagesRef.current = next.messages
+      setMessages(next.messages)
+      return true
     }
 
     function applySnapshot(snapshot: RunSnapshot) {
       if (
-        snapshot.runId !== activeRunId.current ||
-        snapshot.sequence < latestSequence.current
+        snapshot.runId !== activeRunId.current
       ) {
         return
       }
 
-      latestSequence.current = snapshot.sequence
-      if (snapshot.ui) {
-        applyRenderedResponse(
-          snapshot.runId,
-          snapshot.ui,
-          snapshot.workTrace,
-          snapshot.targetMessageId,
-        )
-      }
+      commitProjection(snapshot)
 
       if (snapshot.status === 'failed') {
-        appendRunError(
-          snapshot.runId,
-          snapshot.error ?? 'No pude completar esa respuesta.',
-        )
+        activeRunId.current = null
+        storeActiveRunBinding(null)
         updateConnectionStatus('error')
       } else if (snapshot.status === 'completed') {
+        activeRunId.current = null
+        storeActiveRunBinding(null)
         updateConnectionStatus('ready')
       } else {
         updateConnectionStatus('running')
@@ -289,6 +178,24 @@ export function useAriChat({
             if (ack.ok && ack.snapshot) {
               applySnapshot(ack.snapshot)
             } else {
+              const storedActiveBinding = loadActiveRunBinding()
+              const activeBinding = storedActiveBinding.present
+                ? restoreActiveRunBinding(
+                    projectionStateRef.current,
+                    storedActiveBinding.value,
+                  ).binding
+                : null
+              if (activeBinding) {
+                const next = settleUnavailableRun(
+                  projectionStateRef.current,
+                  activeBinding,
+                )
+                projectionStateRef.current = next
+                messagesRef.current = next.messages
+                setMessages(next.messages)
+              }
+              activeRunId.current = null
+              storeActiveRunBinding(null)
               updateConnectionStatus('error')
             }
           },
@@ -301,37 +208,26 @@ export function useAriChat({
     })
 
     socket.on('run:event', (envelope: RunEnvelope) => {
-      if (
-        envelope.runId !== activeRunId.current ||
-        envelope.sequence <= latestSequence.current
-      ) {
-        return
-      }
+      const next = applyIncomingRunEnvelope(
+        projectionStateRef.current,
+        activeRunId.current,
+        envelope,
+      )
+      if (next === projectionStateRef.current) return
+      projectionStateRef.current = next
+      messagesRef.current = next.messages
+      setMessages(next.messages)
 
-      latestSequence.current = envelope.sequence
+      if (envelope.runId !== activeRunId.current) return
 
       if (envelope.type === 'run:status') {
         updateConnectionStatus('running')
       }
 
-      if (envelope.type === 'ui:replace') {
-        const payload = envelope.payload as unknown as UIReplacePayload
-        applyRenderedResponse(
-          envelope.runId,
-          payload.spec,
-          payload.workTrace,
-          payload.targetMessageId,
-        )
-      }
-
       if (envelope.type === 'run:complete') {
+        activeRunId.current = null
+        storeActiveRunBinding(null)
         if (envelope.payload.status === 'failed') {
-          appendRunError(
-            envelope.runId,
-            String(
-              envelope.payload.error ?? 'No pude completar esa respuesta.',
-            ),
-          )
           updateConnectionStatus('error')
         } else {
           updateConnectionStatus('ready')
@@ -344,13 +240,6 @@ export function useAriChat({
       socketRef.current = null
     }
   }, [updateConnectionStatus])
-
-  useEffect(() => {
-    const stored = loadStoredMessages()
-    if (!stored) return
-    messagesRef.current = stored
-    setMessages(stored)
-  }, [])
 
   useEffect(() => {
     if (messages.length === 0) return
@@ -375,27 +264,75 @@ export function useAriChat({
         role: 'user',
         text: `Selected option: "${selected}". Proceed with this decision.`,
       }
-      const nextMessages = [...messagesRef.current, userMessage]
       const requestId = crypto.randomUUID()
+      const superseded = settleSupersededRun(
+        projectionStateRef.current,
+        activeRunId.current,
+      )
+      const attempt = prepareRunSubmission(
+        {
+          chatState: superseded,
+          activeRunId: activeRunId.current,
+          pendingRequestId: pendingRequestId.current,
+        },
+        { requestId, userMessage },
+      )
+      if (!attempt.accepted) return
+      const submission = attempt.state.chatState
+      storeActiveRunBinding(null)
 
-      pendingRequestId.current = requestId
-      activeRunId.current = null
-      latestSequence.current = 0
-      messagesRef.current = nextMessages
-      setMessages(nextMessages)
+      pendingRequestId.current = attempt.state.pendingRequestId
+      activeRunId.current = attempt.state.activeRunId
+      projectionStateRef.current = submission
+      messagesRef.current = submission.messages
+      setMessages(submission.messages)
       updateConnectionStatus('running')
 
       socket.emit(
         'run:start',
         {
           requestId,
-          messages: messagesForRun(nextMessages),
+          messages: messagesForRun(submission.messages),
         },
-        (ack: { ok: boolean; runId?: string; error?: string }) => {
+        (ack: {
+          ok: boolean
+          runId?: string
+          responseMessageId?: string
+          error?: string
+        }) => {
           if (pendingRequestId.current !== requestId) return
           pendingRequestId.current = null
-          if (ack.ok && ack.runId) {
+          if (ack.ok && ack.runId && ack.responseMessageId) {
             activeRunId.current = ack.runId
+            const next = bindRunStartAcknowledgement(
+              projectionStateRef.current,
+              {
+                requestId,
+                runId: ack.runId,
+                responseMessageId: ack.responseMessageId,
+              },
+            )
+            projectionStateRef.current = next
+            messagesRef.current = next.messages
+            setMessages(next.messages)
+            if (next.runs[ack.runId].terminal) {
+              storeActiveRunBinding(null)
+              updateConnectionStatus('ready')
+            } else {
+              storeActiveRunBinding({
+                runId: ack.runId,
+                responseMessageId: ack.responseMessageId,
+              })
+            }
+          } else {
+            const next = failPendingRunStart(
+              projectionStateRef.current,
+              requestId,
+            )
+            projectionStateRef.current = next
+            messagesRef.current = next.messages
+            setMessages(next.messages)
+            updateConnectionStatus('error')
           }
         },
       )
@@ -451,44 +388,81 @@ export function useAriChat({
         text: text || t.attach,
         attachments: attachments.length ? attachments : undefined,
       }
-      const nextMessages = [...messagesRef.current, userMessage]
       const requestId = crypto.randomUUID()
+      const attempt = prepareRunSubmission(
+        {
+          chatState: projectionStateRef.current,
+          activeRunId: activeRunId.current,
+          pendingRequestId: pendingRequestId.current,
+        },
+        { requestId, userMessage },
+      )
+      if (!attempt.accepted) return false
+      const submission = attempt.state.chatState
 
-      pendingRequestId.current = requestId
-      activeRunId.current = null
-      latestSequence.current = 0
-      messagesRef.current = nextMessages
-      setMessages(nextMessages)
+      pendingRequestId.current = attempt.state.pendingRequestId
+      activeRunId.current = attempt.state.activeRunId
+      projectionStateRef.current = submission
+      messagesRef.current = submission.messages
+      setMessages(submission.messages)
       updateConnectionStatus('running')
 
       socket.emit(
         'run:start',
         {
           requestId,
-          messages: messagesForRun(nextMessages),
+          messages: messagesForRun(submission.messages),
         },
-        (ack: { ok: boolean; runId?: string; error?: string }) => {
+        (ack: {
+          ok: boolean
+          runId?: string
+          responseMessageId?: string
+          error?: string
+        }) => {
           if (pendingRequestId.current !== requestId) return
           pendingRequestId.current = null
 
-          if (!ack.ok || !ack.runId) {
+          if (!ack.ok || !ack.runId || !ack.responseMessageId) {
             updateConnectionStatus('error')
-            setMessages((current) => {
-              const next: ChatMessage[] = [
-                ...current,
-                {
-                  id: `error-${requestId}`,
-                  role: 'assistant',
-                  text: ack.error ?? 'No pude iniciar esa respuesta.',
-                },
-              ]
-              messagesRef.current = next
-              return next
-            })
+            const failed = failPendingRunStart(
+              projectionStateRef.current,
+              requestId,
+            )
+            const next: ChatMessage[] = [
+              ...failed.messages,
+              {
+                id: `error-${requestId}`,
+                role: 'assistant',
+                text: ack.error ?? 'No pude iniciar esa respuesta.',
+              },
+            ]
+            projectionStateRef.current = { ...failed, messages: next }
+            messagesRef.current = next
+            setMessages(next)
             return
           }
 
           activeRunId.current = ack.runId
+          const next = bindRunStartAcknowledgement(
+            projectionStateRef.current,
+            {
+              requestId,
+              runId: ack.runId,
+              responseMessageId: ack.responseMessageId,
+            },
+          )
+          projectionStateRef.current = next
+          messagesRef.current = next.messages
+          setMessages(next.messages)
+          if (next.runs[ack.runId].terminal) {
+            storeActiveRunBinding(null)
+            updateConnectionStatus('ready')
+          } else {
+            storeActiveRunBinding({
+              runId: ack.runId,
+              responseMessageId: ack.responseMessageId,
+            })
+          }
         },
       )
 
@@ -498,8 +472,11 @@ export function useAriChat({
   )
 
   const clearConversation = useCallback(() => {
+    socketRef.current?.emit('conversation:clear', {}, () => undefined)
+
     try {
       localStorage.removeItem(CHAT_STORAGE_KEY)
+      localStorage.removeItem(ACTIVE_RUN_STORAGE_KEY)
     } catch (error) {
       console.error('Error al limpiar historial local:', error)
     }
@@ -514,8 +491,8 @@ export function useAriChat({
 
     activeRunId.current = null
     pendingRequestId.current = null
-    latestSequence.current = 0
     queuedDecisions.current = []
+    projectionStateRef.current = createChatState()
     messagesRef.current = []
     setMessages([])
     updateConnectionStatus(socketRef.current?.connected ? 'ready' : 'connecting')

@@ -11,6 +11,8 @@ const READABLE_PATHS = new Set([
   ...EDITABLE_PATHS,
   'data/fixture.json',
 ]);
+const SOURCE_PATHS = [...READABLE_PATHS].sort();
+const MAX_SOURCE_FILE_BYTES = 160_000;
 const MAX_OUTPUT_FILES = 64;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_SCREENSHOT_BYTES = 5 * 1024 * 1024;
@@ -59,8 +61,14 @@ export interface VerifiedArtifactBundle {
   manifest: ReadonlyArray<ArtifactManifestEntry>;
 }
 
+export interface VerifiedArtifactSource {
+  files: ReadonlyArray<{ path: string; contents: Uint8Array }>;
+  manifest: ReadonlyArray<ArtifactManifestEntry>;
+}
+
 export interface AuthoringResult {
   verdict: 'accepted';
+  source: VerifiedArtifactSource;
   bundle: VerifiedArtifactBundle;
   manifest: ReadonlyArray<ArtifactManifestEntry>;
   browserScreenshot: Uint8Array;
@@ -69,6 +77,29 @@ export interface AuthoringResult {
     gate: AuthoringCommand;
     stdout: string;
   }>;
+}
+
+async function exportVerifiedSource(
+  sandbox: AuthoringSandbox,
+): Promise<VerifiedArtifactSource> {
+  const files: Array<{ path: string; contents: Uint8Array }> = [];
+  const manifest: ArtifactManifestEntry[] = [];
+
+  for (const path of SOURCE_PATHS) {
+    const contents = await sandbox.readFile(`${REPORT_ROOT}/${path}`);
+    if (contents.byteLength > MAX_SOURCE_FILE_BYTES) {
+      throw new Error(`Source file exceeds ${MAX_SOURCE_FILE_BYTES} bytes: ${path}`);
+    }
+    files.push({ path, contents });
+    manifest.push({
+      path,
+      mimeType: mimeTypeFor(path),
+      bytes: contents.byteLength,
+      sha256: createHash('sha256').update(contents).digest('hex'),
+    });
+  }
+
+  return { files, manifest };
 }
 
 export interface RunAuthoringJobInput {
@@ -228,6 +259,7 @@ export async function runAuthoringJob(
       stdout: networkResult.stdout.slice(0, 4_096),
     });
 
+    const source = await exportVerifiedSource(sandbox);
     const browserScreenshot = await sandbox.readFile(`${REPORT_ROOT}/report-validation.png`);
     if (
       browserScreenshot.byteLength <= PNG_SIGNATURE.byteLength ||
@@ -240,6 +272,7 @@ export async function runAuthoringJob(
     const bundle = await exportVerifiedBundle(sandbox);
     return {
       verdict: 'accepted',
+      source,
       bundle,
       manifest: bundle.manifest,
       browserScreenshot,

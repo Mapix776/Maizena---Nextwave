@@ -164,6 +164,55 @@
         ".wall-i/runs/interactive-thinking-trace/intake/resolved.md"
       ],
       "promoteToAdr": false
+    },
+    {
+      "id": "D011",
+      "title": "Animate one backend-authored Work trace step at a time",
+      "status": "accepted",
+      "context": "The repository already contains eight polished loading animations and backend tool-to-trace mappings. The user wants these explanations to appear progressively while Ari works without turning the chat into a noisy technical console.",
+      "decision": "Auto-open a live Work trace during an active run, animate only the current backend-authored safe step, settle prior steps into compact completed rows, and auto-collapse to the existing elapsed-time disclosure on completion. Reuse the existing animation catalog through an allowlisted presentation hint and honor reduced motion.",
+      "consequences": [
+        "The coordinator must publish safe progressive trace state before final UI completion",
+        "The public contract gains an allowlisted animation hint but continues to exclude tool identity and payloads",
+        "The frontend needs explicit active, completed, and settled presentation states",
+        "Reconnect must recover the latest trace snapshot without replay duplication or step regression"
+      ],
+      "alternatives": [
+        "Show several tool animations concurrently",
+        "Keep the generic spinner until completion",
+        "Infer animation state from json-render components"
+      ],
+      "introducedByTask": "live-work-trace",
+      "evidence": [
+        ".wall-i/runs/live-work-trace/intake/resolved.md",
+        "frontend/components/chat/thinking-animation.tsx",
+        "backend/src/contracts/trace-step.ts"
+      ],
+      "promoteToAdr": false
+    },
+    {
+      "id": "D012",
+      "title": "Separate the run response shell from an older UI update target",
+      "status": "accepted",
+      "context": "A new live trace must remain attached to the response that produced it, while existing behavior may update an older logistics card when json-render element identities overlap.",
+      "decision": "Each run owns a new server-bound response shell for live progress, final text, and completed Work trace. The coordinator may separately authorize an existing UI message as the json-render update target. The two identifiers never substitute for each other.",
+      "consequences": [
+        "Ari's new response history remains inspectable even when a prior logistics card updates in place",
+        "The frontend applies trace/text and UI projection through separate target fields",
+        "The browser cannot route a run to an arbitrary prior stored message",
+        "Element-location tracking must be scoped and treated only as UI projection authority"
+      ],
+      "alternatives": [
+        "Move the new trace onto the older response card",
+        "Disable all in-place UI updates",
+        "Create a new duplicate logistics card for every run"
+      ],
+      "introducedByTask": "live-work-trace",
+      "evidence": [
+        ".wall-i/runs/live-work-trace/intake/resolved.md",
+        ".wall-i/runs/live-work-trace/research/adversarial-brief.md"
+      ],
+      "promoteToAdr": false
     }
   ]
 }

@@ -106,18 +106,20 @@
     {
       "id": "T011",
       "term": "Work trace",
-      "definition": "A run-scoped, user-visible account of Ari's observable work: elapsed wall-clock time plus concise, concrete summaries of orchestration and tool activity.",
-      "aliases": ["thinking trace", "reasoning trace", "activity trace"],
+      "definition": "A run-scoped, user-visible account of Ari's observable work that can progress live through safe animated summaries and settles into an elapsed-time disclosure when complete.",
+      "aliases": ["thinking trace", "reasoning trace", "activity trace", "live work trace"],
       "antiDefinitions": [
         "Not raw hidden chain-of-thought.",
         "Not a timeline inferred from the rendered component tree.",
-        "Not infrastructure logs or tool payload dumps."
+        "Not infrastructure logs, raw tool names, arguments, results, or payload dumps."
       ],
       "source": "user",
       "status": "accepted",
       "introducedByTask": "interactive-thinking-trace",
+      "lastTouchedByTask": "live-work-trace",
       "evidence": [
-        ".wall-i/runs/interactive-thinking-trace/intake/resolved.md"
+        ".wall-i/runs/interactive-thinking-trace/intake/resolved.md",
+        ".wall-i/runs/live-work-trace/intake/resolved.md"
       ]
     }
   ]

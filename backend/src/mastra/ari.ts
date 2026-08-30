@@ -1,5 +1,6 @@
 import type { LanguageModelV4 } from '@ai-sdk/provider';
 import { Agent } from '@mastra/core/agent';
+import type { ToolHooks } from '@mastra/core/tools';
 
 import type { ChatMessage } from '../contracts/chat.js';
 import { stepResultSchema, type StepResult } from '../contracts/step-result.js';
@@ -475,6 +476,75 @@ export function extractToolCatalogFacts(
   return { facts, evidence, traceStep };
 }
 
+export type TraceObservation =
+  | {
+      type: 'started';
+      correlation: object;
+      toolName: string;
+      input: unknown;
+    }
+  | {
+      type: 'settled';
+      correlation: object;
+      outcome: 'completed' | 'failed';
+      output?: unknown;
+    };
+
+export interface TraceSink {
+  observe(observation: TraceObservation): void;
+}
+
+class ModelTimeoutError extends Error {}
+
+function safeObserve(
+  traceSink: TraceSink | undefined,
+  observation: TraceObservation,
+): void {
+  if (!traceSink) return;
+  try {
+    traceSink.observe(observation);
+  } catch {
+    console.warn('[work-trace] observation was discarded');
+  }
+}
+
+function composeTraceHooks(
+  agent: Agent<any, any>,
+  traceSink?: TraceSink,
+): ToolHooks | undefined {
+  if (!traceSink) return undefined;
+  const configured = agent.getConfiguredToolHooks();
+
+  return {
+    beforeToolCall: async (context) => {
+      const configuredResult = await configured?.beforeToolCall?.(context);
+      if (configuredResult?.proceed === false) return configuredResult;
+      const correlation = context.metadata;
+      if (correlation) {
+        safeObserve(traceSink, {
+          type: 'started',
+          correlation,
+          toolName: context.toolName,
+          input: context.input,
+        });
+      }
+      return configuredResult;
+    },
+    afterToolCall: async (context) => {
+      const correlation = context.metadata;
+      if (correlation) {
+        safeObserve(traceSink, {
+          type: 'settled',
+          correlation,
+          outcome: context.error ? 'failed' : 'completed',
+          ...(context.error ? {} : { output: context.output }),
+        });
+      }
+      await configured?.afterToolCall?.(context);
+    },
+  };
+}
+
 export function createAriAgent(options: AriOptions = {}) {
   const model = options.model ?? createMainModel();
   const smallModel = options.smallModel ?? options.model ?? createSmallModel();
@@ -511,8 +581,18 @@ export async function executeAriStep(
   agentOrPartialPatch?:
     | Agent
     | ((facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void),
-  onPartialPatch?: (facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void,
+  onPartialPatchOrOptions?:
+    | ((facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void)
+    | { traceSink?: TraceSink },
 ): Promise<StepResult> {
+  const onPartialPatch =
+    typeof onPartialPatchOrOptions === 'function'
+      ? onPartialPatchOrOptions
+      : undefined;
+  const options =
+    onPartialPatchOrOptions && typeof onPartialPatchOrOptions !== 'function'
+      ? onPartialPatchOrOptions
+      : {};
   let agent: Agent;
   let partialPatchHandler:
     | ((facts: Record<string, unknown>, traceStep?: unknown) => Promise<void> | void)
@@ -594,7 +674,8 @@ export async function executeAriStep(
 
   try {
     const generatePromise = agent.generate(modelMessages, {
-      maxSteps: 4,
+      maxSteps: 10,
+      hooks: composeTraceHooks(agent, options.traceSink),
       delegation: {
         onDelegationComplete: ({ result }) => {
           logStepTiming('subagent_delegation_complete');
@@ -606,7 +687,11 @@ export async function executeAriStep(
     let timer: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reject(new Error(`Model generation timed out after ${MODEL_TIMEOUT_MS}ms`));
+        reject(
+          new ModelTimeoutError(
+            `Model generation timed out after ${MODEL_TIMEOUT_MS}ms`,
+          ),
+        );
       }, MODEL_TIMEOUT_MS);
     });
 
@@ -614,6 +699,7 @@ export async function executeAriStep(
       if (timer) clearTimeout(timer);
     });
   } catch (error) {
+    if (!(error instanceof ModelTimeoutError)) throw error;
     logStepTiming('model_timeout_fallback_triggered');
     console.warn(`[timing] model generation timed out (${MODEL_TIMEOUT_MS}ms), applying live fallback.`);
     response = {

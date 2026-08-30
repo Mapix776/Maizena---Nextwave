@@ -36,6 +36,34 @@ export function mapToolToTraceStep(
   };
 }
 
+export function mapToolToTraceStart(
+  toolName: string,
+  args: Record<string, unknown> = {},
+  stepNumber = 1,
+): ExecutionTraceStep {
+  const mapped = createMappedTraceStep(toolName, args, null, stepNumber);
+  const detailByKind: Record<ExecutionTraceStep['kind'], string> = {
+    thinking: 'Organizando la solicitud y preparando el siguiente paso.',
+    reading_document: 'Leyendo la información necesaria para responder.',
+    drawing_chart: 'Preparando una visualización con los datos disponibles.',
+    locating_map: 'Consultando la ruta y la posición disponibles.',
+    finding_container: 'Buscando el embarque en los registros disponibles.',
+    calculating_eta: 'Calculando la llegada estimada con los datos disponibles.',
+    comparing_data: 'Comparando la información disponible.',
+    querying_database: 'Consultando la información operativa disponible.',
+    requesting_decision: 'Preparando las opciones que requieren tu decisión.',
+    generating_ui: 'Preparando la vista interactiva de la respuesta.',
+  };
+
+  return {
+    ...mapped,
+    status: 'running',
+    detail: detailByKind[mapped.kind],
+    outputSummary: undefined,
+    input: args,
+  };
+}
+
 function createMappedTraceStep(
   toolName: string,
   args: Record<string, unknown> = {},

@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/services/supabase-operations.test.ts src/services/document-extractor.test.ts src/coordinator/run-coordinator.test.ts src/contracts/domain.test.ts src/socket/server.test.ts src/artifacts/authoring-runner.test.ts src/artifacts/e2b-authoring-sandbox.test.ts src/artifacts/report-author.test.ts src/artifacts/independent-preview.test.ts",
+    "test": "node --import tsx --test src/services/supabase-operations.test.ts src/services/document-extractor.test.ts src/coordinator/run-coordinator.test.ts src/contracts/domain.test.ts src/contracts/work-trace.test.ts src/mastra/ari-trace.test.ts src/socket/server.test.ts src/artifacts/authoring-runner.test.ts src/artifacts/e2b-authoring-sandbox.test.ts src/artifacts/report-author.test.ts e2b-template/scripts/presentation-contract.test.mjs src/artifacts/independent-preview.test.ts src/artifacts/artifact-generation-service.test.ts src/artifacts/accepted-artifact-lookup.test.ts src/artifacts/frontend-origin-policy.test.ts src/artifacts/supabase-artifact-publisher.test.ts src/artifacts/artifact-content-gateway.test.ts src/artifacts/report-artifacts-migration.test.ts",
     "template:e2b": "tsx src/artifacts/build-e2b-template.ts",
     "tracer:e2b": "tsx src/artifacts/run-e2b-tracer.ts",
     "evals": "tsx ../evals/run_evals.ts"

@@ -5,12 +5,15 @@ import { workTraceSchema as authoritativeWorkTraceSchema } from '../../backend/s
 import { parseWorkTrace, workTraceSchema } from './work-trace.js'
 
 const validTrace = {
+  status: 'completed',
   durationMs: 4_000,
   steps: [
     {
-      id: 'step-1',
+      id: 'trace-step-1',
       stepNumber: 1,
       kind: 'thinking',
+      status: 'completed',
+      animationType: 'thinking',
       title: 'Preparing the response',
       detail: 'Validated the request and prepared the response.',
     },

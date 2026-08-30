@@ -26,6 +26,7 @@ const template = Template({ fileContextPath: process.cwd() })
   .runCmd('npx playwright install-deps chromium', { user: 'root' })
   .runCmd('npx playwright install chromium')
   .copyItems([
+    { src: 'e2b-template/scripts/presentation-contract.mjs', dest: '/workspace/report/scripts/presentation-contract.mjs', user: 'root' },
     { src: 'e2b-template/scripts/validate-source.mjs', dest: '/workspace/report/scripts/validate-source.mjs', user: 'root' },
     { src: 'e2b-template/scripts/validate-browser.mjs', dest: '/workspace/report/scripts/validate-browser.mjs', user: 'root' },
     { src: 'e2b-template/scripts/assert-no-network.mjs', dest: '/workspace/report/scripts/assert-no-network.mjs', user: 'root' },

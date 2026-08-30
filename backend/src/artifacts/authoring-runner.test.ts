@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import {
@@ -9,6 +11,7 @@ import {
 
 class FakeSandbox implements AuthoringSandbox {
   readonly files = new Map<string, Uint8Array>();
+  readonly browserValidatedFiles = new Map<string, Uint8Array>();
   readonly commands: string[] = [];
   killed = false;
 
@@ -29,10 +32,18 @@ class FakeSandbox implements AuthoringSandbox {
   async run(command: 'build' | 'validate-source' | 'validate-browser' | 'assert-no-network') {
     this.commands.push(command);
     if (command === 'build') {
-      this.files.set('/workspace/report/dist/index.html', new TextEncoder().encode('<h1>Nauta</h1>'));
+      this.files.set(
+        '/workspace/report/dist/index.html',
+        new TextEncoder().encode('<script type="module" src="./assets/app.js"></script><h1>Nauta</h1>'),
+      );
       this.files.set('/workspace/report/dist/assets/app.js', new TextEncoder().encode('document.body.dataset.ready="true";'));
     }
     if (command === 'validate-browser') {
+      for (const [path, contents] of this.files) {
+        if (path.startsWith('/workspace/report/dist/')) {
+          this.browserValidatedFiles.set(path, Uint8Array.from(contents));
+        }
+      }
       this.files.set(
         '/workspace/report/report-validation.png',
         Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]),
@@ -77,16 +88,94 @@ test('runs a no-network authoring job, exports a verified bundle, and kills the 
   assert.equal(fake.killed, true);
   assert.equal(result.verdict, 'accepted');
   assert.equal(result.cleanup, 'confirmed');
+  assert.deepEqual(result.source.files.map(({ path }) => path), [
+    'data/fixture.json',
+    'index.html',
+    'src/main.js',
+    'src/styles.css',
+  ]);
+  assert.deepEqual(
+    result.source.manifest.map(({ path }) => path),
+    result.source.files.map(({ path }) => path),
+  );
+  for (const entry of result.source.manifest) {
+    assert.match(entry.sha256, /^[a-f0-9]{64}$/);
+    assert.equal(
+      entry.bytes,
+      result.source.files.find(({ path }) => path === entry.path)?.contents.byteLength,
+    );
+  }
   assert.deepEqual(result.manifest?.map(({ path }) => path), [
     'assets/app.js',
     'index.html',
   ]);
   assert.match(result.manifest?.[0]?.sha256 ?? '', /^[a-f0-9]{64}$/);
+  const exportedIndex = result.bundle.files.find(({ path }) => path === 'index.html');
+  assert.match(new TextDecoder().decode(exportedIndex?.contents), /src="\.\/assets\/app\.js"/);
+  assert.doesNotMatch(new TextDecoder().decode(exportedIndex?.contents), /src="\/assets\//);
+  assert.deepEqual(
+    exportedIndex?.contents,
+    fake.browserValidatedFiles.get('/workspace/report/dist/index.html'),
+  );
+  for (const file of result.bundle.files) {
+    const validated = fake.browserValidatedFiles.get(
+      `/workspace/report/dist/${file.path}`,
+    );
+    assert.deepEqual(file.contents, validated);
+    assert.equal(
+      result.bundle.manifest.find(({ path }) => path === file.path)?.sha256,
+      createHash('sha256').update(validated!).digest('hex'),
+    );
+  }
   assert.deepEqual(
     [...result.browserScreenshot],
     [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1],
   );
   assert.equal('sandboxId' in result, false);
+});
+
+test('the trusted E2B builder emits gateway-relative assets before browser validation', async () => {
+  const packageJson = JSON.parse(
+    await readFile(new URL('../../e2b-template/package.json', import.meta.url), 'utf8'),
+  ) as { scripts?: { build?: string } };
+
+  assert.equal(packageJson.scripts?.build, 'vite build --base=./ --emptyOutDir');
+});
+
+test('the E2B template packages the shared presentation contract beside its validators', async () => {
+  const builder = await readFile(
+    new URL('./build-e2b-template.ts', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    builder,
+    /e2b-template\/scripts\/presentation-contract\.mjs/,
+  );
+  assert.match(
+    builder,
+    /\/workspace\/report\/scripts\/presentation-contract\.mjs/,
+  );
+});
+
+test('rejects a source snapshot that exceeds its bounded export limit and still cleans up', async () => {
+  const fake = new FakeSandbox();
+
+  await assert.rejects(
+    runAuthoringJob({
+      jobId: 'job-source-too-large',
+      fixture: {},
+      createSandbox: async () => fake,
+      author: async (workspace) => {
+        await workspace.write('index.html', 'x'.repeat(160_001));
+        await workspace.write('src/main.js', '');
+        await workspace.write('src/styles.css', '');
+      },
+    }),
+    /Source file exceeds 160000 bytes: index\.html/,
+  );
+
+  assert.equal(fake.killed, true);
 });
 
 test('kills the sandbox and exports nothing when a fixed gate fails', async () => {

@@ -30,7 +30,7 @@ test('ElementLocationTracker associates element IDs with their host message and 
   assert.equal(tracker.findTargetMessageForElements(['non-existent']), undefined);
 });
 
-test('RunCoordinator emits ui:replace with targetMessageId when updating existing components in-place', async () => {
+test('RunCoordinator emits separate response and UI target IDs for an intentional in-place update', async () => {
   const tracker = new ElementLocationTracker();
   const engine = new SpeculativeEngine();
   const emittedEnvelopes: UIEnvelope[] = [];
@@ -101,8 +101,13 @@ test('RunCoordinator emits ui:replace with targetMessageId when updating existin
     (e) => e.runId === run2.runId && e.type === 'ui:replace',
   );
   assert.ok(updateReplace);
-  const payload = updateReplace.payload as { targetMessageId?: string; reason?: string };
-  assert.equal(payload.targetMessageId, hostMessageId);
+  const payload = updateReplace.payload as {
+    responseMessageId?: string;
+    uiTargetMessageId?: string;
+    reason?: string;
+  };
+  assert.equal(payload.responseMessageId, `assistant-${run2.runId}`);
+  assert.equal(payload.uiTargetMessageId, hostMessageId);
   assert.equal(payload.reason, 'speculative-hit');
 });
 

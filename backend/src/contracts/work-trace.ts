@@ -32,6 +32,7 @@ export const executionTraceStepSchema = z.object({
   id: z.string(),
   stepNumber: z.number(),
   kind: executionStepKindSchema,
+  status: z.enum(['running', 'completed', 'failed']).optional(),
   animationType: thinkingAnimationTypeSchema.default('thinking'),
   title: z.string(),
   detail: z.string(),
@@ -104,32 +105,58 @@ function sanitizePublicText(
 
 export const workTraceStepSchema = executionTraceStepSchema
   .pick({
-    id: true,
     stepNumber: true,
     kind: true,
+    status: true,
+    animationType: true,
     title: true,
     detail: true,
+  })
+  .extend({
+    id: z.string().regex(/^trace-step-[1-9]\d*$/).max(32),
+    stepNumber: z.number().int().positive(),
+    status: z.enum(['running', 'completed', 'failed']),
+    title: z.string().min(1).max(120),
+    detail: z.string().min(1).max(600),
   })
   .strict();
 
 export const workTraceSchema = z
   .object({
+    status: z.enum(['running', 'completed', 'failed']),
     durationMs: z.number().int().nonnegative(),
-    steps: z.array(workTraceStepSchema).min(1),
+    steps: z.array(workTraceStepSchema).min(1).max(32),
   })
-  .strict();
+  .strict()
+  .superRefine(({ steps }, context) => {
+    const ids = new Set<string>();
+    const numbers = new Set<number>();
+    for (const step of steps) {
+      if (ids.has(step.id) || numbers.has(step.stepNumber)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Work trace step identity must be unique',
+          path: ['steps'],
+        });
+        return;
+      }
+      ids.add(step.id);
+      numbers.add(step.stepNumber);
+    }
+  });
 
 export type WorkTraceStep = z.infer<typeof workTraceStepSchema>;
 export type WorkTrace = z.infer<typeof workTraceSchema>;
 
-export function createWorkTrace(input: {
+export function createWorkTrace(traceInput: {
+  status?: 'running' | 'completed' | 'failed';
   durationMs: number;
   executionSteps: unknown;
 }): WorkTrace {
   const executionSteps = z
     .array(executionTraceStepSchema)
     .min(1)
-    .parse(input.executionSteps);
+    .parse(traceInput.executionSteps);
   const needsSorting = executionSteps.some(
     (step, index) =>
       index > 0 && step.stepNumber < executionSteps[index - 1].stepNumber,
@@ -139,13 +166,16 @@ export function createWorkTrace(input: {
     : executionSteps;
 
   return workTraceSchema.parse({
-    durationMs: Math.max(0, Math.round(input.durationMs)),
-    steps: orderedSteps.map(({ id, stepNumber, kind, title, detail, input }) => ({
-      id,
+    status: traceInput.status ?? 'completed',
+    durationMs: Math.max(0, Math.round(traceInput.durationMs)),
+    steps: orderedSteps.map(({ stepNumber, kind, status, animationType, title, detail, input: internalInput }) => ({
+      id: `trace-step-${stepNumber}`,
       stepNumber,
       kind,
-      title: sanitizePublicText(title, input),
-      detail: sanitizePublicText(detail, input),
+      status: status ?? traceInput.status ?? 'completed',
+      animationType,
+      title: sanitizePublicText(title, internalInput),
+      detail: sanitizePublicText(detail, internalInput),
     })),
   });
 }

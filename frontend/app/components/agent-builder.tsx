@@ -3,7 +3,6 @@
 import type { Spec } from '@json-render/core'
 import type { FileUIPart } from 'ai'
 import {
-  Activity,
   AlertTriangle,
   BarChart3,
   Bookmark,
@@ -68,8 +67,13 @@ import { Spinner } from '@/components/ui/spinner'
 import { WorkTraceDisclosure } from '@/components/chat/work-trace'
 import { DocumentSheetView } from '@/components/logistics/document-sheet-view'
 import { JsonRenderClient } from '@/app/json-render/render-client'
+import { getBackendUrl } from '@/lib/backend-url'
 import { getTranslations, type Locale } from '@/lib/i18n'
 import type { JsonRenderSpec } from '@/lib/json-render/catalog'
+import {
+  closePaneTabState,
+  keyboardPaneTabTarget,
+} from '@/lib/pane-tabs'
 import {
   type ChatAttachment,
   type ChatMessage,
@@ -77,10 +81,11 @@ import {
   useAriChat,
 } from '@/lib/use-ari-chat'
 
-type ContextItem = {
+type CatalogPaneTab = {
   id: string
   title: string
-  kind: 'Documento' | 'Informe' | 'Detalle'
+  kind: 'catalog'
+  category: 'Documento' | 'Informe' | 'Detalle'
   description: string
   sourceId: string
   elementType: string
@@ -89,16 +94,32 @@ type ContextItem = {
   mimeType?: string
 }
 
+type CustomReportPaneTab = {
+  id: string
+  kind: 'custom-report'
+  title: string
+  artifactId: string
+  revisionId: string
+  previewUrl: string
+  status: 'accepted'
+}
+
+type PaneTab = CatalogPaneTab | CustomReportPaneTab
+
+type ReportArtifactResponse = Omit<CustomReportPaneTab, 'id'> & {
+  createdAt: string
+}
+
 const DOCUMENT_SHEET_TYPES = new Set([
   'DocumentDetailsCard',
   'CustomsClearancePanel',
   'ShipmentDocumentsTimeline',
 ])
 
-function contextItemsFromSpec(
+function paneTabsFromSpec(
   spec: JsonRenderSpec,
   sourceId: string,
-): ContextItem[] {
+): CatalogPaneTab[] {
   return Object.entries(spec.elements).map(([id, element], index) => {
     const props = element.props as Record<string, unknown>
     const kind = element.type.toLowerCase().includes('issue')
@@ -122,7 +143,8 @@ function contextItemsFromSpec(
     return {
       id: `${sourceId}-${id}`,
       title,
-      kind,
+      kind: 'catalog',
+      category: kind,
       description:
         typeof props.description === 'string'
           ? props.description
@@ -137,8 +159,25 @@ function contextItemsFromSpec(
   })
 }
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:3001'
+function isAcceptedReportArtifact(value: unknown): value is ReportArtifactResponse {
+  if (!value || typeof value !== 'object') return false
+  const artifact = value as Partial<ReportArtifactResponse>
+  return (
+    artifact.kind === 'custom-report' &&
+    artifact.status === 'accepted' &&
+    typeof artifact.artifactId === 'string' &&
+    typeof artifact.revisionId === 'string' &&
+    typeof artifact.title === 'string' &&
+    typeof artifact.previewUrl === 'string' &&
+    typeof artifact.createdAt === 'string'
+  )
+}
+
+function assertUnreachable(value: never): never {
+  throw new Error(`Unsupported pane tab: ${JSON.stringify(value)}`)
+}
+
+const backendUrl = getBackendUrl()
 
 const fixedInstructions = `You are Ari, the lead logistics agent.
 
@@ -458,6 +497,7 @@ function ChatMessageRow({
           <WorkTraceDisclosure
             trace={message.workTrace}
             workedForLabel={t.workedFor}
+            workingLabel={t.thinkingStatus}
           />
         )}
         <MessageContent
@@ -552,8 +592,12 @@ export default function AgentBuilderView({
   const [company, setCompany] = useState('Muebles del Sur')
   const [companyDesc, setCompanyDesc] = useState('Empresa de distribución y logística')
   const [saved, setSaved] = useState(false)
-  const [contextItems, setContextItems] = useState<ContextItem[]>([])
-  const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
+  const [paneTabs, setPaneTabs] = useState<PaneTab[]>([])
+  const [selectedPaneTabId, setSelectedPaneTabId] = useState<string | null>(null)
+  const paneTabButtonRefs = useRef(new Map<string, HTMLButtonElement>())
+  const [reportGenerationStatus, setReportGenerationStatus] = useState<'idle' | 'pending' | 'error'>('idle')
+  const [reportGenerationError, setReportGenerationError] = useState<string | null>(null)
+  const reportRequestRef = useRef<{ prompt: string; requestId: string } | null>(null)
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set())
   const [savingDocId, setSavingDocId] = useState<string | null>(null)
 
@@ -589,22 +633,29 @@ export default function AgentBuilderView({
     setComposerSubmitting(false)
     setInput('')
     setComposerRevision((current) => current + 1)
-    setContextItems([])
-    setSelectedContextId(null)
+    setPaneTabs([])
+    setSelectedPaneTabId(null)
+    setReportGenerationStatus('idle')
+    setReportGenerationError(null)
+    reportRequestRef.current = null
     onNotify(t.newChatDone)
   }
 
   function openContextPanel(spec: JsonRenderSpec, sourceId: string) {
-    const items = contextItemsFromSpec(spec, sourceId)
-    setContextItems(items)
-    setSelectedContextId(items[0]?.id ?? null)
+    const tabs = paneTabsFromSpec(spec, sourceId)
+    setPaneTabs((current) => [
+      ...current.filter((existing) => !tabs.some((tab) => tab.id === existing.id)),
+      ...tabs,
+    ])
+    setSelectedPaneTabId(tabs[0]?.id ?? null)
   }
 
   function openAttachment(attachment: ChatAttachment, sourceId: string) {
-    const item: ContextItem = {
+    const item: CatalogPaneTab = {
       id: `${sourceId}-${attachment.id}`,
       title: attachment.name,
-      kind: 'Documento',
+      kind: 'catalog',
+      category: 'Documento',
       description: `Vista previa de ${attachment.name}.`,
       sourceId,
       elementType: 'Attachment',
@@ -612,18 +663,102 @@ export default function AgentBuilderView({
       url: attachment.url,
       mimeType: attachment.type,
     }
-    setContextItems([item])
-    setSelectedContextId(item.id)
+    setPaneTabs((current) => [
+      ...current.filter((existing) => existing.id !== item.id),
+      item,
+    ])
+    setSelectedPaneTabId(item.id)
   }
 
   function closeContextPanel() {
-    setContextItems([])
-    setSelectedContextId(null)
+    setPaneTabs([])
+    setSelectedPaneTabId(null)
   }
 
-  const selectedContext = contextItems.find((item) => item.id === selectedContextId)
-  const showContextPanel = contextItems.length > 0
-  async function saveDocToS3(item: ContextItem) {
+  function closePaneTab(id: string) {
+    setPaneTabs((current) => {
+      const next = closePaneTabState(
+        current.map((tab) => tab.id),
+        selectedPaneTabId,
+        id,
+      )
+      setSelectedPaneTabId(next.selectedId)
+      return current.filter((tab) => next.remainingIds.includes(tab.id))
+    })
+  }
+
+  function focusPaneTab(id: string) {
+    setSelectedPaneTabId(id)
+    window.requestAnimationFrame(() => {
+      paneTabButtonRefs.current.get(id)?.focus()
+      paneTabButtonRefs.current.get(id)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      })
+    })
+  }
+
+  function paneTabDomId(id: string) {
+    return encodeURIComponent(id).replaceAll('%', '-')
+  }
+
+  async function generateCustomReport() {
+    if (reportGenerationStatus === 'pending') return
+    const latestUserPrompt = [...messages]
+      .reverse()
+      .find((message) => message.role === 'user')
+      ?.text.trim()
+    const prompt = (latestUserPrompt || t.customReportDefaultPrompt).slice(0, 1_200)
+    const previousRequest = reportRequestRef.current
+    const requestId =
+      previousRequest?.prompt === prompt
+        ? previousRequest.requestId
+        : crypto.randomUUID()
+    reportRequestRef.current = { prompt, requestId }
+    setReportGenerationStatus('pending')
+    setReportGenerationError(null)
+
+    try {
+      const response = await fetch(`${backendUrl}/api/demo/artifacts/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, prompt }),
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = (await response.json()) as { artifact?: unknown }
+      if (!isAcceptedReportArtifact(payload.artifact)) {
+        throw new Error('Invalid accepted report descriptor')
+      }
+      const artifact = payload.artifact
+      const reportTab: CustomReportPaneTab = {
+        id: `custom-report-${artifact.artifactId}-${artifact.revisionId}`,
+        kind: artifact.kind,
+        title: artifact.title,
+        artifactId: artifact.artifactId,
+        revisionId: artifact.revisionId,
+        previewUrl: artifact.previewUrl,
+        status: artifact.status,
+      }
+      setPaneTabs((current) => [
+        ...current.filter((tab) => tab.id !== reportTab.id),
+        reportTab,
+      ])
+      setSelectedPaneTabId(reportTab.id)
+      setReportGenerationStatus('idle')
+      reportRequestRef.current = null
+      onNotify(t.customReportReady)
+    } catch (error) {
+      console.error('[report-generation] Could not generate custom report:', error)
+      setReportGenerationStatus('error')
+      setReportGenerationError(t.customReportError)
+      onNotify(t.customReportError)
+    }
+  }
+
+  const selectedPaneTab = paneTabs.find((item) => item.id === selectedPaneTabId)
+  const showContextPanel = paneTabs.length > 0
+  async function saveDocToS3(item: CatalogPaneTab) {
     if (savedDocIds.has(item.id) || savingDocId) return
     setSavingDocId(item.id)
     try {
@@ -649,7 +784,7 @@ export default function AgentBuilderView({
     }
   }
 
-  function downloadDoc(item: ContextItem) {
+  function downloadDoc(item: CatalogPaneTab) {
     const scalarLines = Object.entries(item.props)
       .filter(
         ([, value]) =>
@@ -709,6 +844,25 @@ export default function AgentBuilderView({
           <StatusPill connectionStatus={connectionStatus} label={statusLabel} />
           <Button
             type="button"
+            variant="outline"
+            size="sm"
+            disabled={reportGenerationStatus === 'pending'}
+            onClick={() => void generateCustomReport()}
+            aria-label={t.generateCustomReport}
+          >
+            {reportGenerationStatus === 'pending' ? (
+              <Spinner className="size-4 text-primary" />
+            ) : (
+              <BarChart3 className="size-4" />
+            )}
+            <span className="hidden sm:inline">
+              {reportGenerationStatus === 'pending'
+                ? t.generatingCustomReport
+                : t.generateCustomReport}
+            </span>
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={handleClearChat}
@@ -729,7 +883,13 @@ export default function AgentBuilderView({
           </Button>
         </header>
 
-        <Conversation className="min-h-0 bg-background" aria-live="polite">
+        {reportGenerationError && (
+          <div className="border-b border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive" role="alert">
+            {reportGenerationError}
+          </div>
+        )}
+
+        <Conversation className="min-h-0 bg-background">
           <ConversationContent
             className={
               empty
@@ -771,7 +931,7 @@ export default function AgentBuilderView({
               <>
                 {messages.map((message) => (
                   <ChatMessageRow
-                    key={message.id}
+                    key={message.renderKey ?? message.id}
                     message={message}
                     isSaved={isSaved}
                     onNotify={onNotify}
@@ -781,15 +941,6 @@ export default function AgentBuilderView({
                     t={t}
                   />
                 ))}
-                {connectionStatus === 'running' && (
-                  <Message from="assistant" className="mx-auto w-full max-w-3xl flex-row items-center gap-3">
-                    <AriAvatar />
-                    <MessageContent className="flex-row items-center gap-2 text-muted-foreground">
-                      <Spinner className="size-4 text-primary" />
-                      <span className="text-sm" role="status">{t.thinking}</span>
-                    </MessageContent>
-                  </Message>
-                )}
               </>
             )}
           </ConversationContent>
@@ -847,64 +998,152 @@ export default function AgentBuilderView({
 
       {showContextPanel && (
         <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-lg flex-col border-l border-border bg-background shadow-sm lg:static lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none">
-          <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border px-4">
-            <span className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-              <Activity className="size-4 text-primary" />
-              {t.contextualInfo}
-            </span>
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="Cerrar panel" onClick={closeContextPanel}>
+          <div className="flex h-14 shrink-0 items-stretch border-b border-border bg-muted/40">
+            <div
+              className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto overflow-y-hidden whitespace-nowrap px-2 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              role="tablist"
+              aria-label={t.availableInfo}
+              aria-orientation="horizontal"
+            >
+              {paneTabs.map((item) => {
+                const selected = selectedPaneTabId === item.id
+                const domId = paneTabDomId(item.id)
+                const tabId = `pane-tab-${domId}`
+                const panelId = `pane-panel-${domId}`
+                return (
+                  <div
+                    key={item.id}
+                    role="presentation"
+                    title={item.kind === 'catalog' ? item.category : t.customReportTab}
+                    className={`group flex h-8 min-w-24 max-w-[220px] shrink-0 items-center gap-0.5 rounded-t-md border border-b-0 transition-colors ${
+                      selected
+                        ? 'border-border bg-background text-foreground shadow-[inset_0_-2px_0_0_var(--primary)]'
+                        : 'border-transparent text-muted-foreground hover:border-border/70 hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <button
+                      ref={(element) => {
+                        if (element) paneTabButtonRefs.current.set(item.id, element)
+                        else paneTabButtonRefs.current.delete(item.id)
+                      }}
+                      id={tabId}
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      aria-controls={panelId}
+                      tabIndex={selected ? 0 : -1}
+                      className="flex h-full min-w-0 flex-1 items-center gap-1.5 px-2 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                      onClick={() => focusPaneTab(item.id)}
+                      onAuxClick={(event) => {
+                        if (event.button === 1) closePaneTab(item.id)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Delete' || event.key === 'Backspace') {
+                          event.preventDefault()
+                          const next = closePaneTabState(
+                            paneTabs.map((tab) => tab.id),
+                            selectedPaneTabId,
+                            item.id,
+                          )
+                          closePaneTab(item.id)
+                          if (next.selectedId) focusPaneTab(next.selectedId)
+                          return
+                        }
+                        const target = keyboardPaneTabTarget(
+                          paneTabs.map((tab) => tab.id),
+                          item.id,
+                          event.key,
+                        )
+                        if (target) {
+                          event.preventDefault()
+                          focusPaneTab(target)
+                        }
+                      }}
+                    >
+                      {item.kind === 'custom-report' ? (
+                        <BarChart3 className="size-3.5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+                      )}
+                      <span className="truncate">{item.title}</span>
+                    </button>
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      className={`mr-1 grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary ${
+                        selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                      }`}
+                      aria-label={`${t.close}: ${item.title}`}
+                      onClick={() => closePaneTab(item.id)}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="mx-2 self-center"
+              aria-label={t.close}
+              onClick={closeContextPanel}
+            >
               <X className="size-4" />
             </Button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="flex gap-2 overflow-x-auto border-b border-border p-3" role="tablist" aria-label={t.availableInfo}>
-              {contextItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedContextId === item.id}
-                  className={`min-w-36 rounded-xl border px-3 py-2 text-left transition-colors ${
-                    selectedContextId === item.id
-                      ? 'border-primary/30 bg-primary/10'
-                      : 'border-border bg-card hover:bg-muted'
-                  }`}
-                  onClick={() => setSelectedContextId(item.id)}
+            {selectedPaneTab && (
+              selectedPaneTab.kind === 'custom-report' ? (
+                <div
+                  id={`pane-panel-${paneTabDomId(selectedPaneTab.id)}`}
+                  role="tabpanel"
+                  aria-labelledby={`pane-tab-${paneTabDomId(selectedPaneTab.id)}`}
+                  className="h-[calc(100dvh-3.5rem)] min-h-[32rem] bg-background"
                 >
-                  <small className={kickerClass}>{item.kind}</small>
-                  <span className="mt-1 block truncate text-sm font-medium">{item.title}</span>
-                </button>
-              ))}
-            </div>
-            {selectedContext && (
-              <div className="space-y-3 p-4">
-                <span className={kickerClass}>{selectedContext.kind}</span>
-                <h3 className="text-base font-semibold tracking-tight">{selectedContext.title}</h3>
-                <p className="text-sm leading-6 text-muted-foreground">{selectedContext.description}</p>
-                {selectedContext.url ? (
-                  selectedContext.mimeType?.startsWith('image/') ? (
+                  <iframe
+                    className="h-full min-h-[32rem] w-full border-0 bg-white"
+                    src={selectedPaneTab.previewUrl}
+                    title={selectedPaneTab.title}
+                    sandbox="allow-scripts"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ) : selectedPaneTab.kind === 'catalog' ? (
+              <div
+                id={`pane-panel-${paneTabDomId(selectedPaneTab.id)}`}
+                role="tabpanel"
+                aria-labelledby={`pane-tab-${paneTabDomId(selectedPaneTab.id)}`}
+                className="space-y-3 p-4"
+              >
+                <span className={kickerClass}>{selectedPaneTab.category}</span>
+                <h3 className="text-base font-semibold tracking-tight">{selectedPaneTab.title}</h3>
+                <p className="text-sm leading-6 text-muted-foreground">{selectedPaneTab.description}</p>
+                {selectedPaneTab.url ? (
+                  selectedPaneTab.mimeType?.startsWith('image/') ? (
                     <img
                       className="max-h-[32rem] w-full rounded-xl border border-border bg-muted object-contain"
-                      src={selectedContext.url}
-                      alt={selectedContext.title}
+                      src={selectedPaneTab.url}
+                      alt={selectedPaneTab.title}
                     />
-                  ) : selectedContext.mimeType === 'application/pdf' ? (
+                  ) : selectedPaneTab.mimeType === 'application/pdf' ? (
                     <iframe
                       className="h-80 w-full rounded-xl border border-border bg-muted"
-                      src={selectedContext.url}
-                      title={selectedContext.title}
+                      src={selectedPaneTab.url}
+                      title={selectedPaneTab.title}
                     />
                   ) : (
                     <Button
-                      render={<a href={selectedContext.url} target="_blank" rel="noreferrer" />}
+                      render={<a href={selectedPaneTab.url} target="_blank" rel="noreferrer" />}
                       variant="outline"
                       size="sm"
                     >
                       {t.viewFile}
                     </Button>
                   )
-                ) : DOCUMENT_SHEET_TYPES.has(selectedContext.elementType) ? (
+                ) : DOCUMENT_SHEET_TYPES.has(selectedPaneTab.elementType) ? (
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card p-3">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
@@ -914,19 +1153,19 @@ export default function AgentBuilderView({
                       <div className="flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          variant={savedDocIds.has(selectedContext.id) ? 'secondary' : 'outline'}
+                          variant={savedDocIds.has(selectedPaneTab.id) ? 'secondary' : 'outline'}
                           size="sm"
-                          disabled={savedDocIds.has(selectedContext.id) || savingDocId !== null}
-                          onClick={() => void saveDocToS3(selectedContext)}
+                          disabled={savedDocIds.has(selectedPaneTab.id) || savingDocId !== null}
+                          onClick={() => void saveDocToS3(selectedPaneTab)}
                         >
-                          {savedDocIds.has(selectedContext.id) ? (
+                          {savedDocIds.has(selectedPaneTab.id) ? (
                             <BookmarkCheck className="size-4" />
                           ) : (
                             <Save className="size-4" />
                           )}
-                          {savedDocIds.has(selectedContext.id)
+                          {savedDocIds.has(selectedPaneTab.id)
                             ? t.savedToS3
-                            : savingDocId === selectedContext.id
+                            : savingDocId === selectedPaneTab.id
                               ? t.savingToS3
                               : t.saveToS3}
                         </Button>
@@ -934,7 +1173,7 @@ export default function AgentBuilderView({
                           type="button"
                           variant="outline"
                           size="sm"
-                          onClick={() => downloadDoc(selectedContext)}
+                          onClick={() => downloadDoc(selectedPaneTab)}
                         >
                           <Download className="size-4" />
                           {t.downloadDoc}
@@ -942,13 +1181,14 @@ export default function AgentBuilderView({
                       </div>
                     </div>
                     <DocumentSheetView
-                      title={selectedContext.title}
-                      props={selectedContext.props}
+                      title={selectedPaneTab.title}
+                      props={selectedPaneTab.props}
                     />
                   </div>
                 ) : null}
-                <small className="block text-xs text-muted-foreground">Origen: {selectedContext.sourceId}</small>
+                <small className="block text-xs text-muted-foreground">Origen: {selectedPaneTab.sourceId}</small>
               </div>
+              ) : assertUnreachable(selectedPaneTab)
             )}
 
             <section className="space-y-4 border-t border-border p-4">

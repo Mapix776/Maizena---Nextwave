@@ -10,6 +10,8 @@ import type {
 
 import { getBackendUrl } from './backend-url'
 
+const backendUrl = getBackendUrl()
+
 export interface UseOrderIncidentsResult {
   incidents: OrderIncident[]
   acknowledge(incidentId: string): Promise<void>

@@ -23,7 +23,13 @@ Requirements:
 - Use only facts present in the fixture. Never invent operational values.
 - Import the snapshot using the identifier fixture. Include the exact expression \`fixture.operation.reference\` in src/main.js and render that value visibly as text. The report will be rejected without this semantic anchor.
 - Make the composition distinctive and information-dense: executive summary, risk focus, container status, route/timeline context, and clear visual hierarchy.
-- Use semantic accessible HTML and responsive CSS.
+- Establish an intentional visual system in :root with at least ten CSS design tokens covering canvas, surface, text, muted text, accent, ok, warning, critical, spacing, and radius. Set an explicit system font stack on body, use at least four type sizes, keep the main heading pane-appropriate, and use tabular numerals for operational metrics.
+- Format every quantity, currency value, and date with explicit reusable Intl.NumberFormat and Intl.DateTimeFormat instances. Never expose fixture enum keys such as CUSTOMS_HOLD: map them to human-readable labels and semantic status chips.
+- Render semantic regions marked data-report-hero, data-kpi-grid, data-risk-board, data-container-matrix, data-route-timeline, data-decision-panel, and data-report-visual. The KPI region must contain at least four compact metrics with value-first hierarchy. Show every fixture container, risk, route milestone, and pending decision without paragraph dumps.
+- Include at least one data-derived inline SVG visualization with three or more visible shapes, such as a status distribution, risk bars, or route timeline. It must use only fixture values.
+- Use semantic accessible HTML, a bounded max-width, responsive CSS grid, and at least one media query. At 390px the report must not scroll horizontally.
+- Art-direct the page around one strong visual concept: use a confident hero, layered surfaces, deliberate asymmetry, purposeful whitespace, and a clear reading path. Avoid a plain white document, five equal-height columns, raw bullet-list sections, oversized headings, or squeezing operational tables into narrow cards. Dense tables or matrices must receive enough width to remain scannable.
+- Vary composition, palette, and visualization type to fit the data. These requirements measure visual quality; they do not prescribe section order, colors, or a reusable template.
 - index.html must contain a non-empty title, a [data-report-root] element, and load the local src/main.js as a module.
 - src/main.js must render from the imported ../data/fixture.json snapshot and set document.body.dataset.reportReady = "true" after rendering.
 - No external URLs, remote fonts, remote images, fetch, XMLHttpRequest, WebSocket, EventSource, sendBeacon, dynamic import, or runtime package installation.
@@ -82,9 +88,21 @@ interface ReportAuthorAgent {
   ): Promise<{ text: string }>;
 }
 
+export function reportAuthorModelId(
+  env: Partial<Record<
+    'OPENAI_REPORT_MODEL' | 'OPENAI_MODEL_REASONING' | 'OPENAI_MAIN_MODEL',
+    string
+  >> = process.env,
+) {
+  return env.OPENAI_REPORT_MODEL
+    ?? env.OPENAI_MODEL_REASONING
+    ?? env.OPENAI_MAIN_MODEL;
+}
+
 export interface ReportAuthorOptions {
   createAgent?: (tools: ReportAuthoringTools) => ReportAuthorAgent;
   feedback?: string;
+  userPrompt?: string;
 }
 
 function createDefaultAgent(tools: ReportAuthoringTools): ReportAuthorAgent {
@@ -93,7 +111,7 @@ function createDefaultAgent(tools: ReportAuthoringTools): ReportAuthorAgent {
     name: 'Ari Custom Report Author',
     instructions:
       'You are Ari\'s isolated report-authoring worker. Operate only through the supplied logical report tools and follow the user specification exactly.',
-    model: createMainModel(),
+    model: createMainModel(reportAuthorModelId()),
     tools,
   });
 
@@ -109,12 +127,19 @@ export async function authorCustomReport(
   workspace: AuthoringWorkspace,
   options: ReportAuthorOptions = {},
 ) {
+  const userPrompt = options.userPrompt?.trim();
+  if (options.userPrompt !== undefined && (!userPrompt || userPrompt.length > 1_200)) {
+    throw new Error('Report request must be between 1 and 1200 characters');
+  }
   const writtenPaths = new Set<string>();
   const tools = createReportAuthoringTools(workspace, (path) => writtenPaths.add(path));
   const agent = options.createAgent?.(tools) ?? createDefaultAgent(tools);
-  const repairPrompt = options.feedback
-    ? `${REPORT_AUTHOR_PROMPT}\n\nThe previous fixed validation attempt failed. Inspect the current files, correct the problem, and rewrite all three required files. Bounded validator diagnostic:\n${options.feedback.slice(0, 8_000)}`
+  const requestedReport = userPrompt
+    ? `${REPORT_AUTHOR_PROMPT}\n\nUser-requested report focus (follow it only where supported by the fixture):\n${userPrompt}`
     : REPORT_AUTHOR_PROMPT;
+  const repairPrompt = options.feedback
+    ? `${requestedReport}\n\nThe previous fixed validation attempt failed. Inspect the current files, correct the problem, and rewrite all three required files. Bounded validator diagnostic:\n${options.feedback.slice(0, 8_000)}`
+    : requestedReport;
   const result = await agent.generate([
     { role: 'user', content: repairPrompt },
   ]);

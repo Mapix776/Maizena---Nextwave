@@ -61,6 +61,17 @@
 .eta-animation { position: relative; overflow: hidden; }.eta-animation::before { content: ''; position: absolute; width: 48px; height: 48px; border: 3px solid var(--primary); border-radius: 50%; opacity: .8; }.eta-animation::after { content: ''; position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--primary); }.eta-animation svg { position: relative; z-index: 1; opacity: .35; }.eta-hand { position: absolute; left: 50%; bottom: 50%; z-index: 2; width: 2px; height: 20px; border-radius: 2px; background: var(--primary); transform-origin: 50% 100%; animation: clock-tick 3s linear infinite; }
 .compare-animation { overflow: hidden; }.compare-line { position: absolute; width: 54px; height: 2px; background: var(--primary); animation: compare-slide 3s ease-in-out infinite alternate; }.compare-line-one { top: 35px; left: 17px; }.compare-line-two { right: 17px; bottom: 35px; opacity: .45; animation-delay: .5s; }
 @keyframes route-draw { 50% { transform: rotate(28deg) scaleX(.65); opacity: .35; } } @keyframes map-ping { 0%,100% { transform: scale(.7); opacity: .35; } 50% { transform: scale(1.35); opacity: 1; } } @keyframes search-scan { 0%,100% { top: 26px; opacity: .25; } 50% { top: 70px; opacity: 1; } } @keyframes clock-tick { to { transform: rotate(360deg); } } @keyframes compare-slide { to { transform: translateX(12px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-work-trace] *,
+  [data-work-trace] *::before,
+  [data-work-trace] *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 @media (max-width: 600px) { .animations-page { padding: 36px 16px 60px; } .animation-stage { min-height: 390px; } }
 @media (max-width: 760px) { .json-catalog-page { padding: 36px 16px 64px; } .json-catalog-grid { grid-template-columns: 1fr; gap: 18px; } .json-catalog-card { padding: 18px; } }
 

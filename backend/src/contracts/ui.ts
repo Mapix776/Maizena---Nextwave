@@ -299,13 +299,19 @@ export interface UIReplacePayload {
   reason: string;
   spec: TracerSpec;
   workTrace: WorkTrace;
-  targetMessageId?: string;
+  responseMessageId: string;
+  uiTargetMessageId: string;
+}
+
+export interface WorkTraceReplacePayload {
+  workTrace: WorkTrace;
+  responseMessageId: string;
 }
 
 export interface UIEnvelope<TPayload = unknown> {
   runId: string;
   sequence: number;
-  type: 'run:status' | 'ui:replace' | 'run:complete';
+  type: 'run:status' | 'work-trace:replace' | 'ui:replace' | 'run:complete';
   timestamp: string;
   payload: TPayload;
 }
@@ -317,6 +323,7 @@ export interface RunSnapshot {
   facts: Record<string, unknown>;
   ui: TracerSpec | null;
   workTrace: WorkTrace | null;
+  responseMessageId: string;
   error?: string;
-  targetMessageId?: string;
+  uiTargetMessageId?: string;
 }

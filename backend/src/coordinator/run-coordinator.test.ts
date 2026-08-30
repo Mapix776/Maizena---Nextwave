@@ -4,7 +4,413 @@ import test from 'node:test';
 import { tracerCatalog } from '../contracts/ui.js';
 import { HELLO_STEP_RESULT } from '../fixtures/hello.js';
 import { SpeculativeEngine } from '../services/speculative-engine.js';
+import { ElementLocationTracker } from '../services/element-location-tracker.js';
 import { RunCoordinator } from './run-coordinator.js';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+test('the Work trace commit queue isolates rejection and drains reverse-settled progress before terminal UI', async () => {
+  const releaseExecution = deferred<typeof HELLO_STEP_RESULT>();
+  const observations: Array<{ type: string; id?: string }> = [];
+  const envelopes: Array<{ type: string; sequence: number; payload: any }> = [];
+  let rejected = false;
+  const firstCorrelation = {};
+  const secondCorrelation = {};
+  const coordinator = new RunCoordinator({
+    executeStep: async (_messages, options) => {
+      assert.doesNotThrow(() =>
+        options?.traceSink.observe({
+          type: 'started',
+          correlation: {},
+          toolName: 'uncloneableTool',
+          input: { callback: () => undefined },
+        }),
+      );
+      assert.equal(
+        options?.traceSink.observe({
+          type: 'started',
+          correlation: firstCorrelation,
+          toolName: 'getContainerStatusTool',
+          input: { containerNumber: 'PRIVATE-CONTAINER' },
+        }),
+        undefined,
+      );
+      options?.traceSink.observe({
+        type: 'started',
+        correlation: secondCorrelation,
+        toolName: 'getContainerStatusTool',
+        input: { containerNumber: 'PRIVATE-CONTAINER' },
+      });
+      options?.traceSink.observe({
+        type: 'settled',
+        correlation: secondCorrelation,
+        outcome: 'completed',
+        output: { secret: 'PRIVATE-OUTPUT' },
+      });
+      options?.traceSink.observe({
+        type: 'settled',
+        correlation: firstCorrelation,
+        outcome: 'completed',
+        output: { secret: 'PRIVATE-OUTPUT' },
+      });
+      return releaseExecution.promise;
+    },
+    emit: async (envelope) => {
+      if (envelope.type === 'work-trace:replace' && !rejected) {
+        rejected = true;
+        throw new Error('injected emitter rejection');
+      }
+      envelopes.push(envelope as never);
+      if (envelope.type === 'work-trace:replace') {
+        observations.push({ type: envelope.type });
+      }
+    },
+    createRunId: () => 'run-queue-proof',
+  });
+  const run = coordinator.createRun('scope-a');
+  const execution = coordinator.execute(run.runId);
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  releaseExecution.resolve(HELLO_STEP_RESULT);
+  await execution;
+
+  assert.equal(rejected, true);
+  assert.ok(observations.length >= 4);
+  assert.deepEqual(
+    envelopes.map(({ sequence }) => sequence),
+    envelopes.map((_item, index) => index + 1),
+  );
+  const finalUi = envelopes.find(({ type }) => type === 'ui:replace');
+  assert.ok(finalUi);
+  assert.equal(Object.isFrozen(finalUi), true);
+  assert.equal(Object.isFrozen(finalUi.payload.workTrace.steps[0]), true);
+  assert.equal(finalUi.payload.responseMessageId, 'assistant-run-queue-proof');
+  assert.equal(finalUi.payload.workTrace.status, 'completed');
+  assert.deepEqual(
+    finalUi.payload.workTrace.steps.map((step: any) => ({
+      id: step.id,
+      status: step.status,
+    })),
+    [
+      { id: 'trace-step-1', status: 'completed' },
+      { id: 'trace-step-2', status: 'completed' },
+      { id: 'trace-step-3', status: 'completed' },
+    ],
+  );
+  assert.doesNotMatch(
+    JSON.stringify(finalUi.payload.workTrace),
+    /PRIVATE|toolName|output|timestamp/i,
+  );
+  const snapshot = coordinator.getSnapshot(run.runId);
+  assert.equal(snapshot.sequence, envelopes.at(-1)?.sequence);
+  assert.equal(snapshot.status, 'completed');
+});
+
+test('normal terminal projection retries atomically after emitter rejection before publishing target authority', async () => {
+  const tracker = new ElementLocationTracker();
+  const runIds = ['terminal-retry', 'later-same-scope'];
+  const envelopes: Array<{
+    runId: string;
+    type: string;
+    sequence: number;
+    payload: any;
+  }> = [];
+  const observedSnapshots: Array<ReturnType<RunCoordinator['getSnapshot']>> = [];
+  let coordinator!: RunCoordinator;
+  let rejectedTerminalProjection = false;
+
+  coordinator = new RunCoordinator({
+    executeStep: async () => HELLO_STEP_RESULT,
+    composeUi: () => ({
+      root: 'assistant-message',
+      elements: {
+        'assistant-message': {
+          type: 'AssistantMessage',
+          props: { text: 'Atomic terminal response.' },
+          children: ['atomic-delivery-card'],
+        },
+        'atomic-delivery-card': {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'In Transit' },
+          children: [],
+        },
+      },
+    }),
+    emit: async (envelope) => {
+      observedSnapshots.push(coordinator.getSnapshot(envelope.runId));
+      if (
+        envelope.runId === 'terminal-retry' &&
+        envelope.type === 'ui:replace' &&
+        !rejectedTerminalProjection
+      ) {
+        rejectedTerminalProjection = true;
+        assert.equal(
+          tracker.locateElement('atomic-delivery-card', 'atomic-scope'),
+          undefined,
+          'a rejected projection must not publish target authority',
+        );
+        throw new Error('reject terminal ui:replace once');
+      }
+      envelopes.push(envelope as never);
+    },
+    locationTracker: tracker,
+    createRunId: () => runIds.shift() ?? 'unexpected-run',
+  });
+
+  const first = coordinator.createRun('atomic-scope');
+  await coordinator.execute(first.runId);
+
+  const firstSnapshot = coordinator.getSnapshot(first.runId);
+  const firstEnvelopes = envelopes.filter(({ runId }) => runId === first.runId);
+  assert.equal(rejectedTerminalProjection, true);
+  assert.deepEqual(
+    firstEnvelopes.map(({ sequence }) => sequence),
+    firstEnvelopes.map((_envelope, index) => index + 1),
+    'discarded projections do not consume a sequence',
+  );
+  assert.equal(firstSnapshot.status, 'completed');
+  assert.equal(firstSnapshot.sequence, firstEnvelopes.at(-1)?.sequence);
+  assert.ok(firstSnapshot.ui?.elements['atomic-delivery-card']);
+  assert.equal(firstSnapshot.workTrace?.status, 'completed');
+  assert.ok(firstSnapshot.workTrace.durationMs >= 0);
+  assert.ok(
+    firstSnapshot.workTrace.steps.every(({ status }) => status === 'completed'),
+  );
+  assert.equal(
+    tracker.locateElement('atomic-delivery-card', 'atomic-scope')?.messageId,
+    firstSnapshot.responseMessageId,
+  );
+  assert.ok(
+    observedSnapshots.every(
+      (snapshot) =>
+        snapshot.status !== 'completed' ||
+        (snapshot.ui !== null && snapshot.workTrace?.status === 'completed'),
+    ),
+    'no emitter-visible snapshot combines terminal status with an incomplete projection',
+  );
+
+  const later = coordinator.createRun('atomic-scope');
+  await coordinator.execute(later.runId);
+  const laterUi = envelopes.find(
+    ({ runId, type }) => runId === later.runId && type === 'ui:replace',
+  );
+  assert.equal(laterUi?.payload.uiTargetMessageId, firstSnapshot.responseMessageId);
+});
+
+test('an uncommittable terminal projection fails safely without authorizing a later same-scope target', async () => {
+  const tracker = new ElementLocationTracker();
+  const runIds = ['uncommittable-ui', 'after-uncommittable-ui'];
+  const envelopes: Array<{ runId: string; type: string; payload: any }> = [];
+  const coordinator = new RunCoordinator({
+    executeStep: async () => HELLO_STEP_RESULT,
+    composeUi: () => ({
+      root: 'assistant-message',
+      elements: {
+        'assistant-message': {
+          type: 'AssistantMessage',
+          props: { text: 'Safe fallback response.' },
+          children: ['uncommitted-card'],
+        },
+        'uncommitted-card': {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'In Transit' },
+          children: [],
+        },
+      },
+    }),
+    emit: async (envelope) => {
+      if (envelope.runId === 'uncommittable-ui' && envelope.type === 'ui:replace') {
+        throw new Error('terminal transport remains unavailable');
+      }
+      envelopes.push(envelope as never);
+    },
+    locationTracker: tracker,
+    createRunId: () => runIds.shift() ?? 'unexpected-run',
+  });
+
+  const rejected = coordinator.createRun('uncommittable-scope');
+  await coordinator.execute(rejected.runId);
+  const rejectedSnapshot = coordinator.getSnapshot(rejected.runId);
+  assert.equal(rejectedSnapshot.status, 'failed');
+  assert.equal(rejectedSnapshot.ui, null);
+  assert.equal(rejectedSnapshot.workTrace?.status, 'failed');
+  assert.equal(
+    tracker.locateElement('uncommitted-card', 'uncommittable-scope'),
+    undefined,
+  );
+
+  const later = coordinator.createRun('uncommittable-scope');
+  await coordinator.execute(later.runId);
+  const laterUi = envelopes.find(
+    ({ runId, type }) => runId === later.runId && type === 'ui:replace',
+  );
+  assert.equal(laterUi?.payload.uiTargetMessageId, `assistant-${later.runId}`);
+  assert.notEqual(
+    laterUi?.payload.uiTargetMessageId,
+    rejectedSnapshot.responseMessageId,
+  );
+});
+
+test('two-target routing rejects an identical element id outside the run projection scope', async () => {
+  const tracker = new ElementLocationTracker();
+  tracker.registerMessageElements(
+    'assistant-other-scope',
+    'older-run',
+    ['shared-container-card'],
+    'scope-b',
+  );
+  const envelopes: Array<{ type: string; payload: any }> = [];
+  const runIds = ['scoped-run', 'scoped-run-2'];
+  const coordinator = new RunCoordinator({
+    executeStep: async () => HELLO_STEP_RESULT,
+    composeUi: () => ({
+      root: 'assistant-message',
+      elements: {
+        'assistant-message': {
+          type: 'AssistantMessage',
+          props: { text: 'Safe scoped response.' },
+          children: ['shared-container-card'],
+        },
+        'shared-container-card': {
+          type: 'ContainerProgress',
+          props: { currentStatus: 'In Transit' },
+          children: [],
+        },
+      },
+    }),
+    emit: (envelope) => {
+      envelopes.push(envelope as never);
+    },
+    locationTracker: tracker,
+    createRunId: () => runIds.shift() ?? 'unexpected-run',
+  });
+  const run = coordinator.createRun('scope-a');
+
+  await coordinator.execute(run.runId);
+
+  const ui = envelopes.find(({ type }) => type === 'ui:replace');
+  assert.equal(ui?.payload.responseMessageId, 'assistant-scoped-run');
+  assert.equal(ui?.payload.uiTargetMessageId, 'assistant-scoped-run');
+  assert.notEqual(ui?.payload.uiTargetMessageId, 'assistant-other-scope');
+
+  const nextRun = coordinator.createRun('scope-a');
+  await coordinator.execute(nextRun.runId);
+  const nextUi = envelopes.find(
+    ({ type, payload }) =>
+      type === 'ui:replace' &&
+      payload.responseMessageId === 'assistant-scoped-run-2',
+  );
+  assert.equal(nextUi?.payload.responseMessageId, 'assistant-scoped-run-2');
+  assert.equal(nextUi?.payload.uiTargetMessageId, 'assistant-scoped-run');
+});
+
+test('same-scope routing ignores reusable descendants but authorizes the same domain card root', async () => {
+  const tracker = new ElementLocationTracker();
+  const runIds = ['domain-run-a', 'domain-run-b', 'domain-run-b-update'];
+  const deliveryIds = ['DELIVERY-A', 'DELIVERY-B', 'DELIVERY-B'];
+  const envelopes: Array<{ runId: string; type: string; payload: any }> = [];
+  const coordinator = new RunCoordinator({
+    executeStep: async () => HELLO_STEP_RESULT,
+    composeUi: () => {
+      const deliveryId = deliveryIds.shift() ?? 'UNEXPECTED';
+      const cardId = `delivery-card-${deliveryId}`;
+      return {
+        root: 'assistant-message',
+        elements: {
+          'assistant-message': {
+            type: 'AssistantMessage',
+            props: { text: `Response for ${deliveryId}` },
+            children: [cardId],
+          },
+          [cardId]: {
+            type: 'DeliveryCard',
+            props: {
+              id: deliveryId,
+              from: 'Cartagena',
+              to: 'Bogotá',
+              transportType: 'Land',
+              status: 'In Transit',
+              createdAt: '2026-08-30T10:00:00.000Z',
+              deliveryTime: '6 hours',
+            },
+            children: ['container-progress'],
+          },
+          'container-progress': {
+            type: 'ContainerProgress',
+            props: { currentStatus: 'In Transit' },
+            children: [],
+          },
+        },
+      };
+    },
+    emit: (envelope) => {
+      envelopes.push(envelope as never);
+    },
+    locationTracker: tracker,
+    createRunId: () => runIds.shift() ?? 'unexpected-run',
+  });
+
+  const first = coordinator.createRun('same-scope');
+  await coordinator.execute(first.runId);
+  const firstSnapshot = coordinator.getSnapshot(first.runId);
+  const second = coordinator.createRun('same-scope');
+  await coordinator.execute(second.runId);
+
+  const secondUi = envelopes.find(
+    ({ runId, type }) => runId === second.runId && type === 'ui:replace',
+  );
+  assert.equal(secondUi?.payload.responseMessageId, 'assistant-domain-run-b');
+  assert.equal(secondUi?.payload.uiTargetMessageId, 'assistant-domain-run-b');
+  assert.deepEqual(coordinator.getSnapshot(first.runId), firstSnapshot);
+  assert.ok(secondUi?.payload.spec.elements['delivery-card-DELIVERY-B']);
+  assert.ok(
+    coordinator
+      .getSnapshot(second.runId)
+      .ui?.elements['delivery-card-DELIVERY-B'],
+  );
+  assert.equal(
+    tracker.locateElement('delivery-card-DELIVERY-A', 'same-scope')?.messageId,
+    'assistant-domain-run-a',
+  );
+  assert.equal(
+    tracker.locateElement('delivery-card-DELIVERY-B', 'same-scope')?.messageId,
+    'assistant-domain-run-b',
+  );
+  assert.equal(
+    tracker.locateElement('container-progress', 'same-scope'),
+    undefined,
+  );
+
+  const intentionalUpdate = coordinator.createRun('same-scope');
+  await coordinator.execute(intentionalUpdate.runId);
+  const updateUi = envelopes.find(
+    ({ runId, type }) =>
+      runId === intentionalUpdate.runId && type === 'ui:replace',
+  );
+  assert.equal(
+    updateUi?.payload.responseMessageId,
+    'assistant-domain-run-b-update',
+  );
+  assert.equal(updateUi?.payload.uiTargetMessageId, 'assistant-domain-run-b');
+  assert.deepEqual(updateUi?.payload.spec.elements['assistant-message'].props, {
+    text: 'Response for DELIVERY-B',
+  });
+  assert.equal(updateUi?.payload.workTrace.status, 'completed');
+  assert.equal(
+    tracker.locateElement('delivery-card-DELIVERY-B', 'same-scope')?.messageId,
+    'assistant-domain-run-b',
+  );
+  assert.ok(
+    coordinator
+      .getSnapshot(intentionalUpdate.runId)
+      .ui?.elements['delivery-card-DELIVERY-B'],
+  );
+});
 
 test('normal completion stores and emits one coordinator-measured Work trace', async () => {
   const envelopes: Array<{ type: string; payload: Record<string, unknown> }> = [];
@@ -26,19 +432,22 @@ test('normal completion stores and emits one coordinator-measured Work trace', a
   const uiReplace = envelopes.find(({ type }) => type === 'ui:replace');
   const snapshot = coordinator.getSnapshot(run.runId);
   assert.deepEqual(uiReplace?.payload.workTrace, {
+    status: 'completed',
     durationMs: 4_321,
     steps: [
       {
-        id: 'hello-step-1',
+        id: 'trace-step-1',
         stepNumber: 1,
         kind: 'thinking',
-        title: 'Preparing the response',
-        detail: 'Validated the request and prepared the demo response.',
+        status: 'completed',
+        animationType: 'thinking',
+        title: 'Entendiendo tu solicitud',
+        detail: 'Trabajo observable finalizado.',
       },
     ],
   });
   assert.deepEqual(snapshot.workTrace, uiReplace?.payload.workTrace);
-  assert.equal(snapshot.targetMessageId, 'assistant-run-measured-trace');
+  assert.equal(snapshot.uiTargetMessageId, 'assistant-run-measured-trace');
 });
 
 test('speculative completion emits the same sanitized Work trace shape', async () => {
@@ -79,20 +488,127 @@ test('speculative completion emits the same sanitized Work trace shape', async (
   const uiReplace = envelopes.find(({ type }) => type === 'ui:replace');
   assert.equal(uiReplace?.payload.reason, 'speculative-hit');
   assert.deepEqual(uiReplace?.payload.workTrace, {
+    status: 'completed',
     durationMs: 75,
     steps: [
       {
-        id: 'hello-step-1',
+        id: 'trace-step-1',
         stepNumber: 1,
         kind: 'thinking',
-        title: 'Preparing the response',
-        detail: 'Validated the request and prepared the demo response.',
+        status: 'completed',
+        animationType: 'thinking',
+        title: 'Aplicando una actualización preparada',
+        detail: 'Apliqué una actualización preparada para esta solicitud.',
       },
     ],
   });
   assert.deepEqual(
     coordinator.getSnapshot(run.runId).workTrace,
     uiReplace?.payload.workTrace,
+  );
+});
+
+test('a failed observed tool and run settle atomically on the same safe response shell', async () => {
+  const correlation = {};
+  const rawSentinel = 'provider-secret-tool-failure';
+  const envelopes: any[] = [];
+  const coordinator = new RunCoordinator({
+    createRunId: () => 'run-safe-failure',
+    executeStep: async (_messages, options) => {
+      options?.traceSink.observe({
+        type: 'started',
+        correlation,
+        toolName: 'getContainerStatusTool',
+        input: { containerNumber: rawSentinel },
+      });
+      options?.traceSink.observe({
+        type: 'settled',
+        correlation,
+        outcome: 'failed',
+        output: { error: rawSentinel },
+      });
+      throw new Error(rawSentinel);
+    },
+    emit: (envelope) => {
+      envelopes.push(envelope);
+    },
+  });
+
+  const run = coordinator.createRun();
+  await coordinator.execute(run.runId);
+
+  const terminal = envelopes.at(-1);
+  const snapshot = coordinator.getSnapshot(run.runId);
+  assert.equal(terminal.type, 'run:complete');
+  assert.equal(terminal.payload.status, 'failed');
+  assert.equal(terminal.payload.responseMessageId, snapshot.responseMessageId);
+  assert.equal(terminal.payload.workTrace.status, 'failed');
+  assert.equal(terminal.payload.workTrace.steps.at(-1).status, 'failed');
+  assert.equal(terminal.payload.error, 'No pude completar esa respuesta.');
+  assert.equal(snapshot.status, 'failed');
+  assert.deepEqual(snapshot.workTrace, terminal.payload.workTrace);
+  assert.doesNotMatch(JSON.stringify({ terminal, snapshot }), new RegExp(rawSentinel));
+});
+
+test('speculative terminal projection uses the same rejecting-emitter atomicity boundary', async () => {
+  const speculativeEngine = new SpeculativeEngine();
+  await speculativeEngine.pregenerateNextState('speculative-seed', {
+    ...HELLO_STEP_RESULT,
+    factPatch: {
+      ...HELLO_STEP_RESULT.factPatch,
+      operationSummary: {
+        operationId: 'operation-atomic-speculative',
+        referenceCode: 'MDS-DEMO-ATOMIC-2',
+        status: 'BOOKED',
+        clientName: 'Atomic Speculative Test',
+        tags: ['test'],
+        containers: [],
+      },
+    },
+  });
+  const tracker = new ElementLocationTracker();
+  const envelopes: Array<{ type: string; sequence: number; payload: any }> = [];
+  let rejectedTerminalProjection = false;
+  const coordinator = new RunCoordinator({
+    speculativeEngine,
+    locationTracker: tracker,
+    emit: async (envelope) => {
+      if (envelope.type === 'ui:replace' && !rejectedTerminalProjection) {
+        rejectedTerminalProjection = true;
+        assert.equal(
+          tracker.locateElement('operation-summary', 'speculative-scope'),
+          undefined,
+        );
+        throw new Error('reject speculative ui:replace once');
+      }
+      envelopes.push(envelope as never);
+    },
+    createRunId: () => 'atomic-speculative-run',
+  });
+
+  const run = coordinator.createRun('speculative-scope');
+  await coordinator.execute(run.runId, [
+    {
+      role: 'user',
+      content: 'Move MDS-DEMO-ATOMIC-2 to IN_TRANSIT.',
+    },
+  ]);
+
+  const snapshot = coordinator.getSnapshot(run.runId);
+  const uiReplace = envelopes.find(({ type }) => type === 'ui:replace');
+  assert.equal(rejectedTerminalProjection, true);
+  assert.equal(uiReplace?.payload.reason, 'speculative-hit');
+  assert.deepEqual(
+    envelopes.map(({ sequence }) => sequence),
+    envelopes.map((_envelope, index) => index + 1),
+  );
+  assert.equal(snapshot.status, 'completed');
+  assert.equal(snapshot.sequence, envelopes.at(-1)?.sequence);
+  assert.equal(snapshot.workTrace?.status, 'completed');
+  assert.ok(snapshot.ui?.elements['operation-summary']);
+  assert.equal(
+    tracker.locateElement('operation-summary', 'speculative-scope')?.messageId,
+    snapshot.responseMessageId,
   );
 });
 
@@ -112,13 +628,14 @@ test('RunCoordinator validates and emits one monotonic envelope sequence', async
 
   assert.deepEqual(envelopes, [
     { type: 'run:status', sequence: 1 },
-    { type: 'ui:replace', sequence: 2 },
-    { type: 'run:complete', sequence: 3 },
+    { type: 'work-trace:replace', sequence: 2 },
+    { type: 'ui:replace', sequence: 3 },
+    { type: 'run:complete', sequence: 4 },
   ]);
 
   const complete = coordinator.getSnapshot(initial.runId);
   assert.equal(complete.status, 'completed');
-  assert.equal(complete.sequence, 3);
+  assert.equal(complete.sequence, 4);
   assert.equal(complete.facts.greeting, 'Hello from Ari');
   assert.ok(complete.ui);
   assert.deepEqual([...tracerCatalog.componentNames].sort(), [
@@ -320,13 +837,17 @@ test('invalid reconciliation facts never mutate run state or emit UI', async () 
   const run = coordinator.createRun();
   await coordinator.execute(run.runId);
 
-  assert.deepEqual(eventTypes, ['run:status', 'run:complete']);
+  assert.deepEqual(eventTypes, [
+    'run:status',
+    'work-trace:replace',
+    'run:complete',
+  ]);
   assert.deepEqual(coordinator.getSnapshot(run.runId).facts, {});
   assert.equal(coordinator.getSnapshot(run.runId).ui, null);
   assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
   assert.equal(
     coordinator.getSnapshot(run.runId).error,
-    'Invalid reconciliation findings fact',
+    'No pude completar esa respuesta.',
   );
 });
 
@@ -349,12 +870,17 @@ test('non-success StepResults cannot mutate facts or complete successfully', asy
 
     assert.deepEqual(
       envelopes.map(({ type }) => type),
-      ['run:status', 'run:complete'],
+      [
+        'run:status',
+        'work-trace:replace',
+        'run:complete',
+      ],
     );
-    assert.deepEqual(envelopes.at(-1)?.payload, {
-      status: 'failed',
-      error: 'Invalid StepResult',
-    });
+    const terminalPayload = envelopes.at(-1)?.payload as any;
+    assert.equal(terminalPayload.status, 'failed');
+    assert.equal(terminalPayload.error, 'No pude completar esa respuesta.');
+    assert.equal(terminalPayload.responseMessageId, `assistant-run-${status}`);
+    assert.equal(terminalPayload.workTrace.status, 'failed');
 
     const failed = coordinator.getSnapshot(run.runId);
     assert.equal(failed.status, 'failed');
@@ -443,7 +969,11 @@ test('invalid component trees never mutate facts or emit ui:replace', async () =
     const run = coordinator.createRun();
     await coordinator.execute(run.runId);
 
-    assert.deepEqual(eventTypes, ['run:status', 'run:complete']);
+    assert.deepEqual(eventTypes, [
+      'run:status',
+      'work-trace:replace',
+      'run:complete',
+    ]);
     assert.deepEqual(coordinator.getSnapshot(run.runId).facts, {});
     assert.equal(coordinator.getSnapshot(run.runId).ui, null);
     assert.equal(coordinator.getSnapshot(run.runId).status, 'failed');
