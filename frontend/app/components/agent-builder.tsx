@@ -110,30 +110,30 @@ function contextItemsFromSpec(
 ): ContextItem[] {
   return Object.entries(spec.elements)
     .filter(([, element]) => {
-      const type = element.type.toLowerCase()
-      // Los mensajes conversacionales de Ari no son fichas contextuales.
-      return !type.includes('assistantmessage') && !type.includes('message')
+      // Solo incluir elementos con visor de ficha real o archivo adjunto,
+      // para evitar pestañas en blanco (ej. "Ficha 1", "Ficha 5").
+      const props = element.props as Record<string, unknown> | undefined
+      const isDocSheet = DOCUMENT_SHEET_TYPES.has(element.type)
+      const hasFileUrl = Boolean(props?.url || props?.fileUrl)
+      return isDocSheet || hasFileUrl
     })
     .map(([id, element], index) => {
     const props = element.props as Record<string, unknown>
     const type = element.type.toLowerCase()
-    const kind = type.includes('issue')
-      ? 'Alertas Operativas'
-      : type.includes('document')
-        ? 'Documentos'
-        : type.includes('customs') || type.includes('aduan')
-          ? 'Ficha Aduanal'
-          : type.includes('shipment') || type.includes('timeline')
-            ? 'Seguimiento'
-            : 'Ficha'
+    const isCustoms = type.includes('customs') || type.includes('aduan')
+    const kind = isCustoms ? 'Ficha Aduanal' : 'Documentos'
     const title =
-      typeof props.title === 'string'
+      typeof props.title === 'string' && props.title.trim()
         ? props.title
-        : typeof props.reference === 'string'
-          ? props.reference
-          : typeof props.name === 'string'
-            ? props.name
-            : `${kind} ${index + 1}`
+        : typeof props.containerNumber === 'string'
+          ? `Aduana · ${props.containerNumber}`
+          : typeof props.reference === 'string'
+            ? props.reference
+            : typeof props.name === 'string'
+              ? props.name
+              : isCustoms
+                ? `Ficha Aduanal ${index + 1}`
+                : `Documento ${index + 1}`
     const url =
       typeof props.url === 'string'
         ? props.url
@@ -148,7 +148,7 @@ function contextItemsFromSpec(
       description:
         typeof props.description === 'string'
           ? props.description
-          : `Información contextual de ${title.toLowerCase()}.`,
+          : 'Expediente documental certificado.',
       sourceId,
       elementType: element.type,
       props,
