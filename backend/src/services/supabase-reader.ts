@@ -279,6 +279,11 @@ export class SupabaseReader {
     );
   }
 
+  /** Listar todos los contenedores */
+  async listContainers(limit: number = 100): Promise<ContainerRow[]> {
+    return this.request<ContainerRow[]>(`containers?select=*&order=created_at.desc&limit=${limit}`);
+  }
+
   /** Consultar contenedores por buque actual */
   async getContainersByVessel(vesselName: string): Promise<ContainerRow[]> {
     return this.request<ContainerRow[]>(

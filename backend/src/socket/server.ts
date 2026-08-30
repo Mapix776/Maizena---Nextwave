@@ -18,6 +18,12 @@ import {
   saveDocumentInputSchema,
 } from '../services/supabase-documents.js';
 import { createOrderIncidentStore } from '../services/order-incidents.js';
+import { AnalyticsService } from '../services/analytics.service.js';
+import { createPinnedChartStore } from '../services/pinned-charts.store.js';
+import {
+  pinChartInputSchema,
+  updatePinnedChartInputSchema,
+} from '../contracts/analytics.js';
 
 const joinCommandSchema = z.object({ runId: z.string().min(1) }).strict();
 const startCommandSchema = z
@@ -60,6 +66,8 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
 
   const documentStore = options.documentStore ?? new SupabaseDocumentStore();
   const incidentStore = createOrderIncidentStore();
+  const analyticsService = new AnalyticsService();
+  const pinnedChartStore = createPinnedChartStore();
   const httpServer: HttpServer = createServer((request, response) => {
     const origin = request.headers.origin;
     if (isOriginAllowed(origin)) {
@@ -86,6 +94,20 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
     ) {
       response.writeHead(200);
       response.end(JSON.stringify({ ok: true, status: 'ok', timestamp: new Date().toISOString() }));
+      return;
+    }
+
+    if (
+      request.method === 'GET' &&
+      (request.url === '/api/analytics' || request.url === '/analytics')
+    ) {
+      void analyticsService.getAnalytics().then((data) => {
+        response.writeHead(200);
+        response.end(JSON.stringify(data));
+      }).catch((err) => {
+        response.writeHead(500);
+        response.end(JSON.stringify({ error: 'Failed to compute analytics', details: String(err) }));
+      });
       return;
     }
 
@@ -160,13 +182,56 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
       return;
     }
 
-    const acknowledgeMatch = request.url?.match(
-      /^\/api\/demo\/incidents\/([^/]+)\/acknowledge$/,
+    if (
+      request.method === 'GET' &&
+      request.url === '/api/analytics/pinned'
+    ) {
+      sendJson(response, 200, pinnedChartStore.list());
+      return;
+    }
+
+    if (
+      request.method === 'POST' &&
+      request.url === '/api/analytics/pinned'
+    ) {
+      void readJsonBody(request).then((body) => {
+        const parsed = pinChartInputSchema.safeParse(body);
+        if (!parsed.success) {
+          sendJson(response, 400, { error: 'Invalid pin chart payload' });
+          return;
+        }
+        const created = pinnedChartStore.add(parsed.data);
+        io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+        sendJson(response, 201, created);
+      });
+      return;
+    }
+
+    const pinnedChartMatch = request.url?.match(
+      /^\/api\/analytics\/pinned\/([^/]+)$/,
     );
-    if (request.method === 'POST' && acknowledgeMatch) {
-      const snapshot = incidentStore.acknowledge(acknowledgeMatch[1]);
-      io.emit('incidents:snapshot', snapshot);
-      sendJson(response, 200, snapshot);
+    if (request.method === 'PUT' && pinnedChartMatch) {
+      void readJsonBody(request).then((body) => {
+        const parsed = updatePinnedChartInputSchema.safeParse(body);
+        if (!parsed.success) {
+          sendJson(response, 400, { error: 'Invalid update payload' });
+          return;
+        }
+        const updated = pinnedChartStore.update(pinnedChartMatch[1], parsed.data);
+        if (!updated) {
+          sendJson(response, 404, { error: 'Pinned chart not found' });
+          return;
+        }
+        io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+        sendJson(response, 200, updated);
+      });
+      return;
+    }
+
+    if (request.method === 'DELETE' && pinnedChartMatch) {
+      const deleted = pinnedChartStore.delete(pinnedChartMatch[1]);
+      io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+      sendJson(response, 200, { ok: true, deleted });
       return;
     }
 
@@ -194,6 +259,44 @@ export function createNautaServer(options: NautaServerOptions = {}): NautaServer
 
   io.on('connection', (socket) => {
     socket.emit('incidents:snapshot', incidentStore.snapshot());
+    socket.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+
+    socket.on('analytics:pin', (payload: unknown, ack?: (res: { ok: boolean; chart?: unknown; error?: string }) => void) => {
+      const parsed = pinChartInputSchema.safeParse(payload);
+      if (!parsed.success) {
+        ack?.({ ok: false, error: 'Invalid pin payload' });
+        return;
+      }
+      const created = pinnedChartStore.add(parsed.data);
+      io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+      ack?.({ ok: true, chart: created });
+    });
+
+    socket.on('analytics:unpin', (id: string, ack?: (res: { ok: boolean }) => void) => {
+      const deleted = pinnedChartStore.delete(id);
+      io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+      ack?.({ ok: deleted });
+    });
+
+    socket.on('analytics:resize', (payload: { id: string; size: 'small' | 'medium' | 'large' }, ack?: (res: { ok: boolean }) => void) => {
+      const updated = pinnedChartStore.update(payload.id, { size: payload.size });
+      if (updated) {
+        io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+        ack?.({ ok: true });
+      } else {
+        ack?.({ ok: false });
+      }
+    });
+
+    socket.on('analytics:reorder', (payload: { id: string; order: number }, ack?: (res: { ok: boolean }) => void) => {
+      const updated = pinnedChartStore.update(payload.id, { order: payload.order });
+      if (updated) {
+        io.emit('analytics:pinned:snapshot', pinnedChartStore.list());
+        ack?.({ ok: true });
+      } else {
+        ack?.({ ok: false });
+      }
+    });
 
     socket.on('run:start', (command, acknowledge) => {
       const parsed = startCommandSchema.safeParse(command);
