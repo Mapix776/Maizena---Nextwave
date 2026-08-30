@@ -17,6 +17,12 @@ import type {
 } from '../../../backend/src/contracts/logistics-ui'
 import logisticsUiJsonSchema from '../../../backend/src/contracts/logistics-ui.schema.json'
 import reconciliationFindingsJsonSchema from '../../../backend/src/contracts/reconciliation-findings.schema.json'
+import type {
+  ComparisonTableProps,
+  KpiGridProps,
+  StepProgressBarProps,
+  tracerCatalog as backendTracerCatalog,
+} from '../../../backend/src/contracts/ui'
 
 const deliveryProps = z.object({
   id: z.string(),
@@ -53,6 +59,53 @@ const reconciliationFindingsPropsSchema = z.fromJSONSchema(
   reconciliationFindingsJsonSchema as never,
 ) as z.ZodType<ReconciliationFindingsProps>
 
+const comparisonTablePropsSchema: z.ZodType<ComparisonTableProps> = z.object({
+  title: z.string().min(1),
+  operationReference: z.string().optional(),
+  documentAName: z.string().min(1),
+  documentBName: z.string().min(1),
+  severity: z.enum(['normal', 'warning', 'critical']).default('normal'),
+  fields: z.array(z.object({
+    field: z.string().min(1),
+    label: z.string().min(1),
+    valueA: z.union([z.string(), z.number()]),
+    valueB: z.union([z.string(), z.number()]),
+    status: z.enum(['match', 'discrepancy']),
+    diff: z.string().optional(),
+  }).strict()).min(1),
+  actions: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    actionPayload: z.string().optional(),
+  })).optional(),
+}).strict()
+
+const kpiGridPropsSchema: z.ZodType<KpiGridProps> = z.object({
+  title: z.string().min(1),
+  metrics: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    value: z.union([z.string(), z.number()]),
+    unit: z.string().optional(),
+    subtext: z.string().optional(),
+    severity: z.enum(['normal', 'warning', 'critical']).default('normal'),
+    trend: z.enum(['up', 'down', 'neutral']).optional(),
+  }).strict()).min(1),
+}).strict()
+
+const stepProgressBarPropsSchema: z.ZodType<StepProgressBarProps> = z.object({
+  title: z.string().min(1),
+  currentStepIndex: z.number(),
+  totalSteps: z.number(),
+  steps: z.array(z.object({
+    id: z.string().min(1),
+    label: z.string().min(1),
+    status: z.enum(['completed', 'current', 'pending']),
+    date: z.string().optional(),
+    location: z.string().optional(),
+  }).strict()).min(2),
+}).strict()
+
 export const jsonRenderSchema = defineSchema((s) => ({
   spec: s.object({
     root: s.string(),
@@ -73,6 +126,9 @@ export const catalog = defineCatalog(jsonRenderSchema, {
   components: {
     AssistantMessage: {
       props: z.object({ text: z.string().min(1) }),
+    },
+    ComparisonTable: {
+      props: comparisonTablePropsSchema,
     },
     ContainerProgress: {
       props: z.object({ currentStatus: z.enum(containerStatuses) }),
@@ -136,6 +192,9 @@ export const catalog = defineCatalog(jsonRenderSchema, {
         data: z.array(z.object({ label: z.string(), value: z.number() })).min(1),
       }),
     },
+    KpiGrid: {
+      props: kpiGridPropsSchema,
+    },
     CatalogChart: {
       props: z.object({
         title: z.string(), description: z.string().optional(),
@@ -146,6 +205,9 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     },
     ShipmentDocumentsTimeline: {
       props: shipmentDocumentsTimelinePropsSchema,
+    },
+    StepProgressBar: {
+      props: stepProgressBarPropsSchema,
     },
     InteractiveRouteMap: {
       props: z.object({
@@ -163,6 +225,12 @@ export const catalog = defineCatalog(jsonRenderSchema, {
 })
 
 export type JsonRenderSpec = typeof catalog._specType
+
+type BackendComponentName = (typeof backendTracerCatalog.componentNames)[number]
+type FrontendComponentName = (typeof catalog.componentNames)[number]
+type MissingFrontendComponent = Exclude<BackendComponentName, FrontendComponentName>
+
+export const backendCatalogParity: MissingFrontendComponent extends never ? true : never = true
 
 export function validateJsonRenderSpec(spec: unknown): JsonRenderSpec {
   const validation = catalog.validate(spec)

@@ -11,6 +11,9 @@ import { AgentRunTimeline } from './agent-run-timeline'
 import { ShipmentMilestoneTimeline } from './shipment-milestone-timeline'
 import { OperationsMetricsCard } from './operations-metrics-card'
 import { HumanDecisionCard } from '../delivery/human-decision-card'
+import { ComparisonTable } from './comparison-table'
+import { KpiGrid } from './kpi-grid'
+import { StepProgressBar } from './step-progress-bar'
 
 test('OperationSummaryCard renders the canonical operation and container route', () => {
   const html = renderToStaticMarkup(
@@ -229,3 +232,40 @@ test('HumanDecisionCard renders persisted decision context with sparse options',
   assert.match(html, /Requires approval/)
   assert.match(html, /Notify client/)
 });
+
+test('interactive backend catalog components render their validated content', () => {
+  const kpiHtml = renderToStaticMarkup(
+    <KpiGrid
+      title="Network KPIs"
+      metrics={[{ id: 'delays', label: 'Delayed', value: 2, unit: 'containers', severity: 'warning', trend: 'up' }]}
+    />,
+  )
+  const comparisonHtml = renderToStaticMarkup(
+    <ComparisonTable
+      title="Bill of Lading vs Packing List"
+      documentAName="Bill of Lading"
+      documentBName="Packing List"
+      severity="warning"
+      fields={[{ field: 'weight', label: 'Weight', valueA: '18,050 kg', valueB: '18,200 kg', status: 'discrepancy', diff: '150 kg' }]}
+    />,
+  )
+  const progressHtml = renderToStaticMarkup(
+    <StepProgressBar
+      title="Shipment itinerary"
+      currentStepIndex={1}
+      totalSteps={3}
+      steps={[
+        { id: 'origin', label: 'Origin', status: 'completed' },
+        { id: 'transit', label: 'Transit', status: 'current', location: 'Pacific Ocean' },
+        { id: 'destination', label: 'Destination', status: 'pending' },
+      ]}
+    />,
+  )
+
+  assert.match(kpiHtml, /Network KPIs/)
+  assert.match(kpiHtml, /2/)
+  assert.match(comparisonHtml, /150 kg/)
+  assert.match(comparisonHtml, /Bill of Lading/)
+  assert.match(progressHtml, /Step 2 of 3/)
+  assert.match(progressHtml, /Pacific Ocean/)
+})

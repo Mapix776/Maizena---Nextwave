@@ -9,6 +9,8 @@ import {
   executeAriStep,
 } from './ari.js';
 import { DeterministicRenderModel } from './models.js';
+import { validateTracerSpec } from '../contracts/ui.js';
+import { composeRunUi } from '../services/ui-composer.js';
 
 test('Ari uses the helpful-assistant prompt and returns one render-demo tool result', async () => {
   let toolExecutions = 0;
@@ -273,6 +275,62 @@ test('Ari preserves a typed global metrics query as a constrained catalog fact',
       { status: 'IN_TRANSIT', count: 4 },
     ],
   });
+});
+
+test('Ari maps listed operations into a schema-valid comparison table', async () => {
+  const operation = {
+    id: 'operation-1',
+    client_name: 'Muebles del Sur',
+    reference_code: 'MDS-DEMO-RED-081',
+    status: 'CUSTOMS_CLEARANCE',
+    canonical_data: {
+      origin_port: { value: 'Ho Chi Minh City' },
+      destination_port: { value: 'Manzanillo' },
+    },
+    discrepancies: [],
+    tags: [],
+    notes: null,
+    created_at: '2026-08-29T20:00:00Z',
+    updated_at: '2026-08-29T20:00:00Z',
+  };
+  const fakeAgent = {
+    async generate() {
+      return {
+        text: 'One operation is active.',
+        toolResults: [
+          {
+            payload: {
+              toolName: 'listOperationsTool',
+              result: { count: 1, operations: [operation] },
+              isError: false,
+            },
+          },
+        ],
+      };
+    },
+  };
+
+  const result = await executeAriStep(
+    [{ role: 'user', content: 'Show active operations.' }],
+    fakeAgent as never,
+  );
+
+  assert.deepEqual(result.factPatch?.comparisonTable, {
+    title: 'Operaciones Logísticas y Embarques Activos',
+    documentAName: 'Estado',
+    documentBName: 'Ruta y Cliente',
+    severity: 'warning',
+    fields: [
+      {
+        field: 'operation-1',
+        label: 'MDS-DEMO-RED-081',
+        valueA: 'CUSTOMS_CLEARANCE',
+        valueB: 'Ho Chi Minh City → Manzanillo (Muebles del Sur)',
+        status: 'discrepancy',
+      },
+    ],
+  });
+  assert.doesNotThrow(() => validateTracerSpec(composeRunUi(result)));
 });
 
 test('Ari preserves a typed pending-decision query as a real decision card fact', async () => {

@@ -12,6 +12,7 @@ import { ShipmentDocumentsTimeline } from '@/components/delivery/shipment-docume
 import { BarChart } from '@/components/analytics/bar-chart'
 import { CatalogChart } from '@/components/analytics/catalog-chart'
 import { InteractiveChart } from '@/components/analytics/interactive-chart'
+import { ComparisonTable } from '@/components/logistics/comparison-table'
 import { AgentRunTimeline } from '@/components/logistics/agent-run-timeline'
 import { CustomsClearancePanel } from '@/components/logistics/customs-clearance-panel'
 import { DocumentDetailsCard } from '@/components/logistics/document-details-card'
@@ -20,11 +21,14 @@ import { OperationalAlertList } from '@/components/logistics/operational-alert-l
 import { OperationsMetricsCard } from '@/components/logistics/operations-metrics-card'
 import { OperationSummaryCard } from '@/components/logistics/operation-summary-card'
 import { ShipmentMilestoneTimeline } from '@/components/logistics/shipment-milestone-timeline'
+import { KpiGrid } from '@/components/logistics/kpi-grid'
+import { StepProgressBar } from '@/components/logistics/step-progress-bar'
 import { catalog } from './catalog'
 
 export const { registry } = defineRegistry(catalog, {
   components: {
     AssistantMessage: ({ props, children }) => <AssistantMessage text={props.text} children={children} />,
+    ComparisonTable: ({ props }) => <ComparisonTable {...props} />,
     ContainerProgress: ({ props }) => <ContainerProgress currentStatus={props.currentStatus} />,
     DeliveryCard: ({ props, children }) => <DeliveryCard delivery={props} children={children} />,
     DeliveryIssueCard: ({ props }) => <DeliveryIssueCard delivery={props} />,
@@ -43,5 +47,7 @@ export const { registry } = defineRegistry(catalog, {
     CatalogChart: ({ props }) => <CatalogChart {...props} />,
     InteractiveChart: ({ props }) => <InteractiveChart {...props} />,
     InteractiveRouteMap: ({ props }) => <InteractiveRouteMap {...props} />,
+    KpiGrid: ({ props }) => <KpiGrid {...props} />,
+    StepProgressBar: ({ props }) => <StepProgressBar {...props} />,
   },
 })

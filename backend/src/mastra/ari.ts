@@ -571,7 +571,7 @@ export async function executeAriStep(
   if (parsedListOperations.success && parsedListOperations.data.operations.length > 0) {
     try {
       const ops = parsedListOperations.data.operations;
-      const rows = ops.map((op) => {
+      const fields = ops.map((op) => {
         const canonical = (op.canonical_data ?? {}) as Record<string, unknown>;
         const originVal = canonical.origin_port as { value?: string } | string | undefined;
         const destVal = canonical.destination_port as { value?: string } | string | undefined;
@@ -579,20 +579,21 @@ export async function executeAriStep(
         const dest = (typeof destVal === 'object' ? destVal?.value : destVal) || 'Destino';
 
         return {
-          id: op.id,
+          field: op.id,
           label: op.reference_code,
-          sourceValue: op.status,
-          targetValue: `${origin} → ${dest} (${op.client_name})`,
-          status: (op.status === 'CUSTOMS_CLEARANCE' || op.status === 'EXCEPTION' ? 'warning' : 'matched') as 'warning' | 'matched',
+          valueA: op.status,
+          valueB: `${origin} → ${dest} (${op.client_name})`,
+          status: (op.status === 'CUSTOMS_CLEARANCE' || op.status === 'EXCEPTION' ? 'discrepancy' : 'match') as 'discrepancy' | 'match',
         };
       });
 
       if (!catalogFactPatch.comparisonTable) {
         catalogFactPatch.comparisonTable = {
           title: 'Operaciones Logísticas y Embarques Activos',
-          sourceLabel: 'Estado',
-          targetLabel: 'Ruta y Cliente',
-          rows,
+          documentAName: 'Estado',
+          documentBName: 'Ruta y Cliente',
+          severity: fields.some(({ status }) => status === 'discrepancy') ? 'warning' : 'normal',
+          fields,
         };
       }
       catalogEvidence.push({
@@ -629,10 +630,10 @@ export async function executeAriStep(
 
       if (containers.length > 0) {
         catalogFactPatch.customsClearance = buildCustomsClearanceCatalogFacts(containers);
-        const rows = containers.map((c: ContainerRow) => ({
-          id: c.id,
+        const fields = containers.map((c: ContainerRow) => ({
+          field: c.id,
           label: c.container_number,
-          sourceValue:
+          valueA:
             c.customs_light === 'red'
               ? 'Retenido (Semáforo Rojo)'
               : c.customs_light === 'green'
@@ -640,19 +641,20 @@ export async function executeAriStep(
                 : c.status === 'IN_TRANSIT'
                   ? 'En Tránsito Marítimo'
                   : 'En Inspección',
-          targetValue: `${c.origin_port || 'Origen'} → ${c.destination_port || 'Destino'} (${c.status})`,
+          valueB: `${c.origin_port || 'Origen'} → ${c.destination_port || 'Destino'} (${c.status})`,
           status: (c.customs_light === 'red'
-            ? 'critical'
+            ? 'discrepancy'
             : c.customs_light === 'pending'
-              ? 'warning'
-              : 'matched') as 'critical' | 'warning' | 'matched',
+              ? 'discrepancy'
+              : 'match') as 'discrepancy' | 'match',
         }));
 
         catalogFactPatch.comparisonTable = {
           title: 'Inventario Consolidado de Contenedores',
-          sourceLabel: 'Estado / Semáforo',
-          targetLabel: 'Ruta y Estatus',
-          rows,
+          documentAName: 'Estado / Semáforo',
+          documentBName: 'Ruta y Estatus',
+          severity: fields.some(({ status }) => status === 'discrepancy') ? 'warning' : 'normal',
+          fields,
         };
 
         if (summary && !catalogFactPatch.kpiGrid) {
