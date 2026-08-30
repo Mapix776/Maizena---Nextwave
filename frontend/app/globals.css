@@ -27,6 +27,22 @@
 .interactive-chart-canvas { height: 250px; margin-top: 12px; }
 .interactive-chart-empty { display: grid; height: 100%; place-items: center; color: var(--muted-foreground); font-size: 13px; }
 @media (max-width: 520px) { .interactive-chart-actions { margin-left: 0; width: 100%; } .interactive-chart-canvas { height: 220px; } }
+
+/* ===== Saved (Guardados) view ===== */
+.saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; margin-top: 8px; }
+.saved-card { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-shadow: 0 8px 24px rgba(45, 25, 73, 0.06); overflow: hidden; }
+.saved-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.saved-card-head div { display: flex; flex-direction: column; min-width: 0; }
+.saved-card-head b { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-card-head small { margin-top: 2px; font-size: 11px; color: var(--muted-foreground); }
+.saved-remove { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 9px; background: var(--card); color: var(--muted-foreground); cursor: pointer; transition: color 140ms ease, border-color 140ms ease; }
+.saved-remove:hover { color: #e5484d; border-color: color-mix(in srgb, #e5484d 45%, var(--border)); }
+.saved-card-body { padding: 16px; }
+.saved-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 320px; margin-top: 8px; padding: 32px; border: 1px dashed var(--border); border-radius: 18px; text-align: center; color: var(--muted-foreground); }
+.saved-empty-icon { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 18px; color: var(--primary); background: var(--lavender); }
+.saved-empty h3 { margin: 4px 0 0; font-size: 18px; color: var(--foreground); }
+.saved-empty p { max-width: 380px; font-size: 14px; line-height: 1.5; }
+@media (max-width: 520px) { .saved-grid { grid-template-columns: 1fr; } }
 .json-catalog-page { min-height: 100vh; background: var(--background); color: var(--foreground); padding: 56px 24px 96px; }
 .json-catalog-shell { max-width: 1180px; margin: 0 auto; }
 .json-catalog-header { max-width: 720px; margin-bottom: 40px; }

@@ -3,10 +3,13 @@
 import type { Spec } from '@json-render/core'
 import {
   Activity,
+  Bookmark,
+  BookmarkCheck,
   CheckCircle2,
   Copy,
   FileText,
   Landmark,
+  ListTree,
   MessageSquare,
   Package,
   PanelLeftClose,
@@ -126,16 +129,101 @@ function responseText(spec: JsonRenderSpec): string {
   return typeof props?.text === 'string' ? props.text : 'Respuesta renderizada.'
 }
 
+function savedTitle(spec: JsonRenderSpec, fallback: string): string {
+  for (const element of Object.values(spec.elements)) {
+    const props = element.props as Record<string, unknown>
+    if (typeof props?.title === 'string' && props.title.trim()) return props.title
+    if (typeof props?.reference === 'string' && props.reference.trim()) return props.reference
+  }
+  const text = fallback.trim()
+  if (!text) return 'Tarjeta guardada'
+  return text.length > 60 ? `${text.slice(0, 57)}…` : text
+}
+
+type TraceStep = { title: string; detail: string }
+
+const ELEMENT_STEP_LABELS: Record<string, string> = {
+  AssistantMessage: 'mensaje del asistente',
+  OperationSummaryCard: 'resumen de la operación',
+  OperationsMetricsCard: 'métricas de operaciones',
+  ContainerProgress: 'progreso de contenedores',
+  DeliveryCard: 'estado de la entrega',
+  DeliveryIssueCard: 'incidencia de entrega',
+  OperationalAlertList: 'alertas operativas',
+  EtaRiskCard: 'riesgo de ETA',
+  ShipmentMilestoneTimeline: 'hitos del embarque',
+  ShipmentDocumentsTimeline: 'línea de documentos',
+  CustomsClearancePanel: 'despacho de aduana',
+  DocumentDetailsCard: 'detalle de documentos',
+  ReconciliationFindings: 'hallazgos de reconciliación',
+  HumanDecisionCard: 'decisión humana requerida',
+  AgentRunTimeline: 'cronología del agente',
+  BarChart: 'gráfico de barras',
+  InteractiveChart: 'gráfico interactivo',
+  CatalogChart: 'gráfico del catálogo',
+}
+
+const DOCUMENT_ELEMENT_TYPES = new Set([
+  'DocumentDetailsCard',
+  'ReconciliationFindings',
+  'ShipmentDocumentsTimeline',
+  'CustomsClearancePanel',
+])
+
+// Reconstructs, from the validated result spec, the pipeline Ari followed to
+// produce it. Grounded in the real elements the backend composed.
+function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
+  const types = Object.values(spec.elements).map((element) => element.type)
+  const hasDocuments = types.some((type) => DOCUMENT_ELEMENT_TYPES.has(type))
+  const componentNames = types
+    .map((type) => ELEMENT_STEP_LABELS[type] ?? type)
+    .filter((name, index, all) => all.indexOf(name) === index)
+
+  const steps: TraceStep[] = [
+    {
+      title: 'Interpretar la solicitud',
+      detail: 'Ari analiza tu mensaje y decide qué herramientas de datos y agentes necesita.',
+    },
+    {
+      title: 'Consultar datos operativos',
+      detail: 'Ejecuta las tools de Supabase para traer operaciones, contenedores y estados verificados en tiempo real.',
+    },
+  ]
+
+  if (hasDocuments) {
+    steps.push({
+      title: 'Reconciliar documentos',
+      detail: 'Delega en Recon el cruce de Bill of Lading, Commercial Invoice y Packing List para detectar discrepancias.',
+    })
+  }
+
+  steps.push({
+    title: 'Componer la evidencia',
+    detail: `Estructura ${componentNames.length} componente${componentNames.length === 1 ? '' : 's'}: ${componentNames.join(', ')}.`,
+  })
+
+  steps.push({
+    title: 'Validar y renderizar',
+    detail: 'El resultado pasa por el catálogo json-render validado antes de mostrarse en el chat.',
+  })
+
+  return steps
+}
+
 export default function AgentBuilderView({
   onNotify,
   locale = 'es',
   sidebarOpen = true,
   onToggleSidebar,
+  isSaved,
+  onToggleSave,
 }: {
   onNotify: (message: string) => void
   locale?: Locale
   sidebarOpen?: boolean
   onToggleSidebar?: () => void
+  isSaved?: (id: string) => boolean
+  onToggleSave?: (entry: { id: string; title: string; spec: JsonRenderSpec }) => boolean
 }) {
   const t = getTranslations(locale)
   const socketRef = useRef<Socket | null>(null)
@@ -160,6 +248,8 @@ export default function AgentBuilderView({
   const [saved, setSaved] = useState(false)
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [selectedContextId, setSelectedContextId] = useState<string | null>(null)
+  const [contextSpec, setContextSpec] = useState<JsonRenderSpec | null>(null)
+  const [panelView, setPanelView] = useState<'detail' | 'trace'>('detail')
 
   const shareConversation = async () => {
     const transcript = messages.map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`).join('\n\n')
@@ -418,6 +508,8 @@ export default function AgentBuilderView({
     const items = contextItemsFromSpec(spec, sourceId)
     setContextItems(items)
     setSelectedContextId(items[0]?.id ?? null)
+    setContextSpec(spec)
+    setPanelView('detail')
   }
 
   function openAttachment(attachment: ChatAttachment, sourceId: string) {
@@ -432,10 +524,20 @@ export default function AgentBuilderView({
     }
     setContextItems([item])
     setSelectedContextId(item.id)
+    setContextSpec(null)
+    setPanelView('detail')
+  }
+
+  function closeContextPanel() {
+    setContextItems([])
+    setContextSpec(null)
+    setPanelView('detail')
   }
 
   const selectedContext = contextItems.find((item) => item.id === selectedContextId)
   const showContextPanel = contextItems.length > 0
+  const traceSteps = contextSpec ? deriveTraceSteps(contextSpec) : []
+  const showTraceTab = traceSteps.length > 0
   const statusLabel = {
     connecting: t.connecting,
     ready: t.connected,
@@ -524,12 +626,31 @@ export default function AgentBuilderView({
                 )}
                 {message.spec ? (
                   <>
-                    <button
-                      className="open-context-button"
-                      onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
-                    >
-                      <FileText size={13} /> {t.openInfo}
-                    </button>
+                    <div className="json-render-toolbar">
+                      <button
+                        className="open-context-button"
+                        onClick={() => openContextPanel(message.spec as JsonRenderSpec, message.id)}
+                      >
+                        <FileText size={13} /> {t.openInfo}
+                      </button>
+                      {onToggleSave && (
+                        <button
+                          className={`save-card-button ${isSaved?.(message.id) ? 'saved' : ''}`}
+                          aria-pressed={isSaved?.(message.id) ?? false}
+                          onClick={() => {
+                            const nowSaved = onToggleSave({
+                              id: message.id,
+                              title: savedTitle(message.spec as JsonRenderSpec, message.text),
+                              spec: message.spec as JsonRenderSpec,
+                            })
+                            onNotify(nowSaved ? t.saveCardDone : t.unsaveCardDone)
+                          }}
+                        >
+                          {isSaved?.(message.id) ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+                          {isSaved?.(message.id) ? t.savedCardShort : t.saveCard}
+                        </button>
+                      )}
+                    </div>
                     <JsonRenderClient spec={message.spec as Spec} />
                   </>
                 ) : (
@@ -638,8 +759,19 @@ export default function AgentBuilderView({
       {showContextPanel && <div className="builder-right">
         <div className="context-panel-label">
           <span><Activity size={14} /> {t.contextualInfo}</span>
-          <button aria-label="Cerrar panel" onClick={() => setContextItems([])}>×</button>
+          <button aria-label="Cerrar panel" onClick={closeContextPanel}>×</button>
         </div>
+        <div className="context-view-tabs" role="tablist" aria-label={t.availableInfo}>
+          <button role="tab" aria-selected={panelView === 'detail'} className={panelView === 'detail' ? 'selected' : ''} onClick={() => setPanelView('detail')}>
+            <FileText size={14} /> {t.detailTab}
+          </button>
+          {showTraceTab && (
+            <button role="tab" aria-selected={panelView === 'trace'} className={panelView === 'trace' ? 'selected' : ''} onClick={() => setPanelView('trace')}>
+              <ListTree size={14} /> {t.stepByStepTab}
+            </button>
+          )}
+        </div>
+        {panelView === 'detail' && <>
         <div className="context-tabs" role="tablist" aria-label={t.availableInfo}>
           {contextItems.map((item) => (
             <button key={item.id} role="tab" aria-selected={selectedContextId === item.id} className={selectedContextId === item.id ? 'selected' : ''} onClick={() => setSelectedContextId(item.id)}>
@@ -648,6 +780,23 @@ export default function AgentBuilderView({
           ))}
         </div>
         {selectedContext && <div className="context-detail"><span>{selectedContext.kind}</span><h3>{selectedContext.title}</h3><p>{selectedContext.description}</p>{selectedContext.url && (selectedContext.mimeType?.startsWith('image/') ? <img className="context-file-preview" src={selectedContext.url} alt={selectedContext.title} /> : selectedContext.mimeType === 'application/pdf' ? <iframe className="context-file-preview" src={selectedContext.url} title={selectedContext.title} /> : <a className="context-file-link" href={selectedContext.url} target="_blank" rel="noreferrer">{t.viewFile}</a>)}<small>Origen: {selectedContext.sourceId}</small></div>}
+        </>}
+        {panelView === 'trace' && showTraceTab && (
+          <div className="context-trace">
+            <p className="context-trace-intro">{t.stepByStepIntro}</p>
+            <ol className="trace-steps">
+              {traceSteps.map((step, index) => (
+                <li key={step.title} className="trace-step">
+                  <span className="trace-step-marker">{index + 1}</span>
+                  <div className="trace-step-body">
+                    <b>{step.title}</b>
+                    <p>{step.detail}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         <div className="config-header">
           <div>
             <h3>{agentName}</h3>
