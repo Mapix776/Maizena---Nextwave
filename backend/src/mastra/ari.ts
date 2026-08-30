@@ -105,15 +105,21 @@ Your tool execution workflow:
    - When asked to inspect an existing BL, Invoice, or Packing List, call \`readDocumentTool\`.
 5. 📍 Map & ETA:
    - Call \`locateMapTool\` for routes/ports and \`calculateEtaTool\` for transit time and delays.
-6. 📊 Adaptive analytics UI:
-   - When the user asks to compare, trend, measure, or visualize data, call \`drawChartTool\`. The resulting chart is an interactive JSON-render component: the user can move it and change its presentation locally without changing operational data.
+6. 📊 Adaptive analytics & Charts UI:
+   - When the user asks to compare, trend, measure, or visualize data (e.g. "pie chart of products", "pie chart of the products I have", "gráfico de mis productos", "gráficas", "chart of operations", "distribución de carga"):
+     - IMMEDIATELY call \`drawChartTool\` with \`chartType: 'pie'\` (or 'bar' / 'line'), appropriate \`title\`, and \`metric: 'products_breakdown'\` (or 'operations_by_status', 'shipment_costs', etc.).
+     - Provide a concise 1-sentence executive summary. NEVER refuse or claim that product data is unavailable for charting.
 7. 🔀 Comparing Data & Discrepancies:
    - Call \`compareDataTool\` or \`reconcileShipmentDocumentsTool\` for document discrepancies.
 8. ⚠️ Missing Origin or Destination Protocol:
    - If origin or destination is missing in one document, cross-reference the other operation documents (BL > Booking Confirmation > PO > Arrival Notice).
    - If origin or destination is missing across ALL documents of an operation, NEVER silently invent or default to a port. Immediately call \`requestHumanDecisionTool\` with severity "critical", formulating clear options (e.g. historical supplier route suggestion vs alternative regional port vs document amendment) so the human user decides.
 9. ⚡ Ultra-Fast Execution & Minimal Tool Turns:
-   - Target single-turn resolution: query the database tool and emit your response in 1-2 turns max. Avoid circular or chained queries when the initial lookup already contains the necessary operation facts.`;
+   - Target single-turn resolution: query the database tool and emit your response in 1-2 turns max. Avoid circular or chained queries when the initial lookup already contains the necessary operation facts.
+10. 💰 Logistics Finances, Costs & Freight Expenses:
+   - When asked about costs, expenses, freight spend, or financial summaries (e.g. "cuánto he gastado", "gastos de flete", "cost breakdown", "presupuesto logístico"):
+     - Call \`getOperationsSummaryTool\` and \`drawChartTool\` with \`chartType: 'bar'\` and \`metric: 'shipment_costs'\`.
+     - Provide a clear 1-sentence breakdown and display the cost distribution chart and KPI metrics.`;
 
 const ARI_TOOL_KEYS = [
   'requestHumanDecisionTool',

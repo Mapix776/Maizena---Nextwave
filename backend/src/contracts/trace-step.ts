@@ -76,8 +76,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'reading_document',
         animationType: 'reading',
-        title: 'Leyendo documento',
-        detail: `Leí el ${docType} para verificar las cantidades, el peso declarado y validar que no falte información clave para la aduana.`,
+        title: `Revisión de ${docType}`,
+        detail: `Leí el expediente documental de "${docType}": verifiqué los datos de origen, destino, pesos brutos declarados, partidas arancelarias y datos del consignatario para garantizar cumplimiento aduanero.`,
         toolName,
         outputSummary: 'Datos del documento extraídos y comprobados con éxito.',
         timestamp,
@@ -93,8 +93,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'drawing_chart',
         animationType: 'drawing',
-        title: 'Dibujando gráficas',
-        detail: `Estructuré las métricas de "${chartTitle}" para presentártelas en una gráfica interactiva clara y fácil de interpretar.`,
+        title: 'Generación de gráfico interactivo',
+        detail: `Consolidé las métricas de la tabla de operaciones para "${chartTitle}": procesé los volúmenes históricos para que puedas explorar la evolución visual en un gráfico dinámico.`,
         toolName,
         outputSummary: 'Gráfica comparativa generada.',
         timestamp,
@@ -109,9 +109,9 @@ export function mapToolToTraceStep(
       const origin = getProp(result, ['route', 'originPort']);
       const dest = getProp(result, ['route', 'destinationPort']);
 
-      let routeText = `para ${ref}`;
+      let routeText = `para el embarque ${ref}`;
       if (origin && dest && origin !== 'Por confirmar') {
-        routeText = `en la ruta desde ${origin} hacia ${dest}`;
+        routeText = `en el corredor marítimo entre ${origin} y ${dest}`;
       }
 
       return {
@@ -119,8 +119,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'locating_map',
         animationType: 'mapping',
-        title: 'Ubicando en el mapa',
-        detail: `Consulté las coordenadas marítimas y la posición del barco ${vessel ? `"${vessel}"` : ''} ${routeText}.`,
+        title: 'Geolocalización y trazado de ruta',
+        detail: `Consulté las coordenadas satelitales en el registro marítimo ${vessel ? `del buque "${vessel}"` : ''} ${routeText}: calculé el trayecto en altamar y dibujé el mapa interactivo con la posición actual.`,
         toolName,
         outputSummary: vessel ? `Ubicado a bordo de ${vessel}` : 'Ruta y coordenadas localizadas.',
         timestamp,
@@ -138,9 +138,9 @@ export function mapToolToTraceStep(
       const status = getProp(result, ['container', 'status']);
       const dest = getProp(result, ['container', 'destination_port']);
 
-      let detail = `Rastreé el contenedor ${containerNo} en el registro de embarques.`;
+      let detail = `Consulté la tabla de contenedores activos para la unidad ${containerNo}.`;
       if (vessel || location) {
-        detail = `Localicé el contenedor ${containerNo}: viaja a bordo de "${vessel || 'buque marítimo'}" y se encuentra actualmente ${location ? `en ${location}` : 'en tránsito'}${dest ? ` con rumbo a ${dest}` : ''}.`;
+        detail = `Localicé el contenedor ${containerNo} en la base de datos de flota: se encuentra a bordo del buque "${vessel || 'buque marítimo'}", actualmente ${location ? `en ${location}` : 'en navegación'}${dest ? ` con destino final en ${dest}` : ''}.`;
       }
 
       return {
@@ -148,7 +148,7 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'finding_container',
         animationType: 'findingBoat',
-        title: 'Container por barco',
+        title: 'Rastreo de contenedor e itinerario',
         detail,
         toolName,
         outputSummary: status ? `Estatus: ${status}` : 'Contenedor localizado en el sistema.',
@@ -166,8 +166,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'finding_container',
         animationType: 'finding',
-        title: 'Encontrando container',
-        detail: `Revisé el catálogo y los manifiestos de carga buscando "${query}". Encontré ${count} embarque(s) coincidentes con las piezas declaradas.`,
+        title: 'Búsqueda en catálogo de mercancías',
+        detail: `Busqué "${query}" en los manifiestos de carga y listas de empaque: encontré ${count} registro(s) coincidentes, verificando número de bultos y operaciones vinculadas.`,
         toolName,
         outputSummary: `Encontradas coincidencias para "${query}".`,
         timestamp,
@@ -181,11 +181,11 @@ export function mapToolToTraceStep(
       const delayDays = getProp(result, ['etaAnalysis', 'delayDays']);
       const hasDelay = getProp(result, ['etaAnalysis', 'hasDelay']) === 'true';
 
-      let detail = `Calculé los tiempos de navegación en altamar y tiempos de descarga en puerto para ${ref}.`;
+      let detail = `Calculé la fecha estimada de llegada (ETA) para ${ref} analizando velocidad de navegación, tiempos de fondeo y ventana de atraque en puerto.`;
       if (hasDelay && delayDays) {
-        detail += ` Se detectó un desvío estimado de ${delayDays} días respecto a la fecha original.`;
+        detail += ` Se estimó una variación de +${delayDays} días respecto al itinerario original, generando la recomendación preventiva.`;
       } else {
-        detail += ' El embarque avanza de acuerdo con el itinerario previsto.';
+        detail += ' El tiempo de tránsito se encuentra dentro de los parámetros normales de entrega.';
       }
 
       return {
@@ -193,7 +193,7 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'calculating_eta',
         animationType: 'eta',
-        title: 'Calculando ETA',
+        title: 'Cálculo de tiempos de tránsito y ETA',
         detail,
         toolName,
         outputSummary: hasDelay ? `Alerta: +${delayDays} días de retraso` : 'Itinerario en tiempo normal.',
@@ -213,10 +213,10 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'comparing_data',
         animationType: 'comparing',
-        title: 'Comparando datos',
+        title: 'Reconciliación cruzada de documentos',
         detail: isClean
-          ? 'Crucé los datos de la Factura Comercial, el Packing List y el Bill of Lading: los pesos, bultos y números de serie coinciden perfectamente.'
-          : `Crucé los documentos de embarque y detecté ${discrepanciesCount || 'algunas'} diferencias en pesos o cantidades que requieren revisión preventiva.`,
+          ? 'Crucé campo por campo el Bill of Lading (BL), la Factura Comercial (Invoice) y el Packing List (PL): verifiqué que el peso bruto, número de bultos y contenedor coinciden al 100% sin discrepancias.'
+          : `Efectué la auditoría cruzada entre el Bill of Lading y el Packing List: detecté ${discrepanciesCount || 'inconsistencias'} en pesos declarados y formulé la alerta preventiva para evitar multas aduanales.`,
         toolName,
         outputSummary: isClean ? 'Documentación 100% concordante.' : 'Diferencias detectadas para tu atención.',
         timestamp,
@@ -231,8 +231,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Revisando estatus de aduana',
-        detail: 'Verifiqué el semáforo fiscal y el estado de pedimentos ante la autoridad aduanera para confirmar si la carga está liberada o requiere inspección previa.',
+        title: 'Consulta de semáforo fiscal y aduanas',
+        detail: 'Consulté el registro de pedimentos e inspecciones aduanales: verifiqué el semáforo fiscal (verde/desaduanamiento vs rojo/reconocimiento aduanero) para confirmar si la carga está lista para despacho.',
         toolName,
         outputSummary: 'Semáforo fiscal consultado.',
         timestamp,
@@ -248,8 +248,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Comprobando alertas operativas',
-        detail: `Revisé el monitor de incidentes en tiempo real para verificar posibles congestiones portuarias, demoras climáticas o avisos de transportistas. (${count} alertas activas).`,
+        title: 'Monitoreo de alertas operativas en vivo',
+        detail: `Revisé la tabla de alertas e incidentes portuarios: evalué posibles avisos de congestión de terminales, condiciones de clima marítimo y notificaciones de transportistas (${count} evento(s) activo(s)).`,
         toolName,
         outputSummary: 'Monitor de riesgos revisado.',
         timestamp,
@@ -267,8 +267,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Consultando registro en vivo',
-        detail: `Cargué el expediente completo de ${ref}${client ? ` (${client})` : ''} desde Supabase: verifiqué contenedores asignados, historial de eventos y documentos asociados.`,
+        title: 'Carga de expediente de operación',
+        detail: `Abrí el expediente de la operación "${ref}"${client ? ` (${client})` : ''} en la base de datos: revisé contenedores asignados, estado de avance de hitos y documentos comerciales adjuntos.`,
         toolName,
         outputSummary: status ? `Operación: ${status}` : 'Expediente cargado con éxito.',
         timestamp,
@@ -285,8 +285,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'querying_database',
         animationType: 'thinking',
-        title: 'Consultando balance general',
-        detail: 'Consulté las estadísticas globales de todas tus importaciones activas, contenedores en navegación y trámites en aduana.',
+        title: 'Consolidación de balance de flota',
+        detail: 'Consulté el resumen general de importaciones y exportaciones activas: calculé el total de contenedores en tránsito marítimo, arribos programados y despachos aduanales pendientes.',
         toolName,
         outputSummary: 'Métricas operativas actualizadas.',
         timestamp,
@@ -304,8 +304,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'requesting_decision',
         animationType: 'thinking',
-        title: 'Pidiendo tu visto bueno',
-        detail: `Preparé la tarjeta de decisión "${title}" con opciones claras para que elijas la acción adecuada con un solo clic.`,
+        title: 'Preparación de decisión humana (HITL)',
+        detail: `Formulé la acción requerida para "${title}": estructuré las opciones de resolución con su nivel de impacto y botones interactivos para que tomes el control de la operación con un solo clic.`,
         toolName,
         outputSummary: 'Opciones de aprobación listas para ti.',
         timestamp,
@@ -321,8 +321,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'generating_ui',
         animationType: 'thinking',
-        title: 'Generando tarjeta de seguimiento',
-        detail: `Construí la vista interactiva con el resumen de ${deliveryId}, ruta en tiempo real, fecha de llegada (ETA) y barra de progreso.`,
+        title: 'Composición de tarjeta interactiva',
+        detail: `Generé la tarjeta visual para ${deliveryId}: sincronicé los datos del contenedor, mapa de ruta, fecha de entrega y barra de progreso en un componente interactivo directo en el chat.`,
         toolName,
         outputSummary: 'Vista visual interactiva generada.',
         timestamp,
@@ -338,8 +338,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'reading_document',
         animationType: 'reading',
-        title: 'Leyendo documento',
-        detail: `Analicé el archivo "${fileName}", extraje sus datos estructurados y los ingresé a la base de datos para seguimiento inmediato.`,
+        title: 'Ingesta y extracción de documento',
+        detail: `Procesé el archivo "${fileName}": extraje los datos estructurados con el modelo de visión documental, validé su autenticidad y los guardé en la base de datos para trazabilidad inmediata.`,
         toolName,
         outputSummary: 'Documento procesado e ingresado al sistema.',
         timestamp,
@@ -353,8 +353,8 @@ export function mapToolToTraceStep(
         stepNumber,
         kind: 'thinking',
         animationType: 'thinking',
-        title: 'Pensando',
-        detail: 'Organizando la respuesta y preparando los siguientes pasos.',
+        title: 'Razonamiento y orquestación',
+        detail: 'Analicé la información recopilada para estructurar la mejor respuesta y componentes visuales para tu consulta.',
         toolName,
         timestamp,
         durationMs: 20,
