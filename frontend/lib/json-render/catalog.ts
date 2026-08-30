@@ -126,6 +126,16 @@ export const catalog = defineCatalog(jsonRenderSchema, {
         height: z.number().min(180).max(700).optional(),
       }),
     },
+    // Presentation-only analytics widget. Must stay semantically identical to
+    // interactiveChartPropsSchema in backend/src/contracts/ui.ts.
+    InteractiveChart: {
+      props: z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        chartType: z.enum(['bar', 'line', 'pie']),
+        data: z.array(z.object({ label: z.string(), value: z.number() })).min(1),
+      }),
+    },
     CatalogChart: {
       props: z.object({
         title: z.string(), description: z.string().optional(),
