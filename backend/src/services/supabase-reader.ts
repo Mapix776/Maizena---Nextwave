@@ -801,8 +801,14 @@ export class SupabaseReader {
       }
     }
 
+    const isGenericAll =
+      /^(all|todos|productos|productos de contenedores|products|items|articulos|mercancia|cargo|inventario|general)\b/i.test(
+        raw,
+      );
+
     const termsArray = Array.from(searchTerms);
     const matchesAnyTerm = (text: string) => {
+      if (isGenericAll) return true;
       const lower = text.toLowerCase();
       return termsArray.some((t) => lower.includes(t));
     };

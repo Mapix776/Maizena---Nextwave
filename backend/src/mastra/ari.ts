@@ -149,7 +149,13 @@ Your tool execution workflow:
    - Specific Scenarios:
      - Creating an operation from text alone: "I don't create operations from typed descriptions alone — every operation must trace back to a real source document (a Purchase Order, Booking Confirmation, etc.) so the data stays auditable and verifiable across customs and carrier manifests. Upload the document and I will extract and validate the operation from there."
      - Missing critical data (e.g. unstated port): "I won't guess a destination port — an incorrect assumption could route a real shipment wrong. I need you to confirm it via the decision card or provide a document that states it explicitly."
-     - Critical action without approval: "This action directly affects shipment costs and carrier contracts, so I cannot execute it automatically without your explicit approval. Please select your choice on the decision panel."`;
+     - Critical action without approval: "This action directly affects shipment costs and carrier contracts, so I cannot execute it automatically without your explicit approval. Please select your choice on the decision panel."
+14. 🔘 Interactive Product Buttons & Container Navigation (HITL Options):
+   - When the user asks for buttons, interactive labels, or to click/select products to view which container they are in (e.g. "crea un label con botones que hable sobre los productos de contenedores y cuando oprima uno me muestre el detalle", "show buttons for products to see containers", "crear botones con productos"):
+     - IMMEDIATELY call \`searchCargoTool\` with query "all" or \`listOperationsTool\` to fetch products and containers.
+     - Call \`requestHumanDecisionTool\` with question "Select a product to view its container tracking and location details:" and interactive options mapping each product to its container (e.g. Option 1: "Dining Tables (Container CUBK7749201)", Option 2: "Office Chairs (Container MSCU7284915)", Option 3: "Brake Rotors (Container COSU9101001)", Option 4: "Electronic Modules (Container HDMU9303003)").
+     - Call \`renderDemoTool\` to present the container summary context.
+     - State in 1 concise English sentence: "Here is your interactive product directory. Click any product button below to inspect its dedicated container, vessel, and customs status."`;
 
 const ARI_TOOL_KEYS = [
   'requestHumanDecisionTool',
