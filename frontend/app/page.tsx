@@ -303,7 +303,8 @@ function App() {
   const [currentDate, setCurrentDate] = useState('')
   const dashboard = useDashboard()
   const { incidents, acknowledge } = useOrderIncidents()
-  const newestIncident = incidents[0]
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([])
+  const newestIncident = incidents.find((i) => !dismissedAlerts.includes(i.incidentId))
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem('route-pilot-theme')
@@ -370,7 +371,28 @@ function App() {
 
         <ViewScreen active={active} onNotify={notify} t={t} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} dashboard={dashboard} onNavigate={handleNav} incidents={incidents} onAcknowledge={acknowledge} />
       </section>
-      {newestIncident && <aside className={`incident-alert ${newestIncident.severity}`} role="alert" aria-live="assertive"><span className="incident-alert-icon"><ShieldAlert size={19} /></span><div className="incident-alert-copy"><div><strong>{newestIncident.severity === 'critical' ? 'Critical incident' : 'Order warning'}</strong>{incidents.length > 1 && <em>{incidents.length} active</em>}</div><p><b>{newestIncident.orderId}</b> · {newestIncident.message}</p></div><button onClick={() => handleNav('Incidents')}>View incident <ChevronRight size={15} /></button></aside>}
+      {newestIncident && (
+        <aside className={`incident-alert ${newestIncident.severity}`} role="alert" aria-live="assertive">
+          <span className="incident-alert-icon"><ShieldAlert size={19} /></span>
+          <div className="incident-alert-copy">
+            <div>
+              <strong>{newestIncident.severity === 'critical' ? 'Critical incident' : 'Order warning'}</strong>
+              {incidents.length > 1 && <em>{incidents.length} active</em>}
+            </div>
+            <p><b>{newestIncident.orderId}</b> · {newestIncident.message}</p>
+          </div>
+          <button type="button" onClick={() => handleNav('Incidents')}>View incident <ChevronRight size={15} /></button>
+          <button
+            type="button"
+            onClick={() => setDismissedAlerts((prev) => [...prev, newestIncident.incidentId])}
+            className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-black/10 transition"
+            title="Dismiss alert"
+            aria-label="Dismiss alert"
+          >
+            <X size={13} />
+          </button>
+        </aside>
+      )}
       {active !== 'Chat' && <button className="floating-chat" aria-label={t.openChat} onClick={() => { setActive('Chat'); setMobileOpen(false); notify('route.pilot AI chat opened') }}><Sparkles size={19} /><span>AI Chat</span></button>}
       {notice && <div className="toast"><Sparkles size={15} />{notice}</div>}
     </main>

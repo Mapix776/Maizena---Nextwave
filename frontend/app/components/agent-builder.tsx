@@ -220,34 +220,34 @@ function formatFileSize(bytes: number): string {
 const quickPrompts = [
   {
     icon: Ship,
-    label: 'Embarques',
-    prompt: 'Muéstrame el estado de mis embarques activos.',
+    label: 'Shipments',
+    prompt: 'Show me the status of my active shipments.',
   },
   {
     icon: Package,
-    label: 'Contenedores',
-    prompt: 'Revisa el estado de mis contenedores en tránsito.',
+    label: 'Containers',
+    prompt: 'Check the status of my containers in transit.',
   },
   {
     icon: FileText,
-    label: 'Documentos',
+    label: 'Documents',
     prompt:
-      'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.',
+      'Reconcile the Bill of Lading, Commercial Invoice, and Packing List.',
   },
   {
     icon: Landmark,
-    label: 'Aduanas',
-    prompt: 'Consulta el estado de mis trámites de aduana.',
+    label: 'Customs',
+    prompt: 'Check the status of my customs clearance procedures.',
   },
   {
     icon: AlertTriangle,
-    label: 'Incidencias',
-    prompt: 'Muéstrame las incidencias abiertas en mis operaciones.',
+    label: 'Incidents',
+    prompt: 'Show me the active incidents across my operations.',
   },
   {
     icon: BarChart3,
-    label: 'Analíticas',
-    prompt: 'Muéstrame las analíticas y métricas de mis operaciones.',
+    label: 'Analytics',
+    prompt: 'Show me analytics and KPIs for my operations.',
   },
 ]
 
@@ -898,7 +898,7 @@ const kickerClass = 'text-xs font-medium uppercase tracking-wider text-muted-for
 
 export default function AgentBuilderView({
   onNotify,
-  locale = 'es',
+  locale = 'en',
   sidebarOpen = true,
   onToggleSidebar,
   isSaved,
@@ -1194,7 +1194,7 @@ export default function AgentBuilderView({
             <AriAvatar className="size-8" />
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight">{agentName}</h1>
-              <p className="truncate text-xs text-muted-foreground">Asistente de logística de Nauta</p>
+              <p className="truncate text-xs text-muted-foreground">Nauta AI Logistics Assistant</p>
             </div>
           </div>
           <StatusPill connectionStatus={connectionStatus} label={statusLabel} />
@@ -1259,13 +1259,13 @@ export default function AgentBuilderView({
                   <Sparkles className="size-6" />
                 </span>
                 <div className="space-y-2">
-                  <h2 className="text-xl font-semibold tracking-tight">Hola, soy {agentName}</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Hello, I am {agentName}</h2>
                   <p className="mx-auto max-w-lg text-sm leading-6 text-muted-foreground">
-                    Asistente de logística de Nauta. Puedo ayudarte a consultar operaciones,
-                    revisar documentos de comercio exterior y reconciliar BL, Invoice y Packing List.
+                    Nauta AI Logistics Assistant. I can help you monitor operations,
+                    inspect international trade documents, and reconcile Bills of Lading, Commercial Invoices, and Packing Lists.
                   </p>
                 </div>
-                <p className="text-sm font-medium">¿Qué necesitas consultar?</p>
+                <p className="text-sm font-medium">What would you like to check today?</p>
                 <Suggestions className="mx-auto mt-2 grid w-full max-w-2xl grid-cols-1 gap-3 whitespace-normal sm:grid-cols-2 lg:grid-cols-3">
                   {quickPrompts.map(({ icon: Icon, label, prompt }) => (
                     <Suggestion
