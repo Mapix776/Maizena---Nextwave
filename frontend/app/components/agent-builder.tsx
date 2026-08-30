@@ -3,6 +3,8 @@
 import type { Spec } from '@json-render/core'
 import {
   Activity,
+  AlertTriangle,
+  BarChart3,
   Bookmark,
   BookmarkCheck,
   CheckCircle2,
@@ -694,18 +696,21 @@ export default function AgentBuilderView({
         >
           {messages.length <= 1 && connectionStatus !== 'running' ? (
             <div className="chat-empty-state">
-              <span className="chat-empty-avatar"><Sparkles size={26} /></span>
+              <span className="chat-empty-avatar"><Sparkles size={22} /></span>
               <h2>Hola, soy {agentName}</h2>
               <p>Asistente de logística de Nauta. Puedo ayudarte a consultar operaciones, revisar documentos de comercio exterior y reconciliar BL, Invoice y Packing List.</p>
+              <p className="chat-empty-title">¿Qué necesitas consultar?</p>
               <div className="chat-empty-prompts">
                 {[
-                  { icon: Ship, label: 'Consultar embarques', prompt: 'Muéstrame el estado de mis embarques activos.' },
-                  { icon: Package, label: 'Revisar contenedores', prompt: 'Revisa el estado de mis contenedores en tránsito.' },
-                  { icon: Landmark, label: 'Consultar aduanas', prompt: 'Consulta el estado de mis trámites de aduana.' },
-                  { icon: FileText, label: 'Revisar documentos', prompt: 'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.' },
+                  { icon: Ship, label: 'Embarques', prompt: 'Muéstrame el estado de mis embarques activos.' },
+                  { icon: Package, label: 'Contenedores', prompt: 'Revisa el estado de mis contenedores en tránsito.' },
+                  { icon: FileText, label: 'Documentos', prompt: 'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.' },
+                  { icon: Landmark, label: 'Aduanas', prompt: 'Consulta el estado de mis trámites de aduana.' },
+                  { icon: AlertTriangle, label: 'Incidencias', prompt: 'Muéstrame las incidencias abiertas en mis operaciones.' },
+                  { icon: BarChart3, label: 'Analíticas', prompt: 'Muéstrame las analíticas y métricas de mis operaciones.' },
                 ].map(({ icon: Icon, label, prompt }) => (
                   <button key={label} type="button" className="chat-prompt-chip" onClick={() => sendQuickPrompt(prompt)}>
-                    <span className="chat-prompt-icon"><Icon size={17} /></span>
+                    <Icon size={16} className="chat-prompt-icon" />
                     <span>{label}</span>
                   </button>
                 ))}
