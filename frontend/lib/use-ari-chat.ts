@@ -6,6 +6,10 @@ import { io, type Socket } from 'socket.io-client'
 import { getTranslations, type Locale } from '@/lib/i18n'
 import { getBackendUrl } from '@/lib/backend-url'
 import {
+  ARI_PROMPT_REQUESTED_EVENT,
+  type AriPromptRequestedDetail,
+} from '@/lib/ari-ui-events'
+import {
   applyIncomingRunEnvelope,
   applyRunProjection,
   bindRunStartAcknowledgement,
@@ -470,6 +474,19 @@ export function useAriChat({
     },
     [onNotify, t.attach],
   )
+
+  useEffect(() => {
+    const handlePromptRequest = (event: Event) => {
+      const { prompt } = (event as CustomEvent<AriPromptRequestedDetail>).detail
+      if (typeof prompt !== 'string' || !prompt.trim()) return
+      dispatchMessage(prompt.trim(), [])
+    }
+
+    window.addEventListener(ARI_PROMPT_REQUESTED_EVENT, handlePromptRequest)
+    return () => {
+      window.removeEventListener(ARI_PROMPT_REQUESTED_EVENT, handlePromptRequest)
+    }
+  }, [dispatchMessage])
 
   const clearConversation = useCallback(() => {
     socketRef.current?.emit('conversation:clear', {}, () => undefined)

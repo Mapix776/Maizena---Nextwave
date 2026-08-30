@@ -26,6 +26,10 @@ interface RunEnvelope {
 }
 
 import { getBackendUrl } from '@/lib/backend-url'
+import {
+  ARI_PROMPT_REQUESTED_EVENT,
+  type AriPromptRequestedDetail,
+} from '@/lib/ari-ui-events'
 
 export function RunClient() {
   const socketRef = useRef<Socket | null>(null)
@@ -127,6 +131,19 @@ export function RunClient() {
     window.addEventListener('nauta:decision-selected', handleDecision)
     return () => {
       window.removeEventListener('nauta:decision-selected', handleDecision)
+    }
+  }, [startRun])
+
+  useEffect(() => {
+    const handlePromptRequest = (event: Event) => {
+      const { prompt } = (event as CustomEvent<AriPromptRequestedDetail>).detail
+      if (typeof prompt !== 'string' || !prompt.trim()) return
+      startRun({ newRequest: true, prompt: prompt.trim() })
+    }
+
+    window.addEventListener(ARI_PROMPT_REQUESTED_EVENT, handlePromptRequest)
+    return () => {
+      window.removeEventListener(ARI_PROMPT_REQUESTED_EVENT, handlePromptRequest)
     }
   }, [startRun])
 

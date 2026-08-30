@@ -1,6 +1,12 @@
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Gauge } from 'lucide-react'
+'use client'
+
+import { ArrowDownRight, ArrowRight, ArrowUpRight, ChevronRight, Gauge } from 'lucide-react'
 
 import type { KpiGridProps } from '../../../backend/src/contracts/ui'
+import { requestAriPrompt } from '@/lib/ari-ui-events'
+
+const PENDING_DECISIONS_PROMPT =
+  'Show me my pending decisions and let me review and resolve them one at a time.'
 
 const severityStyles = {
   normal: 'border-border bg-muted/40',
@@ -39,6 +45,11 @@ export function KpiGrid({ title, metrics }: KpiGridProps) {
       <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((metric) => {
           const TrendIcon = metric.trend ? trendIcons[metric.trend] : null
+          const isPendingDecisions =
+            metric.id === 'decisions' &&
+            (typeof metric.value === 'number'
+              ? metric.value > 0
+              : Number(metric.value) > 0)
 
           return (
             <div key={metric.id} className={`rounded-lg border p-3.5 ${severityStyles[metric.severity]}`}>
@@ -49,6 +60,17 @@ export function KpiGrid({ title, metrics }: KpiGridProps) {
                 {TrendIcon && <TrendIcon className="ml-auto size-4 self-center" aria-label={`${metric.trend} trend`} />}
               </dd>
               {metric.subtext && <p className="mt-2 text-xs leading-5 text-muted-foreground">{metric.subtext}</p>}
+              {isPendingDecisions && (
+                <button
+                  type="button"
+                  onClick={() => requestAriPrompt(PENDING_DECISIONS_PROMPT)}
+                  className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-destructive underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`Review ${metric.value} pending decisions`}
+                >
+                  Review decisions
+                  <ChevronRight className="size-3.5" aria-hidden="true" />
+                </button>
+              )}
             </div>
           )
         })}

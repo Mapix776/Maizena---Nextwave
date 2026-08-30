@@ -1,6 +1,12 @@
+'use client'
+
 import { AlertTriangle, Boxes, CircleGauge, ClockAlert, Route, ShipWheel } from 'lucide-react'
 
 import type { OperationsMetricsCardProps } from '../../../backend/src/contracts/logistics-ui'
+import { requestAriPrompt } from '@/lib/ari-ui-events'
+
+const PENDING_DECISIONS_PROMPT =
+  'Show me my pending decisions and let me review and resolve them one at a time.'
 
 export function OperationsMetricsCard(props: OperationsMetricsCardProps) {
   const maxStatusCount = Math.max(1, ...props.byStatus.map(({ count }) => count))
@@ -23,9 +29,20 @@ export function OperationsMetricsCard(props: OperationsMetricsCardProps) {
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Network</p>
           <h2 className="mt-1 text-base font-semibold tracking-tight">Operations metrics</h2>
         </div>
-        <span className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-          {props.pendingDecisionsCount} pending decisions
-        </span>
+        {props.pendingDecisionsCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => requestAriPrompt(PENDING_DECISIONS_PROMPT)}
+            className="shrink-0 rounded-full bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-amber-300"
+            aria-label={`Review ${props.pendingDecisionsCount} pending decisions`}
+          >
+            {props.pendingDecisionsCount} pending decisions · Review
+          </button>
+        ) : (
+          <span className="shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            No pending decisions
+          </span>
+        )}
       </header>
 
       <dl className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">

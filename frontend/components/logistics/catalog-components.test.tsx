@@ -211,6 +211,7 @@ test('OperationsMetricsCard renders constrained totals and status counts', () =>
   assert.match(html, /2 delayed/)
   assert.match(html, /4 critical alerts/)
   assert.match(html, /CUSTOMS CLEARANCE/)
+  assert.match(html, /Review 4 pending decisions/)
 });
 
 test('HumanDecisionCard renders persisted decision context with sparse options', () => {
@@ -240,6 +241,15 @@ test('interactive backend catalog components render their validated content', ()
       metrics={[{ id: 'delays', label: 'Delayed', value: 2, unit: 'containers', severity: 'warning', trend: 'up' }]}
     />,
   )
+
+  const pendingDecisionKpiHtml = renderToStaticMarkup(
+    <KpiGrid
+      title="Key Operations Metrics"
+      metrics={[{ id: 'decisions', label: 'Decisions', value: 4, unit: 'pending', severity: 'critical' }]}
+    />,
+  )
+
+  assert.match(pendingDecisionKpiHtml, /Review 4 pending decisions/)
   const comparisonHtml = renderToStaticMarkup(
     <ComparisonTable
       title="Bill of Lading vs Packing List"
