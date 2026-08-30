@@ -344,13 +344,34 @@ export class SupabaseReader {
   // 5. CONSULTAS DE DECISIONES HUMAN-IN-THE-LOOP (DECISIONS)
   // ===========================================================================
 
-  /** Obtener decisiones Human-in-the-Loop pendientes */
+  /** Obtener decisiones Human-in-the-Loop pendientes enriquecidas con código de operación y cliente */
   async getPendingDecisions(operationId?: string): Promise<DecisionRow[]> {
     let path = `decisions?status=eq.PENDING&select=*&order=created_at.desc`;
     if (operationId) {
       path += `&operation_id=eq.${operationId}`;
     }
     return this.request<DecisionRow[]>(path);
+  }
+
+  async getEnrichedPendingDecisions(operationId?: string) {
+    const decisions = await this.getPendingDecisions(operationId);
+    const enriched = await Promise.all(
+      decisions.map(async (d) => {
+        const op = await this.getOperationByReferenceOrId(d.operation_id).catch(() => null);
+        return {
+          id: d.id,
+          operationId: d.operation_id,
+          operationReference: op?.reference_code || 'OP-2026',
+          clientName: op?.client_name || 'Client',
+          title: d.title,
+          description: d.description || '',
+          severity: d.severity,
+          options: d.options_json,
+          defaultAction: d.default_action,
+        };
+      }),
+    );
+    return enriched;
   }
 
   /** Obtener decisión por UUID */

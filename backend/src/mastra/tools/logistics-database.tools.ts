@@ -249,7 +249,7 @@ export function createGetPendingDecisionsTool(options: LogisticsToolsOptions = {
       decisions: z.array(z.any()),
     }),
     execute: async (input) => {
-      const decisions = await reader.getPendingDecisions(input.operationId);
+      const decisions = await reader.getEnrichedPendingDecisions(input.operationId);
       return {
         count: decisions.length,
         decisions,

@@ -279,6 +279,53 @@ export default function AgentBuilderView({
     }
   }, [])
 
+  // Auto-send when user clicks a Human-in-the-Loop decision option card
+  useEffect(() => {
+    const handleDecision = (event: Event) => {
+      const customEvent = event as CustomEvent<{ optionId: string; payload: string }>
+      const selected = customEvent.detail.payload || customEvent.detail.optionId
+      const socket = socketRef.current
+      if (!socket?.connected) return
+
+      const userMessage: ChatMessage = {
+        id: `user-${crypto.randomUUID()}`,
+        role: 'user',
+        text: `Selected option: "${selected}". Proceed with this decision.`,
+      }
+      const nextMessages = [...messages, userMessage]
+      const requestId = crypto.randomUUID()
+
+      pendingRequestId.current = requestId
+      activeRunId.current = null
+      latestSequence.current = 0
+      setMessages(nextMessages)
+      setConnectionStatus('running')
+
+      socket.emit(
+        'run:start',
+        {
+          requestId,
+          messages: nextMessages
+            .filter((message) => message.text)
+            .slice(-40)
+            .map(({ role, text: content }) => ({ role, content })),
+        },
+        (ack: { ok: boolean; runId?: string; error?: string }) => {
+          if (pendingRequestId.current !== requestId) return
+          pendingRequestId.current = null
+          if (ack.ok && ack.runId) {
+            activeRunId.current = ack.runId
+          }
+        },
+      )
+    }
+
+    window.addEventListener('nauta:decision-selected', handleDecision)
+    return () => {
+      window.removeEventListener('nauta:decision-selected', handleDecision)
+    }
+  }, [messages])
+
   useEffect(() => {
     if (shouldAutoScroll.current) {
       messagesEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })

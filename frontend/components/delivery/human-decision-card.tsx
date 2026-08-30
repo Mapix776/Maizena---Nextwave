@@ -1,6 +1,7 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
+import { AlertCircle, CheckCircle2, ChevronRight, Sparkles, UserCheck } from 'lucide-react'
 
 export interface DecisionOption {
   id: string
@@ -22,95 +23,146 @@ export interface HumanDecisionCardProps {
 export function HumanDecisionCard({
   title,
   question,
-  severity = 'normal',
-  options,
+  severity = 'critical',
+  options = [],
   onSelectOption,
 }: HumanDecisionCardProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+
   const handleSelect = (option: DecisionOption) => {
+    if (submitted) return
+    setSelectedId(option.id)
+    setSubmitted(true)
+
+    const payload = option.actionPayload || option.label
+
     if (onSelectOption) {
-      onSelectOption(option.id, option.actionPayload || option.id)
-    } else {
-      // Disparar evento personalizado global para que el chat / run-client lo capture
+      onSelectOption(option.id, payload)
+    }
+
+    // Disparar evento personalizado global para que el chat / tracer lo procese de inmediato
+    if (typeof window !== 'undefined') {
       const event = new CustomEvent('nauta:decision-selected', {
-        detail: { optionId: option.id, payload: option.actionPayload || option.label },
+        detail: {
+          optionId: option.id,
+          payload,
+          label: option.label,
+        },
+        bubbles: true,
+        composed: true,
       })
       window.dispatchEvent(event)
     }
   }
 
-  const severityStyles = {
-    normal: {
-      border: 'border-blue-500/30',
-      bg: 'bg-blue-950/20',
-      badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
-      indicator: 'bg-blue-500',
-    },
-    warning: {
-      border: 'border-amber-500/40',
-      bg: 'bg-amber-950/20',
-      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-      indicator: 'bg-amber-500',
-    },
-    critical: {
-      border: 'border-red-500/40',
-      bg: 'bg-red-950/20',
-      badge: 'bg-red-500/20 text-red-300 border-red-500/40',
-      indicator: 'bg-red-500',
-    },
-  }[severity]
+  const isCritical = severity === 'critical'
+  const isWarning = severity === 'warning'
 
   return (
-    <div
-      className={`my-4 rounded-xl border ${severityStyles.border} ${severityStyles.bg} p-5 backdrop-blur-md transition-all shadow-lg`}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`h-2.5 w-2.5 rounded-full ${severityStyles.indicator} animate-pulse`} />
-        <h3 className="font-semibold text-white tracking-wide text-base">{title}</h3>
+    <div className="my-4 rounded-2xl border-2 border-purple-300 dark:border-purple-800/80 bg-white dark:bg-zinc-950 p-5 shadow-xl transition-all relative overflow-hidden pointer-events-auto">
+      {/* Decorative gradient blur background */}
+      <div className="absolute -top-12 -right-12 size-36 rounded-full bg-purple-500/10 dark:bg-purple-600/20 blur-2xl pointer-events-none" />
+
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2">
+          <div className="size-8 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-xs">
+            <UserCheck className="size-4" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+              Human-in-the-Loop Action Required
+            </span>
+            <h3 className="font-bold text-zinc-900 dark:text-white text-base leading-tight">
+              {title}
+            </h3>
+          </div>
+        </div>
+
+        <span
+          className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${
+            isCritical
+              ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800'
+              : isWarning
+                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                : 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800'
+          }`}
+        >
+          <span className="size-1.5 rounded-full bg-current animate-ping" />
+          {severity.toUpperCase()}
+        </span>
       </div>
 
-      <p className="text-sm text-zinc-300 mb-4 leading-relaxed">{question}</p>
+      {/* Question Prompt */}
+      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-4 mt-2 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-3 rounded-xl border border-zinc-100 dark:border-zinc-800">
+        {question}
+      </p>
 
+      {/* Interactive Options List */}
       <div className="space-y-2.5">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            onClick={() => handleSelect(option)}
-            type="button"
-            className="w-full text-left rounded-lg border border-zinc-700/60 bg-zinc-900/80 hover:bg-zinc-800/90 hover:border-zinc-500/80 p-3.5 transition-all duration-200 group flex items-start justify-between gap-3 cursor-pointer"
-          >
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-white group-hover:text-blue-400 transition-colors text-sm">
-                  {option.label}
-                </span>
-                {option.badge && (
+        {options.map((option, index) => {
+          const isSelected = selectedId === option.id
+
+          return (
+            <button
+              key={option.id || index}
+              onClick={() => handleSelect(option)}
+              type="button"
+              disabled={submitted}
+              className={`w-full text-left rounded-xl border-2 p-3.5 transition-all duration-200 flex items-start justify-between gap-3 cursor-pointer select-none group ${
+                isSelected
+                  ? 'border-purple-600 bg-purple-50/90 dark:bg-purple-950/70 shadow-md ring-2 ring-purple-400'
+                  : submitted
+                    ? 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 opacity-60 cursor-not-allowed'
+                    : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/80 hover:border-purple-500 hover:bg-purple-50/40 dark:hover:bg-purple-950/30 hover:shadow-md active:scale-[0.99]'
+              }`}
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <span
-                    className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${severityStyles.badge}`}
+                    className={`font-bold text-sm transition-colors ${
+                      isSelected
+                        ? 'text-purple-900 dark:text-purple-200'
+                        : 'text-zinc-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400'
+                    }`}
                   >
-                    {option.badge}
+                    {option.label}
                   </span>
+                  {option.badge && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                      {option.badge}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-normal">
+                  {option.description}
+                </p>
+              </div>
+
+              <div className="shrink-0 pt-0.5">
+                {isSelected ? (
+                  <div className="size-6 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xs">
+                    <CheckCircle2 className="size-4" />
+                  </div>
+                ) : (
+                  <div className="size-6 rounded-full border border-zinc-300 dark:border-zinc-700 group-hover:border-purple-500 group-hover:bg-purple-100 dark:group-hover:bg-purple-950 text-zinc-400 group-hover:text-purple-600 flex items-center justify-center transition-colors">
+                    <ChevronRight className="size-3.5" />
+                  </div>
                 )}
               </div>
-              <p className="text-xs text-zinc-400 leading-normal">{option.description}</p>
-            </div>
-            <div className="text-zinc-500 group-hover:text-white transition-colors pt-1">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m9 18 6-6-6-6" />
-              </svg>
-            </div>
-          </button>
-        ))}
+            </button>
+          )
+        })}
       </div>
+
+      {/* Confirmation feedback */}
+      {submitted && (
+        <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-100/70 dark:bg-purple-950/60 p-2.5 rounded-lg border border-purple-200 dark:border-purple-800 animate-fade-in">
+          <Sparkles className="size-4 text-purple-600 animate-spin" />
+          <span>Decision submitted. Ari is executing your approved action...</span>
+        </div>
+      )}
     </div>
   )
 }

@@ -317,18 +317,21 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
 }
 
 .rendered-assistant-message > p {
   margin: 0;
-  padding: 2px 2px 8px;
+  padding: 4px 2px 8px;
   color: var(--foreground);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 450;
   line-height: 1.6;
 }
 
 .rendered-assistant-demo {
   color: var(--foreground);
+  width: 100%;
 }
 
 .rendered-assistant-demo article {
