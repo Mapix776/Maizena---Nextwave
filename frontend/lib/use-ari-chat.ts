@@ -81,7 +81,7 @@ function responseText(spec: JsonRenderSpec): string {
   const props = root?.props as Record<string, unknown> | undefined
   return typeof props?.text === 'string'
     ? props.text
-    : 'Respuesta renderizada.'
+    : 'Rendered response.'
 }
 
 function messagesForRun(messages: ChatMessage[]) {

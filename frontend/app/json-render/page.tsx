@@ -9,8 +9,8 @@ export default function JsonRenderPage() {
       <div className="json-catalog-shell">
         <header className="json-catalog-header">
           <p className="json-catalog-eyebrow">route.pilot / json-render</p>
-          <h1>Catálogo de componentes</h1>
-          <p>Todos los componentes registrados en el catálogo oficial, con sus variantes renderizadas desde specs JSON.</p>
+          <h1>Component catalog</h1>
+          <p>All components registered in the official catalog, with their variants rendered from JSON specs.</p>
         </header>
         <section className="json-catalog-grid" aria-label="Component catalog">
           {catalogShowcase.map((item, index) => (

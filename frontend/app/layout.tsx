@@ -5,8 +5,8 @@ import './globals.css'
 import './tracer.css'
 
 export const metadata: Metadata = {
-  title: 'route.pilot — Centro de operaciones',
-  description: 'Dashboard operativo para gestionar runs, flota y rutas logísticas.',
+  title: 'route.pilot — Operations center',
+  description: 'Operational dashboard to manage runs, fleet and logistics routes.',
   generator: 'v0.app',
   icons: {
     icon: [

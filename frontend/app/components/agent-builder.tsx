@@ -82,14 +82,14 @@ type ContextItem = {
   id: string
   title: string
   kind:
-    | 'Documento'
-    | 'Documentos'
-    | 'Informe'
-    | 'Detalle'
-    | 'Ficha'
-    | 'Ficha Aduanal'
-    | 'Alertas Operativas'
-    | 'Seguimiento'
+    | 'Document'
+    | 'Documents'
+    | 'Report'
+    | 'Detail'
+    | 'Sheet'
+    | 'Customs Sheet'
+    | 'Operational Alerts'
+    | 'Tracking'
   description: string
   sourceId: string
   elementType: string
@@ -110,8 +110,8 @@ function contextItemsFromSpec(
 ): ContextItem[] {
   return Object.entries(spec.elements)
     .filter(([, element]) => {
-      // Solo incluir elementos con visor de ficha real o archivo adjunto,
-      // para evitar pestañas en blanco (ej. "Ficha 1", "Ficha 5").
+      // Only include elements with a real sheet viewer or attached file,
+      // to avoid blank tabs (e.g. "Sheet 1", "Sheet 5").
       const props = element.props as Record<string, unknown> | undefined
       const isDocSheet = DOCUMENT_SHEET_TYPES.has(element.type)
       const hasFileUrl = Boolean(props?.url || props?.fileUrl)
@@ -121,19 +121,19 @@ function contextItemsFromSpec(
     const props = element.props as Record<string, unknown>
     const type = element.type.toLowerCase()
     const isCustoms = type.includes('customs') || type.includes('aduan')
-    const kind = isCustoms ? 'Ficha Aduanal' : 'Documentos'
+    const kind = isCustoms ? 'Customs Sheet' : 'Documents'
     const title =
       typeof props.title === 'string' && props.title.trim()
         ? props.title
         : typeof props.containerNumber === 'string'
-          ? `Aduana · ${props.containerNumber}`
+          ? `Customs · ${props.containerNumber}`
           : typeof props.reference === 'string'
             ? props.reference
             : typeof props.name === 'string'
               ? props.name
               : isCustoms
-                ? `Ficha Aduanal ${index + 1}`
-                : `Documento ${index + 1}`
+                ? `Customs Sheet ${index + 1}`
+                : `Document ${index + 1}`
     const url =
       typeof props.url === 'string'
         ? props.url
@@ -148,7 +148,7 @@ function contextItemsFromSpec(
       description:
         typeof props.description === 'string'
           ? props.description
-          : 'Expediente documental certificado.',
+          : 'Certified document record.',
       sourceId,
       elementType: element.type,
       props,
@@ -160,14 +160,14 @@ function contextItemsFromSpec(
 }
 
 const THINKING_COPY: Record<ThinkingAnimationType, string> = {
-  thinking: 'Ari está procesando tu solicitud...',
-  reading: 'Ari está extrayendo datos del documento...',
-  drawing: 'Ari está construyendo la visualización...',
-  mapping: 'Ari está trazando la ruta en el mapa...',
-  finding: 'Ari está buscando el contenedor...',
-  findingBoat: 'Ari está localizando el contenedor por barco...',
-  eta: 'Ari está calculando el ETA...',
-  comparing: 'Ari está comparando los documentos...',
+  thinking: 'Ari is processing your request...',
+  reading: 'Ari is extracting data from the document...',
+  drawing: 'Ari is building the visualization...',
+  mapping: 'Ari is plotting the route on the map...',
+  finding: 'Ari is looking up the container...',
+  findingBoat: 'Ari is locating the container by vessel...',
+  eta: 'Ari is calculating the ETA...',
+  comparing: 'Ari is comparing the documents...',
 }
 
 function inferThinkingType(message?: ChatMessage): ThinkingAnimationType {
@@ -184,22 +184,22 @@ function inferThinkingType(message?: ChatMessage): ThinkingAnimationType {
   const has = (...words: string[]) => words.some((word) => text.includes(word))
 
   if (
-    has('reconcil', 'discrepan', 'compara', 'comparar', 'cruza', 'cotej', 'bill of lading', 'packing list', 'invoice')
+    has('reconcile', 'reconcil', 'discrepan', 'compare', 'comparison', 'cross-check', 'match', 'bill of lading', 'packing list', 'invoice')
   ) {
     return 'comparing'
   }
-  if (has('barco', 'buque', 'vessel', 'naviera')) return 'findingBoat'
-  if (has('contenedor', 'container')) return 'finding'
-  if (has('ruta', 'mapa', 'rastrea', 'track', 'ubica', 'ubicaci', 'posici', 'dónde', 'donde')) {
+  if (has('boat', 'ship', 'vessel', 'carrier')) return 'findingBoat'
+  if (has('container')) return 'finding'
+  if (has('route', 'map', 'track', 'locate', 'location', 'position', 'where')) {
     return 'mapping'
   }
-  if (has('eta', 'llega', 'cuándo', 'cuando', 'tiempo', 'demora', 'retras', 'estim')) {
+  if (has('eta', 'arrive', 'arrival', 'when', 'time', 'delay', 'estimate')) {
     return 'eta'
   }
-  if (has('gráfic', 'grafic', 'métric', 'metric', 'analític', 'analitic', 'estadístic', 'chart', 'dashboard')) {
+  if (has('chart', 'graph', 'metric', 'analytic', 'statistic', 'dashboard')) {
     return 'drawing'
   }
-  if (has('documento', 'pdf', 'archivo', 'lee', 'leer', 'extrae', 'reporte')) {
+  if (has('document', 'pdf', 'file', 'read', 'extract', 'report')) {
     return 'reading'
   }
   return 'thinking'
@@ -225,24 +225,24 @@ function savedTitle(spec: JsonRenderSpec, fallback: string): string {
 }
 
 const ELEMENT_STEP_LABELS: Record<string, string> = {
-  AssistantMessage: 'mensaje del asistente',
-  OperationSummaryCard: 'resumen de la operación',
-  OperationsMetricsCard: 'métricas de operaciones',
-  ContainerProgress: 'progreso de contenedores',
-  DeliveryCard: 'estado de la entrega',
-  DeliveryIssueCard: 'incidencia de entrega',
-  OperationalAlertList: 'alertas operativas',
-  EtaRiskCard: 'riesgo de ETA',
-  ShipmentMilestoneTimeline: 'hitos del embarque',
-  ShipmentDocumentsTimeline: 'línea de documentos',
-  CustomsClearancePanel: 'despacho de aduana',
-  DocumentDetailsCard: 'detalle de documentos',
-  ReconciliationFindings: 'hallazgos de reconciliación',
-  HumanDecisionCard: 'decisión humana requerida',
-  AgentRunTimeline: 'cronología del agente',
-  BarChart: 'gráfico de barras',
-  InteractiveChart: 'gráfico interactivo',
-  CatalogChart: 'gráfico del catálogo',
+  AssistantMessage: 'assistant message',
+  OperationSummaryCard: 'operation summary',
+  OperationsMetricsCard: 'operations metrics',
+  ContainerProgress: 'container progress',
+  DeliveryCard: 'delivery status',
+  DeliveryIssueCard: 'delivery issue',
+  OperationalAlertList: 'operational alerts',
+  EtaRiskCard: 'ETA risk',
+  ShipmentMilestoneTimeline: 'shipment milestones',
+  ShipmentDocumentsTimeline: 'documents timeline',
+  CustomsClearancePanel: 'customs clearance',
+  DocumentDetailsCard: 'document details',
+  ReconciliationFindings: 'reconciliation findings',
+  HumanDecisionCard: 'human decision required',
+  AgentRunTimeline: 'agent timeline',
+  BarChart: 'bar chart',
+  InteractiveChart: 'interactive chart',
+  CatalogChart: 'catalog chart',
 }
 
 const DOCUMENT_ELEMENT_TYPES = new Set([
@@ -264,42 +264,42 @@ function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
     .filter((name, index, all) => all.indexOf(name) === index)
 
   const dataSource = hasCustoms
-    ? 'Fuente: Pedimento de importación y semáforo fiscal aduanal'
+    ? 'Source: Import customs declaration and customs inspection status'
     : hasRoute
-      ? 'Fuente: Telemetría satelital AIS del buque'
-      : 'Fuente: Detalle 360° de operaciones (Supabase)'
+      ? 'Source: AIS satellite telemetry from the vessel'
+      : 'Source: 360° operations detail (Supabase)'
 
   const steps: TraceStep[] = [
     {
-      title: 'Interpretar la solicitud',
+      title: 'Interpret the request',
       detail:
-        'Ari analiza tu mensaje y decide qué herramientas de datos y agentes necesita.',
+        'Ari analyzes your message and decides which data tools and agents it needs.',
     },
     {
-      title: 'Consultar datos operativos',
+      title: 'Query operational data',
       detail:
-        'Ejecuta las tools de Supabase para traer operaciones, contenedores y estados verificados en tiempo real.',
+        'Runs the Supabase tools to pull operations, containers and verified statuses in real time.',
       outputSummary: dataSource,
     },
   ]
 
   if (hasDocuments) {
     steps.push({
-      title: 'Reconciliar documentos',
+      title: 'Reconcile documents',
       detail:
-        'Delega en Recon el cruce de Bill of Lading, Commercial Invoice y Packing List para detectar discrepancias.',
-      outputSummary: 'Fuente: Bill of Lading, Commercial Invoice y Packing List certificados',
+        'Delegates to Recon the cross-check of Bill of Lading, Commercial Invoice and Packing List to detect discrepancies.',
+      outputSummary: 'Source: Certified Bill of Lading, Commercial Invoice and Packing List',
     })
   }
 
   steps.push({
-    title: 'Componer la evidencia',
-    detail: `Estructura ${componentNames.length} componente${componentNames.length === 1 ? '' : 's'}: ${componentNames.join(', ')}.`,
+    title: 'Compose the evidence',
+    detail: `Structures ${componentNames.length} component${componentNames.length === 1 ? '' : 's'}: ${componentNames.join(', ')}.`,
   })
   steps.push({
-    title: 'Validar y renderizar',
+    title: 'Validate and render',
     detail:
-      'El resultado pasa por el catálogo json-render validado antes de mostrarse en el chat.',
+      'The result goes through the validated json-render catalog before being shown in the chat.',
   })
   return steps
 }
@@ -307,34 +307,34 @@ function deriveTraceSteps(spec: JsonRenderSpec): TraceStep[] {
 const quickPrompts = [
   {
     icon: Ship,
-    label: 'Embarques',
-    prompt: 'Muéstrame el estado de mis embarques activos.',
+    label: 'Shipments',
+    prompt: 'Show me the status of my active shipments.',
   },
   {
     icon: Package,
-    label: 'Contenedores',
-    prompt: 'Revisa el estado de mis contenedores en tránsito.',
+    label: 'Containers',
+    prompt: 'Check the status of my containers in transit.',
   },
   {
     icon: FileText,
-    label: 'Documentos',
+    label: 'Documents',
     prompt:
-      'Reconcilia el Bill of Lading, la Commercial Invoice y el Packing List.',
+      'Reconcile the Bill of Lading, the Commercial Invoice and the Packing List.',
   },
   {
     icon: Landmark,
-    label: 'Aduanas',
-    prompt: 'Consulta el estado de mis trámites de aduana.',
+    label: 'Customs',
+    prompt: 'Check the status of my customs procedures.',
   },
   {
     icon: AlertTriangle,
-    label: 'Incidencias',
-    prompt: 'Muéstrame las incidencias abiertas en mis operaciones.',
+    label: 'Incidents',
+    prompt: 'Show me the open incidents in my operations.',
   },
   {
     icon: BarChart3,
-    label: 'Analíticas',
-    prompt: 'Muéstrame las analíticas y métricas de mis operaciones.',
+    label: 'Analytics',
+    prompt: 'Show me the analytics and metrics of my operations.',
   },
 ]
 
@@ -695,7 +695,7 @@ function ChatMessageRow({
               aria-label={t.copy}
               onClick={() => {
                 void navigator.clipboard?.writeText(message.text)
-                onNotify('Respuesta copiada')
+                onNotify(t.responseCopied)
               }}
             >
               <Copy className="size-3.5" />
@@ -703,14 +703,14 @@ function ChatMessageRow({
             <MessageAction
               label={t.responseRated}
               aria-label={t.responseRated}
-              onClick={() => onNotify('Respuesta valorada')}
+              onClick={() => onNotify(t.responseRated)}
             >
               <ThumbsUp className="size-3.5" />
             </MessageAction>
             <MessageAction
-              label="Marcar como poco útil"
-              aria-label="Marcar como poco útil"
-              onClick={() => onNotify('Gracias por tu opinión')}
+              label="Mark as not helpful"
+              aria-label="Mark as not helpful"
+              onClick={() => onNotify('Thanks for your feedback')}
             >
               <ThumbsDown className="size-3.5" />
             </MessageAction>
@@ -725,7 +725,7 @@ const kickerClass = 'text-xs font-medium uppercase tracking-wider text-muted-for
 
 export default function AgentBuilderView({
   onNotify,
-  locale = 'es',
+  locale = 'en',
   sidebarOpen = true,
   onToggleSidebar,
   isSaved,
@@ -757,10 +757,10 @@ export default function AgentBuilderView({
 
   const shareConversation = async () => {
     const transcript = messages
-      .map((message) => `${message.role === 'assistant' ? 'Ari' : 'Tú'}: ${message.text}`)
+      .map((message) => `${message.role === 'assistant' ? 'Ari' : t.you}: ${message.text}`)
       .join('\n\n')
     if (navigator.share) {
-      await navigator.share({ title: 'Conversación con Ari', text: transcript })
+      await navigator.share({ title: 'Conversation with Ari', text: transcript })
     } else {
       await navigator.clipboard?.writeText(transcript)
       onNotify(t.responseShare)
@@ -796,8 +796,8 @@ export default function AgentBuilderView({
     const item: ContextItem = {
       id: `${sourceId}-${attachment.id}`,
       title: attachment.name,
-      kind: 'Documento',
-      description: `Vista previa de ${attachment.name}.`,
+      kind: 'Document',
+      description: `Preview of ${attachment.name}.`,
       sourceId,
       elementType: 'Attachment',
       props: {},
@@ -894,7 +894,7 @@ export default function AgentBuilderView({
               variant="ghost"
               size="icon"
               onClick={onToggleSidebar}
-              aria-label={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}
+              aria-label={sidebarOpen ? t.hidePanel : t.showPanel}
             >
               {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
             </Button>
@@ -903,7 +903,7 @@ export default function AgentBuilderView({
             <AriAvatar className="size-8" />
             <div className="min-w-0">
               <h1 className="truncate text-base font-semibold tracking-tight">{agentName}</h1>
-              <p className="truncate text-xs text-muted-foreground">Asistente de logística de Nauta</p>
+              <p className="truncate text-xs text-muted-foreground">Nauta logistics assistant</p>
             </div>
           </div>
           <StatusPill connectionStatus={connectionStatus} label={statusLabel} />
@@ -943,13 +943,13 @@ export default function AgentBuilderView({
                   <Sparkles className="size-6" />
                 </span>
                 <div className="space-y-2">
-                  <h2 className="text-xl font-semibold tracking-tight">Hola, soy {agentName}</h2>
+                  <h2 className="text-xl font-semibold tracking-tight">Hi, I&apos;m {agentName}</h2>
                   <p className="mx-auto max-w-lg text-sm leading-6 text-muted-foreground">
-                    Asistente de logística de Nauta. Puedo ayudarte a consultar operaciones,
-                    revisar documentos de comercio exterior y reconciliar BL, Invoice y Packing List.
+                    Nauta logistics assistant. I can help you check operations,
+                    review foreign trade documents and reconcile BL, Invoice and Packing List.
                   </p>
                 </div>
-                <p className="text-sm font-medium">¿Qué necesitas consultar?</p>
+                <p className="text-sm font-medium">What do you need to check?</p>
                 <Suggestions className="mx-auto mt-2 grid w-full max-w-2xl grid-cols-1 gap-3 whitespace-normal sm:grid-cols-2 lg:grid-cols-3">
                   {quickPrompts.map(({ icon: Icon, label, prompt }) => (
                     <Suggestion
@@ -1163,19 +1163,19 @@ export default function AgentBuilderView({
                 <div className="mt-4 space-y-2 rounded-xl border border-border/60 bg-muted/40 p-3.5 text-xs">
                   <div className="flex items-center gap-1.5 font-semibold text-foreground">
                     <Sparkles className="size-3.5 text-primary" />
-                    <span>Trazabilidad y Origen del Documento</span>
+                    <span>Document Traceability &amp; Origin</span>
                   </div>
                   <p className="leading-relaxed text-muted-foreground">
-                    Este expediente fue generado y auditado automáticamente por <b>Ari</b> mediante la
-                    lectura directa de los documentos oficiales en el repositorio seguro de Nauta (Base de
-                    datos y Storage certificado).
+                    This record was generated and audited automatically by <b>Ari</b> through the
+                    direct reading of the official documents in Nauta&apos;s secure repository (certified
+                    database and storage).
                   </p>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/40 pt-1 text-[11px] text-muted-foreground">
                     <span>
-                      <b>Validación:</b> Cotejo automatizado de comercio exterior
+                      <b>Validation:</b> Automated foreign trade cross-check
                     </span>
                     <span>
-                      <b>Integridad:</b> 100% Verificado contra fuentes oficiales
+                      <b>Integrity:</b> 100% Verified against official sources
                     </span>
                   </div>
                 </div>
