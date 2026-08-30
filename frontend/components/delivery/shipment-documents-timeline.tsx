@@ -66,20 +66,20 @@ export function ShipmentDocumentsTimeline({ title, subtitle, documents }: Shipme
   const progress = documents.length ? Math.round((completed / documents.length) * 100) : 0
 
   return (
-    <article className="flex w-full max-w-2xl flex-col gap-6 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
-      <header className="flex items-start justify-between gap-4 border-b border-border pb-5">
-        <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <BadgeCheck aria-hidden="true" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+    <article className="flex w-full max-w-2xl flex-col gap-5 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs">
+      <header className="flex flex-wrap items-start justify-between gap-4 border-b border-border pb-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+            <BadgeCheck className="size-4" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-semibold">{completed} of {documents.length} completed</p>
-          <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-muted" aria-label={`${progress}% complete`} role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}>
+        <div className="shrink-0 text-right">
+          <p className="text-xs font-medium text-muted-foreground">{completed} of {documents.length} completed</p>
+          <div className="mt-2 h-1 w-24 overflow-hidden rounded-full bg-muted" aria-label={`${progress}% complete`} role="progressbar" aria-valuemax={100} aria-valuemin={0} aria-valuenow={progress}>
             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} />
           </div>
         </div>
@@ -92,17 +92,17 @@ export function ShipmentDocumentsTimeline({ title, subtitle, documents }: Shipme
           const isCompleted = document.status === 'completed'
           return (
             <li key={document.id} className="relative flex gap-4 pb-6 last:pb-0">
-              {!isLast && <span className={`absolute left-4 top-8 h-[calc(100%-0.5rem)] w-px ${isCompleted ? 'bg-primary/60' : 'bg-border'}`} aria-hidden="true" />}
-              <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border ${isCompleted ? 'border-primary bg-primary text-primary-foreground' : document.status === 'in_progress' ? 'border-primary bg-background text-primary ring-4 ring-primary/10' : 'border-border bg-muted text-muted-foreground'}`}>
+              {!isLast && <span className={`absolute left-4 top-8 h-[calc(100%-0.5rem)] w-px ${isCompleted ? 'bg-primary/40' : 'bg-border'}`} aria-hidden="true" />}
+              <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full border ${isCompleted ? 'border-primary bg-primary text-primary-foreground' : document.status === 'in_progress' ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}>
                 <Icon className="size-4" aria-hidden="true" />
               </span>
-              <div className="min-w-0 flex-1 pt-0.5">
+              <div className="min-w-0 flex-1 pt-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-medium">{document.title}</h3>
-                    <p className="text-sm leading-6 text-muted-foreground">{document.description}</p>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-medium">{document.title}</h3>
+                    <p className="mt-0.5 text-sm leading-6 text-muted-foreground">{document.description}</p>
                   </div>
-                  <span className={`rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(document.status)}`}>{statusLabels[document.status]}</span>
+                  <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium ${statusStyles(document.status)}`}>{statusLabels[document.status]}</span>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted-foreground">
                   {document.date && <time dateTime={document.date}>{formatDate(document.date)}</time>}
