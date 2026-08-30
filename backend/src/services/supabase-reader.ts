@@ -511,11 +511,55 @@ export class SupabaseReader {
   }
 
   /**
-   * 9. BÚSQUEDA DE MERCANCÍA / CARGA (Resuelve: "¿Ya llegaron los comedores/muebles/artículos?")
+   * 9. BÚSQUEDA DE MERCANCÍA / CARGA (Resuelve: "Have the dining tables arrived?", "Where are the auto parts?")
    */
   async searchCargoItems(itemQuery: string): Promise<CargoItemSearchResult[]> {
-    const q = itemQuery.toLowerCase().trim();
-    if (!q) return [];
+    const raw = itemQuery.toLowerCase().trim();
+    if (!raw) return [];
+
+    // Expansión de sinónimos en inglés/español para búsquedas en inglés
+    const synonymsMap: Record<string, string[]> = {
+      'dining table': ['comedor', 'comedores', 'muebles', 'furniture', 'dining'],
+      'dining tables': ['comedor', 'comedores', 'muebles', 'furniture', 'dining'],
+      'dining set': ['comedor', 'comedores', 'muebles', 'furniture'],
+      'dining sets': ['comedor', 'comedores', 'muebles', 'furniture'],
+      dining: ['comedor', 'comedores', 'muebles', 'furniture', 'mesa', 'mesas'],
+      table: ['mesa', 'mesas', 'comedor', 'comedores', 'furniture', 'muebles'],
+      tables: ['mesa', 'mesas', 'comedor', 'comedores', 'furniture', 'muebles'],
+      furniture: ['muebles', 'mueble', 'comedor', 'comedores', 'mesa', 'mesas'],
+      chair: ['silla', 'sillas', 'muebles', 'furniture'],
+      chairs: ['silla', 'sillas', 'muebles', 'furniture'],
+      electronics: ['electrónicos', 'electronicos', 'tech', 'chips'],
+      autoparts: ['autopartes', 'automotriz', 'auto parts', 'repuestos'],
+      'auto parts': ['autopartes', 'automotriz', 'repuestos'],
+      pharma: ['farma', 'farmaceuticos', 'medicamentos', 'pharmaceuticals'],
+      textiles: ['textil', 'telas', 'ropa', 'apparel'],
+      comedores: ['dining', 'dining tables', 'furniture', 'muebles'],
+      comedor: ['dining', 'dining tables', 'furniture', 'muebles'],
+      mesas: ['tables', 'dining', 'furniture', 'muebles'],
+      mesa: ['table', 'dining', 'furniture', 'muebles'],
+    };
+
+    const searchTerms = new Set<string>([raw]);
+    // Extraer palabras clave del input
+    const words = raw.split(/\s+/).filter((w) => w.length > 2);
+    for (const word of words) {
+      searchTerms.add(word);
+      if (synonymsMap[word]) {
+        for (const s of synonymsMap[word]) searchTerms.add(s);
+      }
+    }
+    for (const [k, v] of Object.entries(synonymsMap)) {
+      if (raw.includes(k)) {
+        for (const s of v) searchTerms.add(s);
+      }
+    }
+
+    const termsArray = Array.from(searchTerms);
+    const matchesAnyTerm = (text: string) => {
+      const lower = text.toLowerCase();
+      return termsArray.some((t) => lower.includes(t));
+    };
 
     const operations = await this.listOperations({ limit: 50 });
     const results: CargoItemSearchResult[] = [];
@@ -527,26 +571,26 @@ export class SupabaseReader {
       let matchedPrice: number | undefined;
       let matchedDoc: string | undefined;
 
-      // 1. Revisar tags y notas
-      const tagMatch = op.tags?.some((t) => t.toLowerCase().includes(q));
-      const notesMatch = op.notes?.toLowerCase().includes(q);
-      const clientMatch = op.client_name.toLowerCase().includes(q);
+      // 1. Revisar tags, notas y cliente
+      const tagMatch = op.tags?.some((t) => matchesAnyTerm(t));
+      const notesMatch = op.notes ? matchesAnyTerm(op.notes) : false;
+      const clientMatch = matchesAnyTerm(op.client_name);
 
       if (tagMatch || notesMatch || clientMatch) {
         matchFound = true;
         matchedDescription = tagMatch
           ? `Tag: ${op.tags?.join(', ')}`
           : clientMatch
-            ? `Cliente: ${op.client_name}`
-            : `Nota: ${op.notes}`;
+            ? `Client: ${op.client_name}`
+            : `Notes: ${op.notes}`;
       }
 
       // 2. Revisar canonical_data
       if (!matchFound && op.canonical_data) {
-        const canonicalStr = JSON.stringify(op.canonical_data).toLowerCase();
-        if (canonicalStr.includes(q)) {
+        const canonicalStr = JSON.stringify(op.canonical_data);
+        if (matchesAnyTerm(canonicalStr)) {
           matchFound = true;
-          matchedDescription = `Datos canónicos de embarque`;
+          matchedDescription = `Canonical shipment cargo data`;
         }
       }
 
@@ -565,7 +609,7 @@ export class SupabaseReader {
             const desc = String(
               item.description ?? item.name ?? item.item_description ?? item.product ?? '',
             );
-            if (desc.toLowerCase().includes(q)) {
+            if (matchesAnyTerm(desc)) {
               matchFound = true;
               matchedDescription = desc;
               matchedQuantity = Number(item.quantity ?? item.qty) || undefined;
@@ -578,9 +622,9 @@ export class SupabaseReader {
 
         if (matchFound) break;
 
-        if (JSON.stringify(extracted).toLowerCase().includes(q)) {
+        if (matchesAnyTerm(JSON.stringify(extracted))) {
           matchFound = true;
-          matchedDescription = `Documento ${doc.type} (${doc.file_name})`;
+          matchedDescription = `Document ${doc.type} (${doc.file_name})`;
           matchedDoc = doc.type;
           break;
         }

@@ -26,6 +26,25 @@ const deliveryProps = z
   })
   .strict();
 
+export const decisionOptionSchema = z
+  .object({
+    id: z.string(),
+    label: z.string(),
+    description: z.string(),
+    badge: z.string().optional(),
+    actionPayload: z.string().optional(),
+  })
+  .strict();
+
+export const humanDecisionCardProps = z
+  .object({
+    title: z.string(),
+    question: z.string(),
+    severity: z.enum(['normal', 'warning', 'critical']).optional(),
+    options: z.array(decisionOptionSchema),
+  })
+  .strict();
+
 // Server-safe mirror of frontend/lib/json-render/catalog.ts. It keeps React
 // out of the backend while making component names and props catalog-bound.
 const reactSpecSchema = defineSchema((schema) => ({
@@ -61,6 +80,9 @@ export const tracerCatalog = defineCatalog(reactSpecSchema, {
     },
     DeliveryIssueCard: {
       props: deliveryProps.extend({ issue: z.string() }),
+    },
+    HumanDecisionCard: {
+      props: humanDecisionCardProps,
     },
   },
 });

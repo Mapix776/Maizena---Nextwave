@@ -36,6 +36,7 @@ export function RunClient() {
   const [status, setStatus] = useState<RunStatus>('connecting')
   const [spec, setSpec] = useState<JsonRenderSpec | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [customInput, setCustomInput] = useState('')
 
   const applySnapshot = useCallback((snapshot: RunSnapshot) => {
     if (
@@ -70,6 +71,7 @@ export function RunClient() {
   const startRun = useCallback((options: {
     socket?: Socket | null
     newRequest?: boolean
+    prompt?: string
   } = {}) => {
     const socket = options.socket ?? socketRef.current
     if (!socket) return
@@ -86,7 +88,15 @@ export function RunClient() {
     latestSequence.current = 0
     activeRunId.current = null
 
-    socket.emit('run:start', { requestId }, (ack: { ok: boolean; runId?: string; error?: string }) => {
+    const payload: { requestId: string; messages?: Array<{ role: 'user'; content: string }> } = {
+      requestId,
+    }
+
+    if (options.prompt) {
+      payload.messages = [{ role: 'user', content: options.prompt }]
+    }
+
+    socket.emit('run:start', payload, (ack: { ok: boolean; runId?: string; error?: string }) => {
       if (pendingStartRequestId.current !== requestId) return
 
       if (!ack.ok || !ack.runId) {
@@ -102,6 +112,23 @@ export function RunClient() {
       joinRun(socket, ack.runId)
     })
   }, [joinRun])
+
+  // Escuchar selecciones de Human-in-the-Loop desde HumanDecisionCard
+  useEffect(() => {
+    const handleDecision = (event: Event) => {
+      const customEvent = event as CustomEvent<{ optionId: string; payload: string }>
+      const selected = customEvent.detail.payload || customEvent.detail.optionId
+      startRun({
+        newRequest: true,
+        prompt: `The user selected: "${selected}". Proceed with this shipment and display the details.`,
+      })
+    }
+
+    window.addEventListener('nauta:decision-selected', handleDecision)
+    return () => {
+      window.removeEventListener('nauta:decision-selected', handleDecision)
+    }
+  }, [startRun])
 
   useEffect(() => {
     const socket = io(backendUrl, { transports: ['websocket'] })
@@ -158,15 +185,22 @@ export function RunClient() {
     }
   }, [joinRun, startRun])
 
+  const handleSendCustomPrompt = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customInput.trim()) return
+    startRun({ newRequest: true, prompt: customInput.trim() })
+    setCustomInput('')
+  }
+
   return (
     <main className="page-shell">
       <section className="engine-card">
         <header className="engine-header">
           <div>
-            <p className="eyebrow">Nauta · engine tracer</p>
-            <h1>Ari, end to end</h1>
+            <p className="eyebrow">Nauta · Operational Brain &amp; AI Workforce</p>
+            <h1>Ari · Autonomous Logistics Assistant</h1>
             <p className="lede">
-              Mastra → RunCoordinator → Socket.IO → json-render
+              Real-time Supabase Queries + Human-in-the-Loop Decisions + Generative UI
             </p>
           </div>
           <div className={`status-badge status-${status}`} data-testid="run-status">
@@ -176,8 +210,8 @@ export function RunClient() {
         </header>
 
         <div className="run-meta">
-          <span>Run</span>
-          <code>{runId ?? 'waiting for acknowledgement'}</code>
+          <span>Run ID</span>
+          <code>{runId ?? 'waiting for acknowledgement…'}</code>
         </div>
 
         <section className="result-panel" data-testid="json-render-result">
@@ -185,15 +219,31 @@ export function RunClient() {
             <JsonRenderClient spec={spec as Spec} />
           ) : (
             <p className="placeholder">
-              {error ?? 'The deterministic hello tool is running…'}
+              {error ?? 'Ari is querying the database and preparing the response…'}
             </p>
           )}
         </section>
 
+        <form onSubmit={handleSendCustomPrompt} className="my-4 flex gap-2">
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            placeholder="Ask Ari (e.g. Have the dining tables arrived yet?, Where is container MSKU1234567?)"
+            className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+          >
+            Query
+          </button>
+        </form>
+
         <footer className="engine-footer">
-          <p>Rendered only from the catalog-validated spec received over Socket.IO.</p>
+          <p>Interactive UI generated dynamically based on agent decisions and live database state.</p>
           <button type="button" onClick={() => startRun({ newRequest: true })}>
-            Run again
+            Restart demo
           </button>
         </footer>
       </section>

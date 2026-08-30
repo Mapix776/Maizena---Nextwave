@@ -14,6 +14,14 @@ const deliveryProps = z.object({
   deliveryTime: z.string(),
 })
 
+const decisionOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string(),
+  badge: z.string().optional(),
+  actionPayload: z.string().optional(),
+})
+
 export const jsonRenderSchema = defineSchema((s) => ({
   spec: s.object({
     root: s.string(),
@@ -43,6 +51,14 @@ export const catalog = defineCatalog(jsonRenderSchema, {
     },
     DeliveryIssueCard: {
       props: deliveryProps.extend({ issue: z.string() }),
+    },
+    HumanDecisionCard: {
+      props: z.object({
+        title: z.string(),
+        question: z.string(),
+        severity: z.enum(['normal', 'warning', 'critical']).optional(),
+        options: z.array(decisionOptionSchema),
+      }),
     },
     BarChart: {
       props: z.object({
