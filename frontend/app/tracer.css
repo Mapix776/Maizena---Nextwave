@@ -750,11 +750,13 @@
 }
 
 .chat-mode .chat-avatar {
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  color: #fff;
-  background: linear-gradient(145deg, #eb59bf, #8b5cf6);
+  display: none;
+}
+
+.chat-mode .chat-message.assistant .chat-bubble {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 /* User bubble in brand purple */
