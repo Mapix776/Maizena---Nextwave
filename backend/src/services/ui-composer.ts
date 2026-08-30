@@ -178,7 +178,7 @@ export function composeRunUi(result: StepResult): unknown {
     const isCriticalOrExplicit =
       props.status === 'INSPECTION' ||
       props.status === 'CUSTOMS_HOLD' ||
-      props.lightStatus === 'red' ||
+      props.customsLight === 'red' ||
       !operationSummary;
     if (isCriticalOrExplicit) {
       addElement(
